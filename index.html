@@ -10,15 +10,15 @@
 <meta property="og:description" content="Professional portfolio: finance, entrepreneurship, operations, Lufthansa-linked innovation work, projects and practical digital tools.">
 <meta property="og:url" content="https://zubaerahmed13.github.io/zubaer-ahmed-portfolio/">
 <link rel="canonical" href="https://zubaerahmed13.github.io/zubaer-ahmed-portfolio/">
-<link rel="preload" as="image" href="assets/profile.jpg?v=13">
-<link rel="stylesheet" href="assets/style.css?v=13">
+<link rel="preload" as="image" href="assets/profile.jpg?v=14">
+<link rel="stylesheet" href="assets/style.css?v=14">
 <title>Zubaer Ahmed | Business × Finance × AI</title>
 <style>
-/* Gallery image is applied by app.js from a text data-URI asset. */
+/* Gallery image is applied by app.js from a high-resolution text data-URI asset. */
 .spritePhoto{background-image:none!important;background-color:#d9d9dc!important;background-size:200% 200%!important;background-repeat:no-repeat!important}
 /* Safari-safe portrait */
-.mark{background-image:url("assets/profile.jpg?v=13")!important;background-size:cover!important;background-position:50% 22%!important;background-repeat:no-repeat!important}
-.portrait{background-image:url("assets/profile.jpg?v=13")!important;background-size:cover!important;background-position:50% 14%!important;background-repeat:no-repeat!important}
+.mark{background-image:url("assets/profile.jpg?v=14")!important;background-size:cover!important;background-position:50% 22%!important;background-repeat:no-repeat!important}
+.portrait{background-image:url("assets/profile.jpg?v=14")!important;background-size:cover!important;background-position:50% 14%!important;background-repeat:no-repeat!important}
 .mark img,.portrait img{opacity:0!important;visibility:hidden!important}
 #boot{min-height:100vh;display:grid;place-items:center;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#6b6b72;background:#f4f5f7;text-align:center;padding:30px}#boot b{display:block;color:#151517;font-size:24px;margin-bottom:8px}
 </style>
@@ -31,13 +31,13 @@
   const boot=document.getElementById('boot'),site=document.getElementById('site');
   try{
     const [a,b]=await Promise.all([
-      fetch('assets/body1.html?v=13',{cache:'no-store'}).then(r=>{if(!r.ok)throw new Error('body1');return r.text()}),
-      fetch('assets/body2.html?v=13',{cache:'no-store'}).then(r=>{if(!r.ok)throw new Error('body2');return r.text()})
+      fetch('assets/body1.html?v=14',{cache:'no-store'}).then(r=>{if(!r.ok)throw new Error('body1');return r.text()}),
+      fetch('assets/body2.html?v=14',{cache:'no-store'}).then(r=>{if(!r.ok)throw new Error('body2');return r.text()})
     ]);
     site.innerHTML=a+b;
     boot.remove();
     const s=document.createElement('script');
-    s.src='assets/app.js?v=13';
+    s.src='assets/app.js?v=14';
     s.defer=true;
     s.onerror=()=>console.error('Portfolio interaction script could not load.');
     document.body.appendChild(s);
