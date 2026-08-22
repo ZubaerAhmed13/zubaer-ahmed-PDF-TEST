@@ -21,7 +21,7 @@ renderRole();
 
 async function loadGallery(){
  try{
-   const res=await fetch('assets/lufthansa-gallery.txt?v=13',{cache:'no-store'});
+   const res=await fetch('assets/lufthansa-gallery-hq.txt?v=14',{cache:'no-store'});
    if(!res.ok)throw new Error('gallery data unavailable');
    const data=(await res.text()).trim();
    if(!data.startsWith('data:image/'))throw new Error('invalid gallery data');
