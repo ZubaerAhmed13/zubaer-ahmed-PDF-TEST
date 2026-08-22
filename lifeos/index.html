@@ -5,15 +5,13 @@
 <meta name="viewport" content="width=device-width,initial-scale=1" />
 <meta name="theme-color" content="#5b5bd6" />
 <title>LifeOS v3.9.4 — Cross-Day Sleep Scheduler</title>
-
-
-<link rel="stylesheet" href="assets/base.css">
-<link rel="stylesheet" href="assets/patches.css">
+<link rel="stylesheet" href="assets/app.css">
+<link rel="manifest" href="manifest.webmanifest">
 </head>
 <body>
 <div class="app">
   <aside class="sidebar" id="sidebar">
-    <div class="brand"><span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 21V11"/><path d="M12 13C7.6 13 5 10.6 5 6c4.6 0 7 2.4 7 7Z"/><path d="M12 16c4.4 0 7-2.4 7-7-4.6 0-7 2.4-7 7Z"/></svg></span><span class="brand-name">LifeOS</span><small>v3.8.1</small></div>
+    <div class="brand"><span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 21V11"/><path d="M12 13C7.6 13 5 10.6 5 6c4.6 0 7 2.4 7 7Z"/><path d="M12 16c4.4 0 7-2.4 7-7-4.6 0-7 2.4-7 7Z"/></svg></span><span class="brand-name">LifeOS</span><small>v3.9.4</small></div>
     <nav class="nav" id="nav"></nav>
     <div class="sidebar-foot"><button class="btn primary" data-action="quick-add-menu" title="Add a task, event, goal, project or habit">Add</button><button class="btn" data-action="command" title="Open the command palette">Command</button></div>
   </aside>
@@ -28,27 +26,20 @@
 <div class="palette" id="palette"><div class="palette-box"><input id="paletteInput" placeholder="Type a command…"><div class="palette-list" id="paletteList"></div></div></div>
 <div class="focus-screen" id="focusScreen"><div class="focus-box"><div class="muted">FOCUS MODE</div><h1 id="focusTitle">Task</h1><div class="timer" id="focusTimer">00:00:00</div><div class="muted" id="focusPlan"></div><div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-top:18px"><button class="btn primary" id="focusPause"><svg class="ui-icon" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M9 6v12M15 6v12"/></svg><span>Pause</span></button><button class="btn" id="focusAdd"><svg class="ui-icon" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg><span>15 min</span></button><button class="btn" id="focusComplete"><svg class="ui-icon" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="m5 12 4 4L19 6"/></svg><span>Complete</span></button><button class="btn danger" id="focusStop"><svg class="ui-icon" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="7" y="7" width="10" height="10" rx="1"/></svg><span>Stop</span></button></div></div></div>
 <input type="file" id="importInput" accept="application/json" class="hidden" />
-
-<script src="assets/globals.js"></script>
-<script src="assets/app-class.js"></script>
-<script src="assets/app-methods-1.js"></script>
-<script src="assets/app-methods-2.js"></script>
-<script src="assets/app-methods-3.js"></script>
-<script src="assets/v3-enhanced.js"></script>
-<script src="assets/v31-json.js"></script>
-<script src="assets/v32-reliability.js"></script>
-<script src="assets/v33-friendly.js"></script>
-<script src="assets/v34-calendar.js"></script>
-<script src="assets/v35-adaptive.js"></script>
-<script src="assets/v37-templates.js"></script>
-<script src="assets/init.js"></script>
-<script src="assets/patch-1.js"></script>
-<script src="assets/patch-2.js"></script>
-<script src="assets/patch-3.js"></script>
-<script src="assets/patch-4.js"></script>
-<script src="assets/patch-5.js"></script>
-<script src="assets/patch-6.js"></script>
-<script src="assets/patch-7.js"></script>
-<script src="assets/patch-8.js"></script>
+<script src="assets/main-00.js"></script>
+<script src="assets/main-01.js"></script>
+<script src="assets/main-02.js"></script>
+<script src="assets/main-03.js"></script>
+<script src="assets/main-04.js"></script>
+<script src="assets/main-05.js"></script>
+<script src="assets/patch-01.js"></script>
+<script src="assets/patch-02.js"></script>
+<script src="assets/patch-03.js"></script>
+<script src="assets/patch-04.js"></script>
+<script src="assets/patch-05.js"></script>
+<script src="assets/patch-06.js"></script>
+<script src="assets/patch-07.js"></script>
+<script src="assets/patch-08.js"></script>
+<script>if("serviceWorker" in navigator){addEventListener("load",()=>navigator.serviceWorker.register("./sw.js").catch(()=>{}));}</script>
 </body>
 </html>
