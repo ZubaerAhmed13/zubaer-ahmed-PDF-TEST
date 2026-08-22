@@ -10,21 +10,19 @@
 <meta property="og:description" content="Professional portfolio: finance, entrepreneurship, operations, Lufthansa-linked innovation work, projects and practical digital tools.">
 <meta property="og:url" content="https://zubaerahmed13.github.io/zubaer-ahmed-portfolio/">
 <link rel="canonical" href="https://zubaerahmed13.github.io/zubaer-ahmed-portfolio/">
-<link rel="preconnect" href="https://avatars.githubusercontent.com">
 <link rel="preconnect" href="https://media.licdn.com">
-<link rel="preload" as="image" href="https://avatars.githubusercontent.com/u/269184458?s=1000&v=4">
-<link rel="stylesheet" href="assets/style.css?v=16">
+<link rel="stylesheet" href="assets/style.css?v=17">
 <title>Zubaer Ahmed | Business × Finance × AI</title>
 <style>
-/* v16: browser-native image rendering. No WebP sprite, no text data-URI, no artificial image scaling. */
+/* v17: restore the exact portrait crop and gallery geometry from the approved v2 portfolio. */
 .mark,.portrait{background:#ececef!important;overflow:hidden!important}
-.mark img,.portrait img{opacity:1!important;visibility:visible!important;width:100%!important;height:100%!important;display:block!important;object-fit:cover!important;transform:none!important;transform-origin:center!important;image-rendering:auto!important}
-.mark img{object-position:50% 20%!important}
-.portrait img{object-position:50% 18%!important}
+.mark img,.portrait img{opacity:1!important;visibility:visible!important;width:100%!important;height:100%!important;display:block!important;object-fit:cover!important;image-rendering:auto!important}
+.mark img{object-position:50% 18%!important;transform:scale(1.38)!important;transform-origin:50% 18%!important}
+.portrait img{object-position:50% 14%!important;transform:scale(1.02)!important;transform-origin:50% 14%!important}
 .collabPhoto{overflow:hidden!important;background:#ececef!important}
-.collabPhoto .mediaPhoto{width:100%!important;height:100%!important;display:block!important;object-fit:cover!important;object-position:center!important;transform:none!important;image-rendering:auto!important}
+.collabPhoto .mediaPhoto{width:100%!important;height:100%!important;display:block!important;object-fit:cover!important;object-position:center!important;image-rendering:auto!important}
 .pic{position:relative!important;overflow:hidden!important;background:#ececef!important}
-.pic .mediaPhoto{position:absolute!important;inset:0!important;width:100%!important;height:100%!important;display:block!important;object-fit:cover!important;object-position:center!important;transform:none!important;image-rendering:auto!important}
+.pic .mediaPhoto{position:absolute!important;inset:0!important;width:100%!important;height:100%!important;display:block!important;object-fit:cover!important;object-position:center!important;image-rendering:auto!important}
 .mediaFallback{background:linear-gradient(135deg,#eceef2,#d8dce4)!important}
 #lightboxImage{display:block;max-width:94vw;max-height:86vh;width:auto;height:auto;object-fit:contain;border-radius:20px;box-shadow:0 30px 100px rgba(0,0,0,.5);background:#111}
 #boot{min-height:100vh;display:grid;place-items:center;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#6b6b72;background:#f4f5f7;text-align:center;padding:30px}#boot b{display:block;color:#151517;font-size:24px;margin-bottom:8px}
@@ -36,38 +34,4 @@
 <script>
 (async()=>{
   const boot=document.getElementById('boot'),site=document.getElementById('site');
-  const PROFILE='https://avatars.githubusercontent.com/u/269184458?s=1000&v=4';
-  const PHOTOS=[
-    'https://media.licdn.com/dms/image/v2/D4E22AQHdn7wVl7vB-A/feedshare-shrink_1280/B4EZfWA34vHsAk-/0/1751642244825?e=2147483647&t=Dcnmo4f9lEkFT153WYg3Ofm1ZgHcsYEC8EJ6Asf9T18&v=beta',
-    'https://media.licdn.com/dms/image/v2/D4E22AQHQ-B1NjW_Hig/feedshare-shrink_800/B4EZfWA34cHcAg-/0/1751642274625?e=2147483647&t=ylFtklDEXYYZRIdoFIYPX0gxMJ8RIqQqWCT0EPrPS_w&v=beta',
-    'https://media.licdn.com/dms/image/v2/D4E22AQH3cNLb8Qo7eQ/feedshare-shrink_1280/B4EZfWA35jHcAo-/0/1751642252145?e=2147483647&t=WsOEtKwYUM6eqn0B5rWEx4Hh8rOR7uE5Bo3mMg4emd4&v=beta',
-    'https://media.licdn.com/dms/image/v2/D4E22AQElTeWnM9s0Dg/feedshare-shrink_800/B4EZfWA36eHIAg-/0/1751642339821?e=2147483647&t=rWw1KRGNGkqo6n9s-36NPGxFWtOPdrkT3Lzela5cSIU&v=beta',
-    'https://media.licdn.com/dms/image/v2/D4E22AQEgKAZCwM9wWw/feedshare-shrink_800/B4EZfWA362HYAg-/0/1751642338189?e=2147483647&t=D6aANqOGoz6R-PNKzkPKxrtOIVs4oJyNQkGdoc29Acc&v=beta'
-  ];
-  function makePhoto(src,alt,lazy=true){
-    const img=document.createElement('img');
-    img.className='mediaPhoto';img.src=src;img.alt=alt;img.decoding='async';img.referrerPolicy='no-referrer';
-    if(lazy)img.loading='lazy';else img.fetchPriority='high';
-    img.addEventListener('error',()=>{img.style.display='none';img.parentElement?.classList.add('mediaFallback')},{once:true});
-    return img;
-  }
-  function hydrateMedia(){
-    site.querySelectorAll('.mark img,.portrait img').forEach((img,i)=>{img.src=PROFILE;img.removeAttribute('srcset');img.decoding='async';img.referrerPolicy='no-referrer';img.onerror=()=>{img.onerror=null;img.src='assets/profile.jpg?v=16'};if(i===1)img.fetchPriority='high'});
-    const collabOld=site.querySelector('.collabPhoto .spritePhoto');
-    if(collabOld)collabOld.replaceWith(makePhoto(PHOTOS[0],'Lufthansa Group and Hochschule Worms hands-on innovation session',false));
-    [...site.querySelectorAll('.pic')].forEach((pic,i)=>{const old=pic.querySelector('.spritePhoto');const src=PHOTOS[i+1]||PHOTOS[0];if(old)old.replaceWith(makePhoto(src,old.getAttribute('aria-label')||'Lufthansa-linked course photo'));pic.dataset.photo=src});
-    const oldLightbox=site.querySelector('#lightboxSprite');
-    if(oldLightbox){const img=document.createElement('img');img.id='lightboxImage';img.alt='Expanded Lufthansa-linked course photo';oldLightbox.replaceWith(img)}
-  }
-  try{
-    const [a,b]=await Promise.all([
-      fetch('assets/body1.html?v=16',{cache:'no-store'}).then(r=>{if(!r.ok)throw new Error('body1');return r.text()}),
-      fetch('assets/body2.html?v=16',{cache:'no-store'}).then(r=>{if(!r.ok)throw new Error('body2');return r.text()})
-    ]);
-    site.innerHTML=a+b;hydrateMedia();boot.remove();
-    const s=document.createElement('script');s.src='assets/app.js?v=16';s.defer=true;s.onerror=()=>console.error('Portfolio interaction script could not load.');document.body.appendChild(s);
-  }catch(err){boot.innerHTML='<div><b>Portfolio could not finish loading.</b><span>Please refresh the page once. If this persists, the GitHub Pages deployment may still be updating.</span></div>';console.error(err)}
-})();
-</script>
-</body>
-</html>
+  const PROFILE='data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAkGBwgHBgkIBwgKCgkLDRYPDQwMDRsUFRAWIB0iIi
