@@ -18,6 +18,22 @@ function renderRole(){
  const r=roles[activeRole]; $('#focusTitle').textContent=r.label; $('#focusIntro').textContent=r.intro; $('#focusEvidence').innerHTML=r.evidence.map(x=>`<div class="ev">${x}</div>`).join(''); $('#focusSkills').innerHTML=r.skills.map(x=>`<span class="tag">${x}</span>`).join('');
 }
 renderRole();
+
+async function loadGallery(){
+ try{
+   const res=await fetch('assets/lufthansa-gallery.txt?v=13',{cache:'no-store'});
+   if(!res.ok)throw new Error('gallery data unavailable');
+   const data=(await res.text()).trim();
+   if(!data.startsWith('data:image/'))throw new Error('invalid gallery data');
+   $$('.spritePhoto').forEach(el=>{
+     el.style.setProperty('background-image',`url("${data}")`,'important');
+     el.style.setProperty('background-size','200% 200%','important');
+     el.style.setProperty('background-repeat','no-repeat','important');
+   });
+ }catch(err){console.error('Lufthansa gallery could not load:',err)}
+}
+loadGallery();
+
 function downloadCV(){const a=document.createElement('a');a.href=CV_URL;a.download='Zubaer_Ahmed_CV.pdf';document.body.appendChild(a);a.click();a.remove()}
 ['downloadCV','downloadCV2','downloadCV3'].forEach(id=>$('#'+id)?.addEventListener('click',downloadCV));
 let saved;try{saved=localStorage.getItem('za-theme')}catch(e){} if(saved)document.documentElement.dataset.theme=saved;
