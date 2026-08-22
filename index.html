@@ -10,11 +10,11 @@
 <meta property="og:description" content="Professional portfolio: finance, entrepreneurship, operations, Lufthansa-linked innovation work, projects and practical digital tools.">
 <meta property="og:url" content="https://zubaerahmed13.github.io/zubaer-ahmed-portfolio/">
 <link rel="canonical" href="https://zubaerahmed13.github.io/zubaer-ahmed-portfolio/">
-<link rel="stylesheet" href="assets/style.css?v=3">
+<link rel="preload" as="image" href="assets/profile.jpg?v=8">
+<link rel="stylesheet" href="assets/style.css?v=8">
 <title>Zubaer Ahmed | Business × Finance × AI</title>
 <style>
-/* The main stylesheet lives inside /assets, so this root-level override keeps the sprite URL correct on GitHub Pages. */
-.spritePhoto{background-image:url("assets/lufthansa-sprite.webp")!important}
+.spritePhoto{background-image:url("assets/lufthansa-sprite.webp?v=8")!important}
 #boot{min-height:100vh;display:grid;place-items:center;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#6b6b72;background:#f4f5f7;text-align:center;padding:30px}#boot b{display:block;color:#151517;font-size:24px;margin-bottom:8px}
 </style>
 </head>
@@ -26,13 +26,27 @@
   const boot=document.getElementById('boot'),site=document.getElementById('site');
   try{
     const [a,b]=await Promise.all([
-      fetch('assets/body1.html?v=3',{cache:'no-store'}).then(r=>{if(!r.ok)throw new Error('body1');return r.text()}),
-      fetch('assets/body2.html?v=3',{cache:'no-store'}).then(r=>{if(!r.ok)throw new Error('body2');return r.text()})
+      fetch('assets/body1.html?v=8',{cache:'no-store'}).then(r=>{if(!r.ok)throw new Error('body1');return r.text()}),
+      fetch('assets/body2.html?v=8',{cache:'no-store'}).then(r=>{if(!r.ok)throw new Error('body2');return r.text()})
     ]);
     site.innerHTML=a+b;
+
+    // Safari-safe portrait fix: never load the legacy SVG wrapper.
+    const portraitURL=new URL('assets/profile.jpg?v=8',window.location.href).href;
+    const rawFallback='https://raw.githubusercontent.com/ZubaerAhmed13/zubaer-ahmed-portfolio/main/assets/profile.jpg?v=8';
+    site.querySelectorAll('img[src*="profile.svg"], img[src*="profile.jpg"]').forEach(img=>{
+      img.removeAttribute('srcset');
+      img.src=portraitURL;
+      img.decoding='async';
+      img.onerror=()=>{
+        img.onerror=null;
+        img.src=rawFallback;
+      };
+    });
+
     boot.remove();
     const s=document.createElement('script');
-    s.src='assets/app.js?v=3';
+    s.src='assets/app.js?v=8';
     s.defer=true;
     s.onerror=()=>console.error('Portfolio interaction script could not load.');
     document.body.appendChild(s);
