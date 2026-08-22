@@ -10,28 +10,130 @@
 <meta property="og:description" content="Professional portfolio: finance, entrepreneurship, operations, Lufthansa-linked innovation work, projects and practical digital tools.">
 <meta property="og:url" content="https://zubaerahmed13.github.io/zubaer-ahmed-portfolio/">
 <link rel="canonical" href="https://zubaerahmed13.github.io/zubaer-ahmed-portfolio/">
+<link rel="preconnect" href="https://avatars.githubusercontent.com">
 <link rel="preconnect" href="https://media.licdn.com">
-<link rel="stylesheet" href="assets/style.css?v=17">
+<link rel="stylesheet" href="assets/style.css?v=22">
 <title>Zubaer Ahmed | Business × Finance × AI</title>
 <style>
-/* v17: restore the exact portrait crop and gallery geometry from the approved v2 portfolio. */
-.mark,.portrait{background:#ececef!important;overflow:hidden!important}
-.mark img,.portrait img{opacity:1!important;visibility:visible!important;width:100%!important;height:100%!important;display:block!important;object-fit:cover!important;image-rendering:auto!important}
-.mark img{object-position:50% 18%!important;transform:scale(1.38)!important;transform-origin:50% 18%!important}
-.portrait img{object-position:50% 14%!important;transform:scale(1.02)!important;transform-origin:50% 14%!important}
-.collabPhoto{overflow:hidden!important;background:#ececef!important}
-.collabPhoto .mediaPhoto{width:100%!important;height:100%!important;display:block!important;object-fit:cover!important;object-position:center!important;image-rendering:auto!important}
-.pic{position:relative!important;overflow:hidden!important;background:#ececef!important}
-.pic .mediaPhoto{position:absolute!important;inset:0!important;width:100%!important;height:100%!important;display:block!important;object-fit:cover!important;object-position:center!important;image-rendering:auto!important}
-.mediaFallback{background:linear-gradient(135deg,#eceef2,#d8dce4)!important}
-#lightboxImage{display:block;max-width:94vw;max-height:86vh;width:auto;height:auto;object-fit:contain;border-radius:20px;box-shadow:0 30px 100px rgba(0,0,0,.5);background:#111}
-#boot{min-height:100vh;display:grid;place-items:center;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#6b6b72;background:#f4f5f7;text-align:center;padding:30px}#boot b{display:block;color:#151517;font-size:24px;margin-bottom:8px}
+/* v22 — restore the working v2 image geometry and crops. */
+.mark img{width:100%!important;height:100%!important;display:block!important;object-fit:cover!important;object-position:50% 18%!important;transform:scale(1.38)!important;transform-origin:50% 18%!important;opacity:1!important;visibility:visible!important}
+.portrait img{width:100%!important;height:100%!important;display:block!important;object-fit:cover!important;object-position:50% 14%!important;transform:scale(1.02)!important;transform-origin:50% 14%!important;opacity:1!important;visibility:visible!important}
+.collabPhoto img{width:100%!important;height:100%!important;display:block!important;object-fit:cover!important;object-position:center!important}
+.pic img{width:100%!important;height:100%!important;display:block!important;object-fit:cover!important;object-position:center!important;transition:.3s}
+.pic:hover img{transform:scale(1.02)}
+#lightboxImage{display:block;max-width:min(1200px,94vw);max-height:88vh;width:auto;height:auto;object-fit:contain;border-radius:20px;box-shadow:0 30px 100px rgba(0,0,0,.5)}
+#boot{min-height:100vh;display:grid;place-items:center;font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",sans-serif;color:#6b6b72;background:#f4f5f7;text-align:center;padding:30px}
+#boot b{display:block;color:#151517;font-size:24px;margin-bottom:8px}
+#boot .retry{display:inline-block;margin-top:18px;padding:10px 15px;border:1px solid rgba(0,0,0,.12);border-radius:12px;background:#fff;color:#151517;font-weight:700;cursor:pointer}
 </style>
 </head>
 <body>
-<div id="boot"><div><b>Loading portfolio…</b><span>Preparing the full recruiter portfolio and photo gallery.</span></div></div>
+<div id="boot"><div><b>Loading portfolio…</b><span>Preparing your recruiter portfolio.</span></div></div>
 <div id="site"></div>
 <script>
-(async()=>{
-  const boot=document.getElementById('boot'),site=document.getElementById('site');
-  const PROFILE='data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAkGBwgHBgkIBwgKCgkLDRYPDQwMDRsUFRAWIB0iIi
+(function(){
+'use strict';
+const boot=document.getElementById('boot');
+const site=document.getElementById('site');
+
+/* High-resolution portrait source. Local image remains an automatic fallback. */
+const PROFILE='https://avatars.githubusercontent.com/u/269184458?s=1000&v=4';
+const PROFILE_FALLBACK='assets/profile.jpg?v=22';
+
+/* Photo order restored to the original v2 portfolio meaning and positions:
+   hero/cross-cultural = indoor group; large left = hands-on session;
+   upper middle = Lufthansa Aviation Center; upper right = workshop. */
+const PHOTO_INDOOR='https://media.licdn.com/dms/image/v2/D4E22AQHdn7wVl7vB-A/feedshare-shrink_1280/B4EZfWA34vHsAk-/0/1751642244825?e=2147483647&t=Dcnmo4f9lEkFT153WYg3Ofm1ZgHcsYEC8EJ6Asf9T18&v=beta';
+const PHOTO_AVIATION='https://media.licdn.com/dms/image/v2/D4E22AQH3cNLb8Qo7eQ/feedshare-shrink_1280/B4EZfWA35jHcAo-/0/1751642252145?e=2147483647&t=WsOEtKwYUM6eqn0B5rWEx4Hh8rOR7uE5Bo3mMg4emd4&v=beta';
+const PHOTO_WORKSHOP='https://media.licdn.com/dms/image/v2/D4E22AQHQ-B1NjW_Hig/feedshare-shrink_800/B4EZfWA34cHcAg-/0/1751642274625?e=2147483647&t=ylFtklDEXYYZRIdoFIYPX0gxMJ8RIqQqWCT0EPrPS_w&v=beta';
+const PHOTO_HANDSON='https://media.licdn.com/dms/image/v2/D4E22AQEgKAZCwM9wWw/feedshare-shrink_800/B4EZfWA362HYAg-/0/1751642338189?e=2147483647&t=D6aANqOGoz6R-PNKzkPKxrtOIVs4oJyNQkGdoc29Acc&v=beta';
+
+function makeImg(src,alt,lazy){
+  const img=document.createElement('img');
+  img.src=src;
+  img.alt=alt;
+  img.decoding='async';
+  if(lazy) img.loading='lazy';
+  return img;
+}
+
+function setProfile(img,priority){
+  if(!img) return;
+  img.src=PROFILE;
+  img.alt=img.alt||'Professional portrait of Zubaer Ahmed';
+  img.decoding='async';
+  if(priority) img.fetchPriority='high';
+  img.onerror=function(){
+    if(this.src.indexOf('profile.jpg')===-1){
+      this.onerror=null;
+      this.src=PROFILE_FALLBACK;
+    }
+  };
+}
+
+function hydrateMedia(){
+  const profileImgs=site.querySelectorAll('.mark img,.portrait img');
+  profileImgs.forEach(function(img,i){setProfile(img,i===1)});
+
+  const heroOld=site.querySelector('.collabPhoto .spritePhoto');
+  if(heroOld){
+    heroOld.replaceWith(makeImg(PHOTO_INDOOR,'Student group during Lufthansa-linked hands-on learning',false));
+  }
+
+  const tiles=Array.from(site.querySelectorAll('.pic'));
+  const assignments=[
+    [PHOTO_HANDSON,'Hochschule Worms students during hands-on learning'],
+    [PHOTO_AVIATION,'Group photo at Lufthansa Aviation Center'],
+    [PHOTO_WORKSHOP,'Innovation workshop discussion'],
+    [PHOTO_INDOOR,'International student team at Lufthansa-linked course']
+  ];
+  tiles.forEach(function(pic,i){
+    const pair=assignments[i];
+    if(!pair) return;
+    const old=pic.querySelector('.spritePhoto');
+    const img=makeImg(pair[0],pair[1],true);
+    if(old) old.replaceWith(img); else pic.prepend(img);
+    pic.dataset.photo=pair[0];
+  });
+
+  const oldLightbox=site.querySelector('#lightboxSprite');
+  if(oldLightbox){
+    const image=document.createElement('img');
+    image.id='lightboxImage';
+    image.alt='Expanded Lufthansa-linked course photo';
+    oldLightbox.replaceWith(image);
+  }
+}
+
+function showLoadError(err){
+  console.error('Portfolio loading error:',err);
+  boot.innerHTML='<div><b>Portfolio could not finish loading.</b><span>Please reload once. The site files are available, but the browser did not complete the page request.</span><br><button class="retry" type="button">Reload portfolio</button></div>';
+  const btn=boot.querySelector('.retry');
+  if(btn) btn.onclick=function(){location.reload()};
+}
+
+const timer=setTimeout(function(){
+  if(document.body.contains(boot)) showLoadError(new Error('Loading timeout'));
+},12000);
+
+Promise.all([
+  fetch('assets/body1.html?v=22',{cache:'no-store'}).then(function(r){if(!r.ok)throw new Error('body1 '+r.status);return r.text()}),
+  fetch('assets/body2.html?v=22',{cache:'no-store'}).then(function(r){if(!r.ok)throw new Error('body2 '+r.status);return r.text()})
+]).then(function(parts){
+  site.innerHTML=parts[0]+parts[1];
+  hydrateMedia();
+  clearTimeout(timer);
+  if(boot.parentNode) boot.remove();
+  const script=document.createElement('script');
+  script.src='assets/app.js?v=22';
+  script.defer=true;
+  script.onerror=function(){console.error('Interaction script could not load')};
+  document.body.appendChild(script);
+}).catch(function(err){
+  clearTimeout(timer);
+  showLoadError(err);
+});
+})();
+</script>
+</body>
+</html>
