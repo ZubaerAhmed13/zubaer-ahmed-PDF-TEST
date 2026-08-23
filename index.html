@@ -11,13 +11,12 @@
 <meta property="og:url" content="https://zubaerahmed13.github.io/zubaer-ahmed-portfolio/">
 <link rel="canonical" href="https://zubaerahmed13.github.io/zubaer-ahmed-portfolio/">
 <link rel="preconnect" href="https://media.licdn.com">
-<link rel="preload" as="image" href="assets/profile-fixed.jpg?v=23">
-<link rel="stylesheet" href="assets/style.css?v=23">
+<link rel="preload" as="image" href="assets/profile.jpg?v=24">
+<link rel="stylesheet" href="assets/style.css?v=24">
 <title>Zubaer Ahmed | Business × Finance × AI</title>
 <style>
-/* v23 — original working v2 portrait crop and gallery geometry. */
 .mark img{width:100%!important;height:100%!important;display:block!important;object-fit:cover!important;object-position:50% 18%!important;transform:scale(1.38)!important;transform-origin:50% 18%!important;opacity:1!important;visibility:visible!important}
-.portrait img{width:100%!important;height:100%!important;display:block!important;object-fit:cover!important;object-position:50% 14%!important;transform:scale(1.02)!important;transform-origin:50% 14%!important;opacity:1!important;visibility:visible!important}
+.portrait img{width:100%!important;height:100%!important;display:block!important;object-fit:cover!important;object-position:50% 14%!important;transform:none!important;transform-origin:50% 14%!important;opacity:1!important;visibility:visible!important;image-rendering:auto!important}
 .collabPhoto img{width:100%!important;height:100%!important;display:block!important;object-fit:cover!important;object-position:center!important}
 .pic img{width:100%!important;height:100%!important;display:block!important;object-fit:cover!important;object-position:center!important;transition:.3s}
 .pic:hover img{transform:scale(1.02)}
@@ -35,95 +34,25 @@
 'use strict';
 const boot=document.getElementById('boot');
 const site=document.getElementById('site');
-
-/* Local browser-safe JPEG created from the portrait embedded in the working v2 portfolio. */
-const PROFILE='assets/profile-fixed.jpg?v=23';
-
-/* Lufthansa photo order preserves the original v2 gallery positions. */
+const PROFILE='assets/profile.jpg?v=24';
 const PHOTO_INDOOR='https://media.licdn.com/dms/image/v2/D4E22AQHdn7wVl7vB-A/feedshare-shrink_1280/B4EZfWA34vHsAk-/0/1751642244825?e=2147483647&t=Dcnmo4f9lEkFT153WYg3Ofm1ZgHcsYEC8EJ6Asf9T18&v=beta';
 const PHOTO_AVIATION='https://media.licdn.com/dms/image/v2/D4E22AQH3cNLb8Qo7eQ/feedshare-shrink_1280/B4EZfWA35jHcAo-/0/1751642252145?e=2147483647&t=WsOEtKwYUM6eqn0B5rWEx4Hh8rOR7uE5Bo3mMg4emd4&v=beta';
 const PHOTO_WORKSHOP='https://media.licdn.com/dms/image/v2/D4E22AQHQ-B1NjW_Hig/feedshare-shrink_800/B4EZfWA34cHcAg-/0/1751642274625?e=2147483647&t=ylFtklDEXYYZRIdoFIYPX0gxMJ8RIqQqWCT0EPrPS_w&v=beta';
 const PHOTO_HANDSON='https://media.licdn.com/dms/image/v2/D4E22AQEgKAZCwM9wWw/feedshare-shrink_800/B4EZfWA362HYAg-/0/1751642338189?e=2147483647&t=D6aANqOGoz6R-PNKzkPKxrtOIVs4oJyNQkGdoc29Acc&v=beta';
-
-function makeImg(src,alt,lazy){
-  const img=document.createElement('img');
-  img.src=src;
-  img.alt=alt;
-  img.decoding='async';
-  if(lazy) img.loading='lazy';
-  return img;
-}
-
-function setProfile(img,priority){
-  if(!img) return;
-  img.src=PROFILE;
-  img.alt=img.alt||'Professional portrait of Zubaer Ahmed';
-  img.decoding='async';
-  if(priority) img.fetchPriority='high';
-}
-
+function makeImg(src,alt,lazy){const img=document.createElement('img');img.src=src;img.alt=alt;img.decoding='async';if(lazy)img.loading='lazy';return img}
 function hydrateMedia(){
-  const profileImgs=site.querySelectorAll('.mark img,.portrait img');
-  profileImgs.forEach(function(img,i){setProfile(img,i===1)});
-
-  const heroOld=site.querySelector('.collabPhoto .spritePhoto');
-  if(heroOld){
-    heroOld.replaceWith(makeImg(PHOTO_INDOOR,'Student group during Lufthansa-linked hands-on learning',false));
-  }
-
-  const tiles=Array.from(site.querySelectorAll('.pic'));
-  const assignments=[
-    [PHOTO_HANDSON,'Hochschule Worms students during hands-on learning'],
-    [PHOTO_AVIATION,'Group photo at Lufthansa Aviation Center'],
-    [PHOTO_WORKSHOP,'Innovation workshop discussion'],
-    [PHOTO_INDOOR,'International student team at Lufthansa-linked course']
-  ];
-  tiles.forEach(function(pic,i){
-    const pair=assignments[i];
-    if(!pair) return;
-    const old=pic.querySelector('.spritePhoto');
-    const img=makeImg(pair[0],pair[1],true);
-    if(old) old.replaceWith(img); else pic.prepend(img);
-    pic.dataset.photo=pair[0];
-  });
-
-  const oldLightbox=site.querySelector('#lightboxSprite');
-  if(oldLightbox){
-    const image=document.createElement('img');
-    image.id='lightboxImage';
-    image.alt='Expanded Lufthansa-linked course photo';
-    oldLightbox.replaceWith(image);
-  }
+ site.querySelectorAll('.mark img,.portrait img').forEach(function(img,i){img.src=PROFILE;img.alt=img.alt||'Professional portrait of Zubaer Ahmed';img.decoding='async';if(i===1)img.fetchPriority='high'});
+ const heroOld=site.querySelector('.collabPhoto .spritePhoto');if(heroOld)heroOld.replaceWith(makeImg(PHOTO_INDOOR,'Student group during Lufthansa-linked hands-on learning',false));
+ const tiles=Array.from(site.querySelectorAll('.pic'));const assignments=[[PHOTO_HANDSON,'Hochschule Worms students during hands-on learning'],[PHOTO_AVIATION,'Group photo at Lufthansa Aviation Center'],[PHOTO_WORKSHOP,'Innovation workshop discussion'],[PHOTO_INDOOR,'International student team at Lufthansa-linked course']];
+ tiles.forEach(function(pic,i){const pair=assignments[i];if(!pair)return;const old=pic.querySelector('.spritePhoto');const img=makeImg(pair[0],pair[1],true);if(old)old.replaceWith(img);else pic.prepend(img);pic.dataset.photo=pair[0]});
+ const oldLightbox=site.querySelector('#lightboxSprite');if(oldLightbox){const image=document.createElement('img');image.id='lightboxImage';image.alt='Expanded Lufthansa-linked course photo';oldLightbox.replaceWith(image)}
 }
-
-function showLoadError(err){
-  console.error('Portfolio loading error:',err);
-  boot.innerHTML='<div><b>Portfolio could not finish loading.</b><span>Please reload once. The site files are available, but the browser did not complete the page request.</span><br><button class="retry" type="button">Reload portfolio</button></div>';
-  const btn=boot.querySelector('.retry');
-  if(btn) btn.onclick=function(){location.reload()};
-}
-
-const timer=setTimeout(function(){
-  if(document.body.contains(boot)) showLoadError(new Error('Loading timeout'));
-},12000);
-
+function showLoadError(err){console.error('Portfolio loading error:',err);boot.innerHTML='<div><b>Portfolio could not finish loading.</b><span>Please reload once.</span><br><button class="retry" type="button">Reload portfolio</button></div>';const btn=boot.querySelector('.retry');if(btn)btn.onclick=function(){location.reload()}}
+const timer=setTimeout(function(){if(document.body.contains(boot))showLoadError(new Error('Loading timeout'))},12000);
 Promise.all([
-  fetch('assets/body1.html?v=23',{cache:'no-store'}).then(function(r){if(!r.ok)throw new Error('body1 '+r.status);return r.text()}),
-  fetch('assets/body2.html?v=23',{cache:'no-store'}).then(function(r){if(!r.ok)throw new Error('body2 '+r.status);return r.text()})
-]).then(function(parts){
-  site.innerHTML=parts[0]+parts[1];
-  hydrateMedia();
-  clearTimeout(timer);
-  if(boot.parentNode) boot.remove();
-  const script=document.createElement('script');
-  script.src='assets/app.js?v=23';
-  script.defer=true;
-  script.onerror=function(){console.error('Interaction script could not load')};
-  document.body.appendChild(script);
-}).catch(function(err){
-  clearTimeout(timer);
-  showLoadError(err);
-});
+ fetch('assets/body1.html?v=24',{cache:'no-store'}).then(function(r){if(!r.ok)throw new Error('body1 '+r.status);return r.text()}),
+ fetch('assets/body2.html?v=24',{cache:'no-store'}).then(function(r){if(!r.ok)throw new Error('body2 '+r.status);return r.text()})
+]).then(function(parts){site.innerHTML=parts[0]+parts[1];hydrateMedia();clearTimeout(timer);if(boot.parentNode)boot.remove();const script=document.createElement('script');script.src='assets/app.js?v=24';script.defer=true;document.body.appendChild(script)}).catch(function(err){clearTimeout(timer);showLoadError(err)});
 })();
 </script>
 </body>
