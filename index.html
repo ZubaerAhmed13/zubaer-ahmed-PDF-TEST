@@ -10,12 +10,12 @@
 <meta property="og:description" content="Professional portfolio: finance, entrepreneurship, operations, Lufthansa-linked innovation work, projects and practical digital tools.">
 <meta property="og:url" content="https://zubaerahmed13.github.io/zubaer-ahmed-portfolio/">
 <link rel="canonical" href="https://zubaerahmed13.github.io/zubaer-ahmed-portfolio/">
-<link rel="preconnect" href="https://avatars.githubusercontent.com">
 <link rel="preconnect" href="https://media.licdn.com">
-<link rel="stylesheet" href="assets/style.css?v=22">
+<link rel="preload" as="image" href="assets/profile-fixed.jpg?v=23">
+<link rel="stylesheet" href="assets/style.css?v=23">
 <title>Zubaer Ahmed | Business × Finance × AI</title>
 <style>
-/* v22 — restore the working v2 image geometry and crops. */
+/* v23 — original working v2 portrait crop and gallery geometry. */
 .mark img{width:100%!important;height:100%!important;display:block!important;object-fit:cover!important;object-position:50% 18%!important;transform:scale(1.38)!important;transform-origin:50% 18%!important;opacity:1!important;visibility:visible!important}
 .portrait img{width:100%!important;height:100%!important;display:block!important;object-fit:cover!important;object-position:50% 14%!important;transform:scale(1.02)!important;transform-origin:50% 14%!important;opacity:1!important;visibility:visible!important}
 .collabPhoto img{width:100%!important;height:100%!important;display:block!important;object-fit:cover!important;object-position:center!important}
@@ -36,13 +36,10 @@
 const boot=document.getElementById('boot');
 const site=document.getElementById('site');
 
-/* High-resolution portrait source. Local image remains an automatic fallback. */
-const PROFILE='https://avatars.githubusercontent.com/u/269184458?s=1000&v=4';
-const PROFILE_FALLBACK='assets/profile.jpg?v=22';
+/* Local browser-safe JPEG created from the portrait embedded in the working v2 portfolio. */
+const PROFILE='assets/profile-fixed.jpg?v=23';
 
-/* Photo order restored to the original v2 portfolio meaning and positions:
-   hero/cross-cultural = indoor group; large left = hands-on session;
-   upper middle = Lufthansa Aviation Center; upper right = workshop. */
+/* Lufthansa photo order preserves the original v2 gallery positions. */
 const PHOTO_INDOOR='https://media.licdn.com/dms/image/v2/D4E22AQHdn7wVl7vB-A/feedshare-shrink_1280/B4EZfWA34vHsAk-/0/1751642244825?e=2147483647&t=Dcnmo4f9lEkFT153WYg3Ofm1ZgHcsYEC8EJ6Asf9T18&v=beta';
 const PHOTO_AVIATION='https://media.licdn.com/dms/image/v2/D4E22AQH3cNLb8Qo7eQ/feedshare-shrink_1280/B4EZfWA35jHcAo-/0/1751642252145?e=2147483647&t=WsOEtKwYUM6eqn0B5rWEx4Hh8rOR7uE5Bo3mMg4emd4&v=beta';
 const PHOTO_WORKSHOP='https://media.licdn.com/dms/image/v2/D4E22AQHQ-B1NjW_Hig/feedshare-shrink_800/B4EZfWA34cHcAg-/0/1751642274625?e=2147483647&t=ylFtklDEXYYZRIdoFIYPX0gxMJ8RIqQqWCT0EPrPS_w&v=beta';
@@ -63,12 +60,6 @@ function setProfile(img,priority){
   img.alt=img.alt||'Professional portrait of Zubaer Ahmed';
   img.decoding='async';
   if(priority) img.fetchPriority='high';
-  img.onerror=function(){
-    if(this.src.indexOf('profile.jpg')===-1){
-      this.onerror=null;
-      this.src=PROFILE_FALLBACK;
-    }
-  };
 }
 
 function hydrateMedia(){
@@ -117,15 +108,15 @@ const timer=setTimeout(function(){
 },12000);
 
 Promise.all([
-  fetch('assets/body1.html?v=22',{cache:'no-store'}).then(function(r){if(!r.ok)throw new Error('body1 '+r.status);return r.text()}),
-  fetch('assets/body2.html?v=22',{cache:'no-store'}).then(function(r){if(!r.ok)throw new Error('body2 '+r.status);return r.text()})
+  fetch('assets/body1.html?v=23',{cache:'no-store'}).then(function(r){if(!r.ok)throw new Error('body1 '+r.status);return r.text()}),
+  fetch('assets/body2.html?v=23',{cache:'no-store'}).then(function(r){if(!r.ok)throw new Error('body2 '+r.status);return r.text()})
 ]).then(function(parts){
   site.innerHTML=parts[0]+parts[1];
   hydrateMedia();
   clearTimeout(timer);
   if(boot.parentNode) boot.remove();
   const script=document.createElement('script');
-  script.src='assets/app.js?v=22';
+  script.src='assets/app.js?v=23';
   script.defer=true;
   script.onerror=function(){console.error('Interaction script could not load')};
   document.body.appendChild(script);
