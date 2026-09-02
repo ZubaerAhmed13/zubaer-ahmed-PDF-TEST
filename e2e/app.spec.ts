@@ -48,8 +48,8 @@ test('runs a real worker-backed merge workflow', async ({ page }) => {
   await expect(dialog.getByRole('link', { name: /Download merged\.pdf/ })).toBeVisible();
 });
 
-test('core shell survives an offline reload after production precache', async ({ page, context, browserName }) => {
-  test.skip(browserName !== 'chromium', 'Offline PWA certification currently runs in Chromium.');
+test('runs a local PDF operation after an offline reload', async ({ page, context, browserName }) => {
+  test.skip(browserName !== 'chromium', 'Service-worker offline certification is executed in Chromium; other engines retain their online worker workflow coverage.');
   await page.goto('/zubaer-ahmed-PDF-TEST/');
   await page.waitForFunction(async () => {
     if (!('serviceWorker' in navigator)) return false;
@@ -57,8 +57,21 @@ test('core shell survives an offline reload after production precache', async ({
     return Boolean(registration.active);
   });
   await page.waitForFunction(() => Boolean(navigator.serviceWorker.controller));
+
   await context.setOffline(true);
   await page.reload();
   await expect(page.getByRole('heading', { name: /Private PDF tools/ })).toBeVisible();
+
+  await page.getByLabel('Search tools').fill('merge');
+  await page.getByRole('button', { name: 'Open tool' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Workspace' });
+  await dialog.locator('#workspace-file').setInputFiles([
+    { name: 'offline-one.pdf', mimeType: 'application/pdf', buffer: await pdfFixture(1) },
+    { name: 'offline-two.pdf', mimeType: 'application/pdf', buffer: await pdfFixture(2) }
+  ]);
+  await dialog.getByRole('button', { name: 'Run Merge PDF' }).click();
+  await expect(dialog.locator('#stage')).toHaveText('Complete');
+  await expect(dialog.getByRole('link', { name: /Download merged\.pdf/ })).toBeVisible();
+
   await context.setOffline(false);
 });
