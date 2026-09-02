@@ -1,8 +1,9 @@
 import { createHash } from 'node:crypto';
 import { readdir, readFile, writeFile } from 'node:fs/promises';
 import { join, relative, sep } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-const DIST = new URL('../dist/', import.meta.url);
+const DIST = fileURLToPath(new URL('../dist/', import.meta.url));
 
 async function walk(directory) {
   const entries = await readdir(directory, { withFileTypes: true });
@@ -17,14 +18,14 @@ async function walk(directory) {
 
 const allFiles = await walk(DIST);
 const cacheable = allFiles
-  .map((absolute) => relative(DIST.pathname, absolute).split(sep).join('/'))
+  .map((absolute) => relative(DIST, absolute).split(sep).join('/'))
   .filter((path) => path !== 'sw.js' && !path.endsWith('.map'))
   .sort();
 
 const hash = createHash('sha256');
 for (const path of cacheable) {
   hash.update(path);
-  hash.update(await readFile(new URL(path, DIST)));
+  hash.update(await readFile(join(DIST, path)));
 }
 const version = hash.digest('hex').slice(0, 16);
 const precache = ['./', ...cacheable.map((path) => `./${path}`)];
@@ -82,5 +83,5 @@ self.addEventListener('fetch', (event) => {
 });
 `;
 
-await writeFile(new URL('sw.js', DIST), source, 'utf8');
+await writeFile(join(DIST, 'sw.js'), source, 'utf8');
 console.log(`Generated dist/sw.js with ${precache.length} precached URLs (${version}).`);
