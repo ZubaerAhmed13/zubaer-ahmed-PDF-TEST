@@ -18,6 +18,13 @@ export default tseslint.config(
     }
   },
   {
+    files: ['scripts/**/*.mjs'],
+    languageOptions: {
+      ecmaVersion: 2022,
+      globals: globals.node
+    }
+  },
+  {
     files: ['public/sw.js'],
     languageOptions: {
       ecmaVersion: 2022,
