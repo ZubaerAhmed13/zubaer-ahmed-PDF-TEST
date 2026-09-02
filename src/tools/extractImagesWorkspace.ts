@@ -39,23 +39,39 @@ function isImageBitmap(value: unknown): value is ImageBitmap {
 }
 
 async function resolvePageObject(page: PDFPageProxy, id: string): Promise<unknown> {
-  const objects = page.objs as unknown as { get: (objectId: string, callback?: (value: unknown) => void) => unknown };
+  const objects = page.objs as unknown as {
+    get: (objectId: string, callback?: (value: unknown) => void) => unknown;
+    has?: (objectId: string) => boolean;
+  };
+
+  if (objects.has?.(id)) {
+    try {
+      const ready = objects.get(id);
+      if (ready !== undefined && ready !== null) return ready;
+    } catch {
+      // Fall through to the callback form. PDF.js may reject a synchronous get
+      // even when an object is about to become available from its worker.
+    }
+  }
+
   return new Promise((resolve, reject) => {
     let settled = false;
     const timeout = window.setTimeout(() => {
       if (settled) return;
       settled = true;
       reject(new Error(`IMAGE_OBJECT_TIMEOUT:${id}`));
-    }, 5000);
+    }, 8000);
     const finish = (value: unknown): void => {
-      if (settled) return;
+      if (settled || value === undefined || value === null) return;
       settled = true;
       window.clearTimeout(timeout);
       resolve(value);
     };
     try {
       const immediate = objects.get(id, finish);
-      if (immediate !== undefined) finish(immediate);
+      // PDFObjects#get returns null while the worker-owned object is unresolved.
+      // Do not treat that sentinel as the image; wait for the callback instead.
+      if (immediate !== undefined && immediate !== null) finish(immediate);
     } catch (error) {
       window.clearTimeout(timeout);
       reject(error);
