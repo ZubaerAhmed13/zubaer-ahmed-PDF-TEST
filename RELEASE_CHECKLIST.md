@@ -1,6 +1,6 @@
 # Release Checklist
 
-A checkbox is only marked when evidence exists. This branch starts as a migration preview, not a certified release.
+A checkbox is only marked when executed evidence exists. This branch remains a migration/release-candidate branch, not a certified professional release.
 
 ## P0 architecture
 - [x] Safe migration branch created
@@ -9,7 +9,7 @@ A checkbox is only marked when evidence exists. This branch starts as a migratio
 - [x] Modular TypeScript/Vite source architecture added
 - [x] Central tool registry added
 - [x] GitHub Pages nested base path configured
-- [ ] Dependency lockfile generated and committed by CI
+- [x] Dependency lockfile generated and committed; CI installs with `npm ci`
 - [ ] Full legacy feature parity demonstrated
 - [ ] Obsolete duplicate entry point removed after parity
 
@@ -19,12 +19,15 @@ A checkbox is only marked when evidence exists. This branch starts as a migratio
 - [x] Real page/document progress for migrated worker operations
 - [x] Worker cancellation terminates processing
 - [x] Error categories for invalid/encrypted/unsupported form inputs
-- [ ] Full form field certification
+- [x] Structural Remove pages and Extract pages with reopen/geometry validation
+- [x] Decoded embedded-raster Extract Images workflow certified in Chromium/Firefox/WebKit
+- [x] Lightweight IndexedDB project recovery implemented without document-byte persistence
+- [ ] Full form field certification across broader field types/XFA fixtures
 - [ ] Professional image recompression
 - [ ] Encrypted unlock/protect workflows
 - [ ] Full thumbnail virtualization
 - [ ] Multi-gigabyte streaming/reference architecture
-- [ ] Output-reopen validation for every operation
+- [ ] Output-reopen validation for every export-capable operation
 - [ ] Memory leak certification
 
 ## P2/P3/P4
@@ -34,15 +37,20 @@ A checkbox is only marked when evidence exists. This branch starts as a migratio
 - [x] Explicit quality labels
 - [x] Privacy panel and diagnostics
 - [x] Service worker/manifest foundation
+- [x] Automated axe serious/critical homepage gate
+- [x] Automated responsive width matrix at 360/768/1280 px
+- [x] Chromium/Firefox/WebKit current automated PDF workflow matrix
+- [x] Chromium/Firefox offline reload + worker-backed PDF-operation certification
+- [x] WebKit application-shell/chunk precache certification plus normal worker workflow
+- [ ] Real Safari/WebKit forced-offline worker-operation manual certification
 - [ ] WCAG 2.2 AA manual certification
-- [ ] axe automation
-- [ ] Full responsive width matrix
-- [ ] Chromium/Firefox/WebKit full PDF workflow matrix
-- [ ] Large PDF certification
+- [ ] Large PDF/page-count certification
+- [ ] Multi-gigabyte file-size certification
 - [ ] Color/fidelity certification
-- [ ] Offline PDF-operation certification across target browsers
 - [ ] Production Pages deployment verification
 
 ## Release verdict
 
 Do not merge into `main` or label **PROFESSIONAL RELEASE READY** while any critical unchecked P0/P1 item remains.
+
+Current verdict: **NOT YET PROFESSIONAL RELEASE READY**.

@@ -164,7 +164,7 @@ export function createApp(root: HTMLDivElement | null): void {
     if (action === 'focus-search') search.focus();
     if (action === 'open') void openTool('preview');
     if (action === 'privacy') {
-      infoContent.innerHTML = '<h2>Privacy</h2><p>The migrated core performs PDF processing in your browser. No analytics, telemetry, crash reporting, trackers, or remote document-processing APIs are configured.</p><p>Preferences such as favorites and recent tools are stored in localStorage. Document contents are not stored there.</p>';
+      infoContent.innerHTML = '<h2>Privacy</h2><p>The migrated core performs PDF processing in your browser. No analytics, telemetry, crash reporting, trackers, or remote document-processing APIs are configured.</p><p>Favorites and recent-tool IDs are stored in localStorage. Lightweight project recovery stores the selected tool, settings, and file metadata (name, size, type, and last-modified time) in IndexedDB. PDF/image contents are not stored in localStorage or the recovery database; original files must be reselected after recovery.</p>';
       infoDialog.showModal();
     }
     if (action === 'diagnostics') {
