@@ -37,12 +37,6 @@ function ensurePdf(file: InputFile): void {
   const header = new Uint8Array(file.buffer, 0, Math.min(5, file.buffer.byteLength));
   if (new TextDecoder('ascii').decode(header) !== '%PDF-') throw new PdfOperationError('INVALID_PDF', `${file.name} is not a valid PDF file.`);
 }
-function isPdfOperationError(error: unknown): error is PdfOperationError {
-  if (error instanceof PdfOperationError) return true;
-  if (typeof error !== 'object' || error === null) return false;
-  const candidate = error as { name?: unknown; code?: unknown; message?: unknown };
-  return candidate.name === 'PdfOperationError' && typeof candidate.code === 'string' && typeof candidate.message === 'string';
-}
 async function loadPdf(file: InputFile): Promise<PDFDocument> {
   ensurePdf(file);
   try {
@@ -94,65 +88,81 @@ export async function splitPdf(files: InputFile[], options: Record<string, unkno
     for (let start = 0; start < total; start += every) groups.push(source.getPageIndices().slice(start, start + every));
   } else if (mode === 'selected') groups = [parsePageSelection(asString(options.pages), total)];
   else groups = parseSplitRanges(asString(options.ranges, `1-${total}`), total);
+
   const zip = new JSZip();
   for (let index = 0; index < groups.length; index += 1) {
-    const output = await PDFDocument.create();
-    const pages = await output.copyPages(source, groups[index]!);
-    pages.forEach((page) => output.addPage(page));
-    zip.file(`split-${String(index + 1).padStart(2, '0')}.pdf`, await savePdf(output));
-    progress(emit, 'processing', index + 1, groups.length, `Prepared part ${index + 1} of ${groups.length}`);
+    const doc = await PDFDocument.create();
+    const pages = await doc.copyPages(source, groups[index]!);
+    pages.forEach((page) => doc.addPage(page));
+    zip.file(`split-${String(index + 1).padStart(2, '0')}.pdf`, await savePdf(doc));
+    progress(emit, 'processing', index + 1, groups.length, `Created ${index + 1} of ${groups.length} files`);
   }
+  progress(emit, 'writing', groups.length, groups.length, 'Creating ZIP archive');
   const bytes = await zip.generateAsync({ type: 'uint8array', compression: 'DEFLATE', compressionOptions: { level: 6 } });
   return { outputs: [{ name: 'split-pdf.zip', type: 'application/zip', buffer: bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer }] };
 }
 
 export async function removePages(files: InputFile[], options: Record<string, unknown>, emit: Progress): Promise<OperationResult> {
   const file = files[0];
-  if (!file) throw new PdfOperationError('INPUT_REQUIRED', 'Choose a PDF.');
+  if (!file) throw new PdfOperationError('INPUT_REQUIRED', 'Choose a PDF to remove pages from.');
   const source = await loadPdf(file);
-  const total = source.getPageCount();
-  const remove = new Set(parsePageSelection(asString(options.pages), total));
-  const keep = source.getPageIndices().filter((page) => !remove.has(page));
-  if (!keep.length) throw new PdfOperationError('INVALID_PAGE_SELECTION', 'At least one page must remain.');
+  const pagesValue = asString(options.pages).trim();
+  if (!pagesValue) throw new PdfOperationError('INVALID_PAGE_RANGE', 'Enter at least one page to remove.');
+  const removed = new Set(parsePageSelection(pagesValue, source.getPageCount()));
+  const keep = source.getPageIndices().filter((page) => !removed.has(page));
+  if (!keep.length) throw new PdfOperationError('EMPTY_DOCUMENT', 'At least one page must remain in the PDF.');
   const output = await PDFDocument.create();
   const pages = await output.copyPages(source, keep);
-  pages.forEach((page, index) => { output.addPage(page); progress(emit, 'processing', index + 1, pages.length, `Copied page ${index + 1} of ${pages.length}`); });
+  pages.forEach((page, index) => {
+    output.addPage(page);
+    progress(emit, 'processing', index + 1, pages.length, `Kept page ${index + 1} of ${pages.length}`);
+  });
+  progress(emit, 'writing', pages.length, pages.length, 'Writing PDF with selected pages removed');
   return { outputs: [pdfOutput('pages-removed.pdf', await savePdf(output))] };
 }
 
 export async function extractPages(files: InputFile[], options: Record<string, unknown>, emit: Progress): Promise<OperationResult> {
   const file = files[0];
-  if (!file) throw new PdfOperationError('INPUT_REQUIRED', 'Choose a PDF.');
+  if (!file) throw new PdfOperationError('INPUT_REQUIRED', 'Choose a PDF to extract pages from.');
   const source = await loadPdf(file);
-  const selected = parsePageSelection(asString(options.pages), source.getPageCount());
+  const pagesValue = asString(options.pages).trim();
+  if (!pagesValue) throw new PdfOperationError('INVALID_PAGE_RANGE', 'Enter at least one page to extract.');
+  const selected = parsePageSelection(pagesValue, source.getPageCount());
   const output = await PDFDocument.create();
   const pages = await output.copyPages(source, selected);
-  pages.forEach((page, index) => { output.addPage(page); progress(emit, 'processing', index + 1, pages.length, `Extracted page ${index + 1} of ${pages.length}`); });
+  pages.forEach((page, index) => {
+    output.addPage(page);
+    progress(emit, 'processing', index + 1, pages.length, `Extracted page ${index + 1} of ${pages.length}`);
+  });
+  progress(emit, 'writing', pages.length, pages.length, 'Writing extracted-pages PDF');
   return { outputs: [pdfOutput('extracted-pages.pdf', await savePdf(output))] };
 }
 
-export async function organizePages(files: InputFile[], options: Record<string, unknown>, emit: Progress): Promise<OperationResult> {
+export async function organizePdf(files: InputFile[], options: Record<string, unknown>, emit: Progress): Promise<OperationResult> {
   const file = files[0];
-  if (!file) throw new PdfOperationError('INPUT_REQUIRED', 'Choose a PDF.');
+  if (!file) throw new PdfOperationError('INPUT_REQUIRED', 'Choose a PDF to organize.');
   const source = await loadPdf(file);
   const order = parsePageOrder(asString(options.order), source.getPageCount());
   const output = await PDFDocument.create();
   const pages = await output.copyPages(source, order);
-  pages.forEach((page, index) => { output.addPage(page); progress(emit, 'processing', index + 1, pages.length, `Placed page ${index + 1} of ${pages.length}`); });
+  pages.forEach((page, index) => {
+    output.addPage(page);
+    progress(emit, 'processing', index + 1, pages.length, `Applied page ${index + 1} of ${pages.length}`);
+  });
   return { outputs: [pdfOutput('organized.pdf', await savePdf(output))] };
 }
 
-export async function rotatePages(files: InputFile[], options: Record<string, unknown>, emit: Progress): Promise<OperationResult> {
+export async function rotatePdf(files: InputFile[], options: Record<string, unknown>, emit: Progress): Promise<OperationResult> {
   const file = files[0];
-  if (!file) throw new PdfOperationError('INPUT_REQUIRED', 'Choose a PDF.');
+  if (!file) throw new PdfOperationError('INPUT_REQUIRED', 'Choose a PDF to rotate.');
   const doc = await loadPdf(file);
   const pages = doc.getPages();
   const target = asString(options.target, 'all');
-  const selected = target === 'selected' ? new Set(parsePageSelection(asString(options.pages), pages.length)) : null;
+  const selection = new Set(target === 'selected' ? parsePageSelection(asString(options.pages), pages.length) : []);
   const amount = asNumber(options.degrees, 90);
   pages.forEach((page, index) => {
-    const shouldRotate = target === 'all' || (target === 'odd' && index % 2 === 0) || (target === 'even' && index % 2 === 1) || Boolean(selected?.has(index));
-    if (shouldRotate) page.setRotation(degrees((page.getRotation().angle + amount) % 360));
+    const apply = target === 'all' || (target === 'odd' && index % 2 === 0) || (target === 'even' && index % 2 === 1) || selection.has(index);
+    if (apply) page.setRotation(degrees((page.getRotation().angle + amount) % 360));
     progress(emit, 'processing', index + 1, pages.length, `Processed page ${index + 1} of ${pages.length}`);
   });
   return { outputs: [pdfOutput('rotated.pdf', await savePdf(doc))] };
@@ -164,17 +174,18 @@ export async function addPageNumbers(files: InputFile[], options: Record<string,
   const doc = await loadPdf(file);
   const font = await doc.embedFont(StandardFonts.Helvetica);
   const pages = doc.getPages();
-  const selected = asString(options.pages).trim() ? new Set(parsePageSelection(asString(options.pages), pages.length)) : null;
-  const start = Math.max(1, Math.floor(asNumber(options.start, 1)));
-  const fontSize = Math.max(6, Math.min(72, asNumber(options.fontSize, 11)));
+  const selection = new Set(parsePageSelection(asString(options.pages), pages.length));
+  const start = Math.floor(asNumber(options.start, 1));
+  const size = Math.max(6, Math.min(72, asNumber(options.fontSize, 11)));
   const margin = Math.max(4, asNumber(options.margin, 24));
   const format = asString(options.format, 'page-total');
+  let number = start;
   pages.forEach((page, index) => {
-    if (!selected || selected.has(index)) {
-      const number = start + index;
-      const text = format === 'fraction' ? `${number} / ${pages.length}` : format === 'page' ? `Page ${number}` : format === 'number' ? String(number) : `Page ${number} of ${pages.length}`;
-      const width = font.widthOfTextAtSize(text, fontSize);
-      page.drawText(text, { x: (page.getWidth() - width) / 2, y: margin, size: fontSize, font, color: rgb(0.15, 0.15, 0.15) });
+    if (selection.has(index)) {
+      const text = format === 'number' ? `${number}` : format === 'page' ? `Page ${number}` : format === 'fraction' ? `${number} / ${selection.size}` : `Page ${number} of ${selection.size}`;
+      const width = font.widthOfTextAtSize(text, size);
+      page.drawText(text, { x: Math.max(margin, (page.getWidth() - width) / 2), y: margin, size, font, color: rgb(0.12, 0.12, 0.12) });
+      number += 1;
     }
     progress(emit, 'processing', index + 1, pages.length, `Numbered page ${index + 1} of ${pages.length}`);
   });
@@ -184,10 +195,11 @@ export async function addPageNumbers(files: InputFile[], options: Record<string,
 export async function addWatermark(files: InputFile[], options: Record<string, unknown>, emit: Progress): Promise<OperationResult> {
   const file = files[0];
   if (!file) throw new PdfOperationError('INPUT_REQUIRED', 'Choose a PDF.');
+  const text = asString(options.text, 'CONFIDENTIAL').trim();
+  if (!text) throw new PdfOperationError('INVALID_WATERMARK', 'Watermark text cannot be empty.');
   const doc = await loadPdf(file);
   const font = await doc.embedFont(StandardFonts.HelveticaBold);
   const pages = doc.getPages();
-  const text = asString(options.text, 'CONFIDENTIAL');
   const opacity = Math.max(0.05, Math.min(1, asNumber(options.opacity, 0.18)));
   const rotation = asNumber(options.rotation, -35);
   const fontSize = Math.max(12, Math.min(120, asNumber(options.fontSize, 42)));
@@ -284,27 +296,20 @@ export async function fillForms(files: InputFile[], options: Record<string, unkn
 export async function metadata(files: InputFile[], _options: Record<string, unknown>, emit: Progress): Promise<OperationResult> {
   const file = files[0];
   if (!file) throw new PdfOperationError('INPUT_REQUIRED', 'Choose a PDF.');
-  try {
-    const doc = await loadPdf(file);
-    const info = {
-      title: doc.getTitle() ?? '',
-      author: doc.getAuthor() ?? '',
-      subject: doc.getSubject() ?? '',
-      keywords: doc.getKeywords() ?? '',
-      creator: doc.getCreator() ?? '',
-      producer: doc.getProducer() ?? '',
-      pageCount: doc.getPageCount(),
-      encrypted: false,
-      creationDate: doc.getCreationDate()?.toISOString() ?? '',
-      modificationDate: doc.getModificationDate()?.toISOString() ?? ''
-    };
-    progress(emit, 'finalizing', 1, 1, 'Metadata read');
-    return { outputs: [], info };
-  } catch (error) {
-    if (isPdfOperationError(error)) throw error;
-    const message = error instanceof Error ? error.message : String(error);
-    throw new PdfOperationError('INVALID_PDF', `${file.name} could not be parsed.`, message);
-  }
+  const doc = await loadPdf(file);
+  progress(emit, 'finalizing', 1, 1, 'Metadata read');
+  return { outputs: [], info: {
+    title: doc.getTitle() ?? '',
+    author: doc.getAuthor() ?? '',
+    subject: doc.getSubject() ?? '',
+    keywords: doc.getKeywords() ?? '',
+    creator: doc.getCreator() ?? '',
+    producer: doc.getProducer() ?? '',
+    pageCount: doc.getPageCount(),
+    encrypted: false,
+    creationDate: doc.getCreationDate()?.toISOString() ?? '',
+    modificationDate: doc.getModificationDate()?.toISOString() ?? ''
+  }};
 }
 
 export async function optimizePdf(files: InputFile[], _options: Record<string, unknown>, emit: Progress): Promise<OperationResult> {

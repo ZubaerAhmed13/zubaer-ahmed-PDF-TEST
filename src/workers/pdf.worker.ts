@@ -1,5 +1,6 @@
 /// <reference lib="webworker" />
-import { addPageNumbers, addWatermark, extractPages, fillForms, imagesToPdf, inspectForms, mergePdf, metadata, optimizePdf, organizePdf, removePages, rotatePdf, splitPdf } from '../pdf/core';
+import { addPageNumbers, addWatermark, extractPages, fillForms, imagesToPdf, inspectForms, mergePdf, optimizePdf, organizePdf, removePages, rotatePdf, splitPdf } from '../pdf/core';
+import { metadata } from '../pdf/metadata';
 import { normalizePdfError } from '../pdf/errors';
 import type { OperationResult, WorkerRequest, WorkerResponse } from '../pdf/types';
 

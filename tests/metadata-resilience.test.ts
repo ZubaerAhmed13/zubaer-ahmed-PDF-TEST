@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { metadata } from '../src/pdf/core';
+import { metadata } from '../src/pdf/metadata';
 import type { InputFile } from '../src/pdf/types';
 
 function corruptPdf(): InputFile {
@@ -12,7 +12,7 @@ function corruptPdf(): InputFile {
 }
 
 describe('metadata malformed-document boundary', () => {
-  it('classifies post-load structural failures as INVALID_PDF', async () => {
+  it('classifies load or post-load structural failures as INVALID_PDF', async () => {
     await expect(metadata([corruptPdf()], {}, () => undefined)).rejects.toMatchObject({
       name: 'PdfOperationError',
       code: 'INVALID_PDF',
