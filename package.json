@@ -19,6 +19,7 @@
     "pdfjs-dist": "4.10.38"
   },
   "devDependencies": {
+    "@axe-core/playwright": "4.13.0",
     "@eslint/js": "9.39.5",
     "@playwright/test": "1.62.1",
     "@types/node": "22.10.2",
