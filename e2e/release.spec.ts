@@ -96,6 +96,39 @@ test('release matrix reopens structural edit exports', async ({ page }) => {
   expect((await PDFDocument.load(optimizedBytes)).getPageCount()).toBe(3);
 });
 
+test('split exports the requested ranges as reopenable PDFs', async ({ page }) => {
+  const dialog = await openTool(page, 'split', 'split');
+  await dialog.locator('#workspace-file').setInputFiles({ name: 'three-pages.pdf', mimeType: 'application/pdf', buffer: await pdfFixture(3) });
+  await dialog.locator('select[name="mode"]').selectOption('ranges');
+  await dialog.locator('input[name="ranges"]').fill('1-2;3');
+  await dialog.getByRole('button', { name: 'Run Split PDF' }).click();
+  await expect(dialog.locator('#stage')).toHaveText('Complete');
+
+  const zipBytes = await downloadFrom(dialog, page, /^Download split-pdf\.zip/);
+  const zip = await JSZip.loadAsync(zipBytes);
+  const names = Object.keys(zip.files).filter((name) => name.endsWith('.pdf')).sort();
+  expect(names).toEqual(['split-01.pdf', 'split-02.pdf']);
+  const pageCounts: number[] = [];
+  for (const name of names) {
+    const bytes = await zip.file(name)!.async('uint8array');
+    pageCounts.push((await PDFDocument.load(bytes)).getPageCount());
+  }
+  expect(pageCounts).toEqual([2, 1]);
+});
+
+test('PDF.js preview renders and navigates pages with the worker enabled', async ({ page }) => {
+  const dialog = await openTool(page, 'view pdf', 'preview');
+  await dialog.locator('#workspace-file').setInputFiles({ name: 'preview.pdf', mimeType: 'application/pdf', buffer: await pdfFixture(2) });
+  await dialog.getByRole('button', { name: 'Run View PDF' }).click();
+  await expect(dialog.locator('#stage')).toHaveText('Preview ready');
+  await expect(dialog.locator('#viewer-status')).toHaveText('Page 1 of 2');
+  const dimensions = await dialog.locator('#pdf-canvas').evaluate((canvas: HTMLCanvasElement) => ({ width: canvas.width, height: canvas.height }));
+  expect(dimensions.width).toBeGreaterThan(1);
+  expect(dimensions.height).toBeGreaterThan(1);
+  await dialog.getByRole('button', { name: 'Next' }).click();
+  await expect(dialog.locator('#viewer-status')).toHaveText('Page 2 of 2');
+});
+
 test('AcroForm inspect, fill, export, and reopen works through the UI', async ({ page }) => {
   const dialog = await openTool(page, 'acroform', 'forms');
   await dialog.locator('#workspace-file').setInputFiles({ name: 'form.pdf', mimeType: 'application/pdf', buffer: await formFixture() });
@@ -151,6 +184,29 @@ test('core PDF processing makes no cross-origin network requests', async ({ page
   await dialog.getByRole('button', { name: 'Run Merge PDF' }).click();
   await expect(dialog.locator('#stage')).toHaveText('Complete');
   expect(externalRequests).toEqual([]);
+});
+
+test('PWA manifest and service worker resolve under the GitHub Pages base path', async ({ page }) => {
+  await expect(page.locator('link[rel="manifest"]')).toHaveAttribute('href', './manifest.webmanifest');
+  const manifest = await page.evaluate(async () => {
+    const response = await fetch('./manifest.webmanifest');
+    if (!response.ok) throw new Error(`Manifest request failed: ${response.status}`);
+    return response.json() as Promise<{ start_url: string; scope: string; display: string }>;
+  });
+  expect(manifest).toMatchObject({ start_url: './', scope: './', display: 'standalone' });
+
+  const serviceWorker = await page.evaluate(async () => {
+    if (!('serviceWorker' in navigator)) return { supported: false, scope: '', script: '' };
+    const registration = await Promise.race([
+      navigator.serviceWorker.ready,
+      new Promise<null>((resolve) => setTimeout(() => resolve(null), 7_000))
+    ]);
+    if (!registration) return { supported: true, scope: '', script: '' };
+    return { supported: true, scope: registration.scope, script: registration.active?.scriptURL ?? '' };
+  });
+  expect(serviceWorker.supported).toBe(true);
+  expect(serviceWorker.scope).toContain(appPath);
+  expect(serviceWorker.script).toContain(`${appPath}sw.js`);
 });
 
 test('homepage has no serious or critical automated accessibility violations', async ({ page }) => {
