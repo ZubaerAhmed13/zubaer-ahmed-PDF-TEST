@@ -15,7 +15,7 @@ function readList(key: string): string[] {
 export function createApp(root: HTMLDivElement | null): void {
   if (!root) throw new Error('APP_ROOT_MISSING');
 
-  const recent = readList(RECENT_KEY);
+  let recent = readList(RECENT_KEY);
   const favorites = new Set(readList(FAVORITES_KEY));
 
   root.innerHTML = `
@@ -39,6 +39,17 @@ export function createApp(root: HTMLDivElement | null): void {
           <button class="secondary" data-action="focus-search">Choose a tool</button>
         </div>
         <p class="privacy-chip">Your files stay on this device for the migrated local tools.</p>
+      </section>
+
+      <section class="quick-access" aria-label="Quick access">
+        <article class="quick-panel">
+          <div class="quick-heading"><div><p class="eyebrow">FAVORITES</p><h2>Your pinned tools</h2></div></div>
+          <div id="favorite-tools" class="quick-links"></div>
+        </article>
+        <article class="quick-panel">
+          <div class="quick-heading"><div><p class="eyebrow">RECENT</p><h2>Recently used</h2></div></div>
+          <div id="recent-tools" class="quick-links"></div>
+        </article>
       </section>
 
       <section class="discovery" aria-labelledby="tools-title">
@@ -68,9 +79,22 @@ export function createApp(root: HTMLDivElement | null): void {
   const workspace = root.querySelector<HTMLDivElement>('#workspace');
   const infoDialog = root.querySelector<HTMLDialogElement>('#info-dialog');
   const infoContent = root.querySelector<HTMLDivElement>('#info-content');
-  if (!grid || !search || !workspaceDialog || !workspace || !infoDialog || !infoContent) return;
+  const favoriteTools = root.querySelector<HTMLDivElement>('#favorite-tools');
+  const recentTools = root.querySelector<HTMLDivElement>('#recent-tools');
+  if (!grid || !search || !workspaceDialog || !workspace || !infoDialog || !infoContent || !favoriteTools || !recentTools) return;
 
   let category = 'all';
+
+  const toolButtons = (ids: string[], emptyMessage: string): string => {
+    const available = ids.map((id) => tools.find((tool) => tool.id === id)).filter((tool): tool is NonNullable<typeof tool> => Boolean(tool));
+    if (!available.length) return `<p class="quick-empty">${emptyMessage}</p>`;
+    return available.map((tool) => `<button type="button" class="quick-tool" data-open-tool="${tool.id}"><span aria-hidden="true">${tool.icon}</span><strong>${tool.name}</strong><small>${tool.category}</small></button>`).join('');
+  };
+
+  const renderQuickAccess = (): void => {
+    favoriteTools.innerHTML = toolButtons([...favorites], 'Pin a tool with the star button and it will appear here.');
+    recentTools.innerHTML = toolButtons(recent, 'Tools you open will appear here without storing document contents.');
+  };
 
   const render = (): void => {
     const query = search.value.trim().toLowerCase();
@@ -95,8 +119,9 @@ export function createApp(root: HTMLDivElement | null): void {
   const openTool = async (id: string): Promise<void> => {
     const tool = tools.find((candidate) => candidate.id === id);
     if (!tool) return;
-    const nextRecent = [id, ...recent.filter((item) => item !== id)].slice(0, 6);
-    localStorage.setItem(RECENT_KEY, JSON.stringify(nextRecent));
+    recent = [id, ...recent.filter((item) => item !== id)].slice(0, 6);
+    localStorage.setItem(RECENT_KEY, JSON.stringify(recent));
+    renderQuickAccess();
     workspace.innerHTML = `<div class="workspace-loading" role="status">Loading ${tool.name}…</div>`;
     workspaceDialog.showModal();
     const module = await tool.load();
@@ -113,9 +138,15 @@ export function createApp(root: HTMLDivElement | null): void {
       else favorites.add(id);
       saveFavorites();
       render();
+      renderQuickAccess();
       return;
     }
     const open = target.closest<HTMLButtonElement>('[data-open-tool]');
+    if (open?.dataset.openTool) void openTool(open.dataset.openTool);
+  });
+
+  root.querySelector('.quick-access')?.addEventListener('click', (event) => {
+    const open = (event.target as HTMLElement).closest<HTMLButtonElement>('[data-open-tool]');
     if (open?.dataset.openTool) void openTool(open.dataset.openTool);
   });
 
@@ -159,4 +190,5 @@ export function createApp(root: HTMLDivElement | null): void {
   });
 
   render();
+  renderQuickAccess();
 }
