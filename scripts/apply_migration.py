@@ -12,6 +12,13 @@ PAYLOAD = ROOT / "scripts" / "migration.payload"
 EXPECTED_SHA256 = "a4197620589bca085eaaad95f5675292efcc23054ee2ee3b1d53d383a74f11c1"
 
 encoded = PAYLOAD.read_text(encoding="utf-8").strip()
+# GitHub's bootstrap payload was committed with one trailing Base64 padding
+# character omitted. Padding is not payload data, so normalize only the
+# required trailing '=' characters before strict decoding. The SHA-256 check
+# below still authenticates the decoded compressed bytes before any write.
+padding = (-len(encoded)) % 4
+if padding:
+    encoded += "=" * padding
 compressed = base64.b64decode(encoded, validate=True)
 actual = hashlib.sha256(compressed).hexdigest()
 if actual != EXPECTED_SHA256:
