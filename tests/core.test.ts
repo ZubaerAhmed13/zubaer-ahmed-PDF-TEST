@@ -4,12 +4,14 @@ import { PDFDocument } from 'pdf-lib';
 import {
   addPageNumbers,
   addWatermark,
+  extractPages,
   fillForms,
   inspectForms,
   mergePdf,
   metadata,
   optimizePdf,
   organizePdf,
+  removePages,
   rotatePdf,
   splitPdf
 } from '../src/pdf/core';
@@ -66,6 +68,22 @@ describe('structural PDF operations', () => {
     }
   });
 
+  it('removes selected pages while preserving the remaining page geometry', async () => {
+    const result = await removePages([await fixture('remove.pdf', 4)], { pages: '2,4' }, ignoreProgress);
+    const output = await PDFDocument.load(result.outputs[0]!.buffer);
+    expect(output.getPages().map((page) => page.getWidth())).toEqual([300, 302]);
+  });
+
+  it('extracts selected pages while preserving their original geometry', async () => {
+    const result = await extractPages([await fixture('extract.pdf', 4)], { pages: '2-3' }, ignoreProgress);
+    const output = await PDFDocument.load(result.outputs[0]!.buffer);
+    expect(output.getPages().map((page) => page.getWidth())).toEqual([301, 302]);
+  });
+
+  it('refuses to remove every page from a document', async () => {
+    await expect(removePages([await fixture('remove-all.pdf', 2)], { pages: '1-2' }, ignoreProgress)).rejects.toMatchObject({ code: 'EMPTY_DOCUMENT' });
+  });
+
   it('reorders, omits, and duplicates pages deterministically', async () => {
     const result = await organizePdf([await fixture('organize.pdf', 3)], { order: '3,1,1' }, ignoreProgress);
     const output = await PDFDocument.load(result.outputs[0]!.buffer);
@@ -112,6 +130,7 @@ describe('structural PDF operations', () => {
     expect(result.info?.title).toBe('DocFlow fixture');
     expect(result.info?.author).toBe('Test author');
     expect(result.info?.pageCount).toBe(1);
+    expect(result.info?.encrypted).toBe(false);
   });
 
   it('structurally optimizes and reopens without changing page count', async () => {

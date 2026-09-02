@@ -48,8 +48,7 @@ test('runs a real worker-backed merge workflow', async ({ page }) => {
   await expect(dialog.getByRole('link', { name: /Download merged\.pdf/ })).toBeVisible();
 });
 
-test('runs a local PDF operation after an offline reload', async ({ page, context, browserName }) => {
-  test.skip(browserName !== 'chromium', 'Service-worker offline certification is executed in Chromium; other engines retain their online worker workflow coverage.');
+test('runs a local PDF operation after an offline reload', async ({ page, context }) => {
   await page.goto('/zubaer-ahmed-PDF-TEST/');
   await page.waitForFunction(async () => {
     if (!('serviceWorker' in navigator)) return false;
@@ -74,4 +73,26 @@ test('runs a local PDF operation after an offline reload', async ({ page, contex
   await expect(dialog.getByRole('link', { name: /Download merged\.pdf/ })).toBeVisible();
 
   await context.setOffline(false);
+});
+
+test('responsive shell and workspace avoid horizontal overflow at target widths', async ({ page }) => {
+  for (const width of [360, 768, 1280]) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto('/zubaer-ahmed-PDF-TEST/');
+    await expect(page.getByRole('heading', { name: /Private PDF tools/ })).toBeVisible();
+    const shellOverflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+    expect(shellOverflow).toBeLessThanOrEqual(1);
+
+    await page.getByLabel('Search tools').fill('merge');
+    await page.getByRole('button', { name: 'Open tool' }).click();
+    const dialog = page.getByRole('dialog', { name: 'Workspace' });
+    await expect(dialog).toBeVisible();
+    await expect(dialog.locator('.drop-zone')).toBeVisible();
+    await expect(dialog.getByRole('button', { name: 'Run Merge PDF' })).toBeVisible();
+    const dialogBox = await dialog.boundingBox();
+    expect(dialogBox).not.toBeNull();
+    expect((dialogBox?.x ?? 0) + (dialogBox?.width ?? 0)).toBeLessThanOrEqual(width + 1);
+    await page.keyboard.press('Escape');
+    await expect(dialog).toBeHidden();
+  }
 });
