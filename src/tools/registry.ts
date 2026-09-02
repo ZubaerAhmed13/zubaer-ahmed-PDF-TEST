@@ -10,7 +10,7 @@ export interface ToolDefinition {
   quality: 'Lossless' | 'Potentially lossy' | 'Inspection';
   status: 'Migrated' | 'Limited' | 'Preview';
   multipleFiles: boolean;
-  load: () => Promise<typeof import('./workspace')>;
+  load: () => Promise<{ mountWorkspace: typeof import('./workspace').mountWorkspace }>;
 }
 
 export const toolCategories = [
@@ -38,6 +38,18 @@ export const tools: ToolDefinition[] = [
   tool({ id: 'watermark', name: 'Add watermark', category: 'edit', description: 'Add a text watermark while preserving existing page content.', keywords: ['stamp','text'], icon: 'W', quality: 'Lossless', status: 'Migrated', multipleFiles: false }),
   tool({ id: 'images-to-pdf', name: 'Images to PDF', category: 'convert', description: 'Create a PDF from JPEG or PNG images.', keywords: ['jpg','jpeg','png'], icon: '▣', quality: 'Potentially lossy', status: 'Migrated', multipleFiles: true }),
   tool({ id: 'pdf-to-images', name: 'PDF to images', category: 'convert', description: 'Render selected PDF pages to PNG or JPEG.', keywords: ['png','jpg','render'], icon: '▤', quality: 'Potentially lossy', status: 'Migrated', multipleFiles: false }),
+  {
+    id: 'extract-images',
+    name: 'Extract images',
+    category: 'convert',
+    description: 'Extract decoded embedded raster images as PNG without rendering whole pages. Original compressed stream bytes are not claimed to be preserved.',
+    keywords: ['embedded','image','extract','xobject','inline','png'],
+    icon: '◫',
+    quality: 'Potentially lossy',
+    status: 'Migrated',
+    multipleFiles: false,
+    load: () => import('./extractImagesWorkspace')
+  },
   tool({ id: 'forms', name: 'Fill PDF forms', category: 'forms', description: 'Edit supported AcroForm fields; XFA is detected and reported as unsupported.', keywords: ['acroform','xfa','fields'], icon: '☑', quality: 'Lossless', status: 'Preview', multipleFiles: false }),
   tool({ id: 'metadata', name: 'Document information', category: 'review', description: 'Inspect standard PDF metadata and encryption state.', keywords: ['metadata','author','title'], icon: 'i', quality: 'Inspection', status: 'Migrated', multipleFiles: false }),
   tool({ id: 'compress', name: 'Optimize PDF', category: 'optimize', description: 'Structural re-save only. Image recompression is not yet release-certified.', keywords: ['compress','size','optimize'], icon: '⇲', quality: 'Potentially lossy', status: 'Limited', multipleFiles: false })
