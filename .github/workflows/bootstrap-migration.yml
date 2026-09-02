@@ -54,7 +54,7 @@ jobs:
           package['devDependencies']['@eslint/js'] = '9.39.5'
           package['devDependencies']['eslint'] = '9.39.5'
           package['devDependencies']['@playwright/test'] = '1.62.1'
-          package['devDependencies']['vitest'] = '2.1.9'
+          package['devDependencies']['vitest'] = '4.1.11'
           package['devDependencies']['vite'] = '6.4.3'
           package_path.write_text(json.dumps(package, indent=2) + '\n', encoding='utf-8')
           PY
