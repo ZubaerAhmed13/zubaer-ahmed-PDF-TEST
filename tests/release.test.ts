@@ -61,6 +61,7 @@ async function extendedFormFixture(): Promise<InputFile> {
 }
 
 const ignoreProgress = (): void => undefined;
+const encryptedPdfBase64 = 'JVBERi0xLjMKJeLjz9MKMSAwIG9iago8PAovUHJvZHVjZXIgPDk2ZjFkOGU3ODU+Cj4+CmVuZG9iagoyIDAgb2JqCjw8Ci9UeXBlIC9QYWdlcwovQ291bnQgMQovS2lkcyBbIDQgMCBSIF0KPj4KZW5kb2JqCjMgMCBvYmoKPDwKL1R5cGUgL0NhdGFsb2cKL1BhZ2VzIDIgMCBSCj4+CmVuZG9iago0IDAgb2JqCjw8Ci9UeXBlIC9QYWdlCi9SZXNvdXJjZXMgPDwKPj4KL01lZGlhQm94IFsgMC4wIDAuMCAzMDAgNDAwIF0KL1BhcmVudCAyIDAgUgo+PgplbmRvYmoKNSAwIG9iago8PAovViAyCi9SIDMKL0xlbmd0aCAxMjgKL1AgNDI5NDk2NzI5MgovRmlsdGVyIC9TdGFuZGFyZAovTyA8NmExM2EyOWEwNTEyN2ExMzlmMTExNTU3ZDk5MTk0YzVjZmE5NDVhYTk5Y2UwYTM0YzMwNzM5YTkwNjYwOTM3Mz4KL1UgPDFjNDdmZWJjNWI5Yjg0NDY5MzFmZGM3MWU3ZDZiNzNjMjhiZjRlNWU0ZTc1OGE0MTY0MDA0ZTU2ZmZmYTAxMDg+Cj4+CmVuZG9iagp4cmVmCjAgNgowMDAwMDAwMDAwIDY1NTM1IGYgCjAwMDAwMDAwMTUgMDAwMDAgbiAKMDAwMDAwMDA1OSAwMDAwMCBuIAowMDAwMDAwMTE4IDAwMDAwIG4gCjAwMDAwMDAxNjcgMDAwMDAgbiAKMDAwMDAwMDI2MSAwMDAwMCBuIAp0cmFpbGVyCjw8Ci9TaXplIDYKL1Jvb3QgMyAwIFIKL0luZm8gMSAwIFIKL0lEIFsgPDM2MzczMjY0MzYzODM0MzczMTM4NjM2MjMwMzE2NDMzMzgzNTYyNjUzNjMyNjYzMTMwNjIzMjMwMzY2NjM3Mzk+IDwzNjM3MzI2NDM2MzgzNDM3MzEzODYzNjIzMDMxNjQzMzM4MzU2MjY1MzYzMjY2MzEzMDYyMzIzMDM2NjYzNzM5PiBdCi9FbmNyeXB0IDUgMCBSCj4+CnN0YXJ0eHJlZgo0NzYKJSVFT0YK';
 
 describe('release certification coverage', () => {
   it('detects and fills text, multiline, checkbox, radio, dropdown, and option-list AcroForm fields', async () => {
@@ -117,6 +118,11 @@ describe('release certification coverage', () => {
     const bytes = new TextEncoder().encode('%PDF-1.7\nthis is deliberately malformed');
     const input = inputFromBytes('broken.pdf', 'application/pdf', bytes);
     await expect(inspectForms([input], {}, ignoreProgress)).rejects.toMatchObject({ code: 'INVALID_PDF' });
+  });
+
+  it('classifies a real standards-encrypted PDF as password required', async () => {
+    const input = inputFromBytes('encrypted.pdf', 'application/pdf', Buffer.from(encryptedPdfBase64, 'base64'));
+    await expect(inspectForms([input], {}, ignoreProgress)).rejects.toMatchObject({ code: 'PASSWORD_REQUIRED' });
   });
 
   it('embeds a PNG into a reopenable A4 PDF without changing the source image bytes first', async () => {

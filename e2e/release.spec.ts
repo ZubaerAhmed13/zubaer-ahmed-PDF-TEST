@@ -24,9 +24,11 @@ async function formFixture(): Promise<Buffer> {
   return Buffer.from(await doc.save());
 }
 
-async function openTool(page: Page, query: string): Promise<Locator> {
+async function openTool(page: Page, query: string, toolId: string): Promise<Locator> {
   await page.getByLabel('Search tools').fill(query);
-  await page.getByRole('button', { name: 'Open tool' }).click();
+  const openButton = page.locator(`#tool-grid [data-open-tool="${toolId}"]`);
+  await expect(openButton).toHaveCount(1);
+  await openButton.click();
   const dialog = page.getByRole('dialog', { name: 'Workspace' });
   await expect(dialog).toBeVisible();
   return dialog;
@@ -44,12 +46,13 @@ async function downloadFrom(dialog: Locator, page: Page, name: RegExp): Promise<
 async function runPdfExport(
   page: Page,
   query: string,
+  toolId: string,
   toolName: string,
   outputName: RegExp,
   input: Buffer,
   configure?: (dialog: Locator) => Promise<void>
 ): Promise<Buffer> {
-  const dialog = await openTool(page, query);
+  const dialog = await openTool(page, query, toolId);
   await dialog.locator('#workspace-file').setInputFiles({ name: 'fixture.pdf', mimeType: 'application/pdf', buffer: input });
   if (configure) await configure(dialog);
   await dialog.getByRole('button', { name: `Run ${toolName}` }).click();
@@ -68,33 +71,33 @@ test.beforeEach(async ({ page }) => {
 test('release matrix reopens structural edit exports', async ({ page }) => {
   const input = await pdfFixture(3);
 
-  const rotatedBytes = await runPdfExport(page, 'rotate', 'Rotate pages', /^Download rotated\.pdf/, input, async (dialog) => {
+  const rotatedBytes = await runPdfExport(page, 'rotate', 'rotate', 'Rotate pages', /^Download rotated\.pdf/, input, async (dialog) => {
     await dialog.locator('select[name="degrees"]').selectOption('90');
   });
   const rotated = await PDFDocument.load(rotatedBytes);
   expect(rotated.getPageCount()).toBe(3);
   expect(rotated.getPages().every((pdfPage) => pdfPage.getRotation().angle === 90)).toBe(true);
 
-  const organizedBytes = await runPdfExport(page, 'organize', 'Organize pages', /^Download organized\.pdf/, input, async (dialog) => {
+  const organizedBytes = await runPdfExport(page, 'organize', 'organize', 'Organize pages', /^Download organized\.pdf/, input, async (dialog) => {
     await dialog.locator('input[name="order"]').fill('3,1,1');
   });
   const organized = await PDFDocument.load(organizedBytes);
   expect(organized.getPages().map((pdfPage) => pdfPage.getWidth())).toEqual([302, 300, 300]);
 
-  const numberedBytes = await runPdfExport(page, 'page numbers', 'Add page numbers', /^Download numbered\.pdf/, input);
+  const numberedBytes = await runPdfExport(page, 'page numbers', 'page-numbers', 'Add page numbers', /^Download numbered\.pdf/, input);
   expect((await PDFDocument.load(numberedBytes)).getPageCount()).toBe(3);
 
-  const watermarkedBytes = await runPdfExport(page, 'watermark', 'Add watermark', /^Download watermarked\.pdf/, input, async (dialog) => {
+  const watermarkedBytes = await runPdfExport(page, 'watermark', 'watermark', 'Add watermark', /^Download watermarked\.pdf/, input, async (dialog) => {
     await dialog.locator('input[name="text"]').fill('RELEASE TEST');
   });
   expect((await PDFDocument.load(watermarkedBytes)).getPageCount()).toBe(3);
 
-  const optimizedBytes = await runPdfExport(page, 'optimize', 'Optimize PDF', /^Download optimized\.pdf/, input);
+  const optimizedBytes = await runPdfExport(page, 'optimize', 'compress', 'Optimize PDF', /^Download optimized\.pdf/, input);
   expect((await PDFDocument.load(optimizedBytes)).getPageCount()).toBe(3);
 });
 
 test('AcroForm inspect, fill, export, and reopen works through the UI', async ({ page }) => {
-  const dialog = await openTool(page, 'acroform');
+  const dialog = await openTool(page, 'acroform', 'forms');
   await dialog.locator('#workspace-file').setInputFiles({ name: 'form.pdf', mimeType: 'application/pdf', buffer: await formFixture() });
   await dialog.getByRole('button', { name: 'Inspect form fields' }).click();
   await expect(dialog.locator('#form-field-summary')).toContainText('2 supported field(s)');
@@ -111,7 +114,7 @@ test('AcroForm inspect, fill, export, and reopen works through the UI', async ({
 
 test('image conversion workflows produce valid downloadable artifacts', async ({ page }) => {
   const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9WlRYpkAAAAASUVORK5CYII=', 'base64');
-  let dialog = await openTool(page, 'images to pdf');
+  let dialog = await openTool(page, 'images to pdf', 'images-to-pdf');
   await dialog.locator('#workspace-file').setInputFiles({ name: 'pixel.png', mimeType: 'image/png', buffer: png });
   await dialog.getByRole('button', { name: 'Run Images to PDF' }).click();
   await expect(dialog.locator('#stage')).toHaveText('Complete');
@@ -119,7 +122,7 @@ test('image conversion workflows produce valid downloadable artifacts', async ({
   expect((await PDFDocument.load(pdfBytes)).getPageCount()).toBe(1);
   await page.keyboard.press('Escape');
 
-  dialog = await openTool(page, 'pdf to images');
+  dialog = await openTool(page, 'pdf to images', 'pdf-to-images');
   await dialog.locator('#workspace-file').setInputFiles({ name: 'one-page.pdf', mimeType: 'application/pdf', buffer: await pdfFixture(1) });
   await dialog.locator('select[name="format"]').selectOption('png');
   await dialog.getByRole('button', { name: 'Run PDF to images' }).click();
@@ -140,7 +143,7 @@ test('core PDF processing makes no cross-origin network requests', async ({ page
     if (/^https?:/i.test(url) && new URL(url).origin !== origin) externalRequests.push(url);
   });
 
-  const dialog = await openTool(page, 'merge');
+  const dialog = await openTool(page, 'merge', 'merge');
   await dialog.locator('#workspace-file').setInputFiles([
     { name: 'one.pdf', mimeType: 'application/pdf', buffer: await pdfFixture(1) },
     { name: 'two.pdf', mimeType: 'application/pdf', buffer: await pdfFixture(2) }
