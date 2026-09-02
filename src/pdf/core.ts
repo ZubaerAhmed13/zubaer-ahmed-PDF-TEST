@@ -47,6 +47,16 @@ async function loadPdf(file: InputFile): Promise<PDFDocument> {
     throw new PdfOperationError('INVALID_PDF', `${file.name} could not be parsed.`, message);
   }
 }
+function getAcroForm(file: InputFile, doc: PDFDocument) {
+  try {
+    const form = doc.getForm();
+    const fields = form.getFields();
+    return { form, fields };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new PdfOperationError('INVALID_PDF', `${file.name} contains a malformed AcroForm structure.`, message);
+  }
+}
 async function savePdf(doc: PDFDocument): Promise<Uint8Array> {
   return doc.save({ useObjectStreams: true, addDefaultPage: false, updateFieldAppearances: true });
 }
@@ -205,8 +215,8 @@ export async function inspectForms(files: InputFile[], _options: Record<string, 
   if (!file) throw new PdfOperationError('INPUT_REQUIRED', 'Choose a PDF form.');
   if (hasXfa(file.buffer)) throw new PdfOperationError('UNSUPPORTED_FORM', 'This PDF uses XFA forms, which are not currently editable in DocFlow.');
   const doc = await loadPdf(file);
-  const form = doc.getForm();
-  const fields = form.getFields().map((field) => {
+  const { fields } = getAcroForm(file, doc);
+  const fieldInfo = fields.map((field) => {
     let type = 'unknown';
     let value = '';
     if (field instanceof PDFTextField) { type = 'text'; value = field.getText() ?? ''; }
@@ -217,8 +227,8 @@ export async function inspectForms(files: InputFile[], _options: Record<string, 
     return { name: field.getName(), type, value };
   });
   progress(emit, 'finalizing', 1, 1, 'Form inspection complete');
-  if (!fields.length) throw new PdfOperationError('NO_FORM_FIELDS', 'No supported AcroForm fields were detected.');
-  return { outputs: [], info: { fields: JSON.stringify(fields), fieldCount: fields.length } };
+  if (!fieldInfo.length) throw new PdfOperationError('NO_FORM_FIELDS', 'No supported AcroForm fields were detected.');
+  return { outputs: [], info: { fields: JSON.stringify(fieldInfo), fieldCount: fieldInfo.length } };
 }
 
 export async function fillForms(files: InputFile[], options: Record<string, unknown>, emit: Progress): Promise<OperationResult> {
@@ -226,11 +236,10 @@ export async function fillForms(files: InputFile[], options: Record<string, unkn
   if (!file) throw new PdfOperationError('INPUT_REQUIRED', 'Choose a PDF form.');
   if (hasXfa(file.buffer)) throw new PdfOperationError('UNSUPPORTED_FORM', 'This PDF uses XFA forms, which are not currently editable in DocFlow.');
   const doc = await loadPdf(file);
-  const form = doc.getForm();
+  const { form, fields } = getAcroForm(file, doc);
   const rawValues = typeof options.values === 'string' ? options.values : '{}';
   let values: Record<string, unknown>;
   try { values = JSON.parse(rawValues) as Record<string, unknown>; } catch { throw new PdfOperationError('INVALID_FORM_VALUES', 'Form values must be valid JSON.'); }
-  const fields = form.getFields();
   fields.forEach((field, index) => {
     const value = values[field.getName()];
     if (value === undefined) return;
