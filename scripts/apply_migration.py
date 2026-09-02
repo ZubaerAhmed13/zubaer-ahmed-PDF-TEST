@@ -8,17 +8,14 @@ from pathlib import Path
 import shutil
 
 ROOT = Path(__file__).resolve().parents[1]
-PAYLOAD = ROOT / "scripts" / "migration.payload"
 EXPECTED_SHA256 = "a4197620589bca085eaaad95f5675292efcc23054ee2ee3b1d53d383a74f11c1"
+PAYLOAD_PARTS = [ROOT / "scripts" / f"migration.payload.{index:03d}" for index in range(3)]
 
-encoded = PAYLOAD.read_text(encoding="utf-8").strip()
-# GitHub's bootstrap payload was committed with one trailing Base64 padding
-# character omitted. Padding is not payload data, so normalize only the
-# required trailing '=' characters before strict decoding. The SHA-256 check
-# below still authenticates the decoded compressed bytes before any write.
-padding = (-len(encoded)) % 4
-if padding:
-    encoded += "=" * padding
+missing = [str(path.relative_to(ROOT)) for path in PAYLOAD_PARTS if not path.exists()]
+if missing:
+    raise SystemExit(f"Missing migration payload chunks: {', '.join(missing)}")
+
+encoded = "".join(path.read_text(encoding="utf-8").strip() for path in PAYLOAD_PARTS)
 compressed = base64.b64decode(encoded, validate=True)
 actual = hashlib.sha256(compressed).hexdigest()
 if actual != EXPECTED_SHA256:
