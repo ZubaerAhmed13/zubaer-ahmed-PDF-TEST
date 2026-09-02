@@ -9,6 +9,8 @@ interface FileRecord {
 }
 
 const pdfOnly = new Set(['preview','merge','split','remove-pages','extract-pages','organize','rotate','page-numbers','watermark','pdf-to-images','forms','metadata','compress']);
+const THUMBNAIL_ROW_HEIGHT = 154;
+const THUMBNAIL_OVERSCAN = 3;
 
 function escapeHtml(value: string): string {
   return value.replace(/[&<>"']/g, (character) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[character] ?? character));
@@ -34,7 +36,7 @@ function optionMarkup(id: string): string {
     case 'pdf-to-images': return `<label>Format<select name="format"><option value="png">PNG</option><option value="jpeg">JPEG</option></select></label><label>Render scale<select name="scale"><option value="1">1×</option><option value="1.5" selected>1.5×</option><option value="2">2×</option></select></label><p class="warning-text">Image export rasterizes pages and is intentionally lossy with respect to selectable text/vector structure.</p>`;
     case 'forms': return `<div class="form-inspector"><button type="button" class="secondary" data-inspect-form>Inspect form fields</button><div id="form-field-summary" class="help">Inspect first to distinguish supported AcroForm fields from XFA or documents without fields.</div></div><label class="wide">Field values (JSON)<textarea name="values" rows="7" placeholder='{"CustomerName":"Example","Accepted":true}'></textarea></label><label class="check"><input name="flatten" type="checkbox"> Flatten fields after filling (destructive)</label>`;
     case 'compress': return `<div class="notice"><strong>Limited structural optimization</strong><p>This does not claim professional image compression. It rewrites PDF structure with object streams and reports the before/after size. Images are not intentionally recompressed.</p></div>`;
-    case 'preview': return `<p class="help">The viewer renders one active page at a time with the PDF.js worker enabled. This avoids creating full-resolution canvases for every page.</p>`;
+    case 'preview': return `<p class="help">The PDF.js viewer keeps one full active-page canvas and a virtualized thumbnail window, so large page counts do not create a canvas for every page at once.</p>`;
     case 'metadata': return `<p class="help">Reads standard metadata locally. Encrypted/password-protected files are detected and reported instead of being mislabeled as readable.</p>`;
     default: return '';
   }
@@ -109,6 +111,7 @@ export function mountWorkspace(container: HTMLDivElement, tool: ToolDefinition):
   let running: RunningOperation | null = null;
   let mainCancelled = false;
   let previewController: PreviewController | null = null;
+  let previewUiCleanup: (() => void) | null = null;
   let objectUrls: string[] = [];
 
   const beforeUnload = (event: BeforeUnloadEvent): void => {
@@ -174,20 +177,119 @@ export function mountWorkspace(container: HTMLDivElement, tool: ToolDefinition):
   const runPreview = async (): Promise<void> => {
     const file = records[0]?.file;
     if (!file) throw new Error('Choose a PDF first.');
+    previewUiCleanup?.();
+    previewUiCleanup = null;
     await previewController?.destroy();
-    previewArea.innerHTML = `<div class="viewer-toolbar"><button type="button" data-page="prev">Previous</button><span id="viewer-status">Opening PDF…</span><button type="button" data-page="next">Next</button></div><div class="canvas-shell"><canvas id="pdf-canvas"></canvas></div>`;
+    previewController = null;
+    previewArea.innerHTML = `<div class="viewer-toolbar"><button type="button" data-page="prev">Previous</button><span id="viewer-status">Opening PDF…</span><button type="button" data-page="next">Next</button></div><div class="viewer-layout"><aside class="thumbnail-rail" aria-label="Page thumbnails"><div class="thumbnail-track"></div></aside><div class="canvas-shell"><canvas id="pdf-canvas"></canvas></div></div>`;
     const canvas = previewArea.querySelector<HTMLCanvasElement>('#pdf-canvas');
     const viewerStatus = previewArea.querySelector<HTMLElement>('#viewer-status');
-    if (!canvas || !viewerStatus) return;
-    previewController = await createPreview(await file.arrayBuffer(), canvas, viewerStatus);
+    const toolbar = previewArea.querySelector<HTMLElement>('.viewer-toolbar');
+    const rail = previewArea.querySelector<HTMLElement>('.thumbnail-rail');
+    const track = previewArea.querySelector<HTMLElement>('.thumbnail-track');
+    if (!canvas || !viewerStatus || !toolbar || !rail || !track) return;
+
+    const controller = await createPreview(await file.arrayBuffer(), canvas, viewerStatus);
+    previewController = controller;
+    track.style.height = `${controller.pageCount * THUMBNAIL_ROW_HEIGHT}px`;
+    track.dataset.pageCount = String(controller.pageCount);
     let current = 1;
-    await previewController.render(current);
-    previewArea.querySelector('.viewer-toolbar')?.addEventListener('click', (event) => {
+    let windowGeneration = 0;
+    let renderFrame = 0;
+
+    const markCurrent = (): void => {
+      track.querySelectorAll<HTMLElement>('.thumbnail-item[aria-current]').forEach((item) => item.removeAttribute('aria-current'));
+      track.querySelector<HTMLElement>(`.thumbnail-item[data-thumbnail-page="${current}"]`)?.setAttribute('aria-current', 'page');
+    };
+
+    const renderThumbnailWindow = (): void => {
+      renderFrame = 0;
+      const generation = ++windowGeneration;
+      controller.cancelThumbnails();
+      const viewportHeight = Math.max(rail.clientHeight, THUMBNAIL_ROW_HEIGHT * 3);
+      const firstVisible = Math.floor(rail.scrollTop / THUMBNAIL_ROW_HEIGHT) + 1;
+      const start = Math.max(1, firstVisible - THUMBNAIL_OVERSCAN);
+      const visibleRows = Math.ceil(viewportHeight / THUMBNAIL_ROW_HEIGHT) + THUMBNAIL_OVERSCAN * 2;
+      const end = Math.min(controller.pageCount, start + visibleRows - 1);
+      const fragment = document.createDocumentFragment();
+      for (let pageNumber = start; pageNumber <= end; pageNumber += 1) {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'thumbnail-item';
+        button.dataset.thumbnailPage = String(pageNumber);
+        button.dataset.thumbnailState = 'idle';
+        button.setAttribute('aria-label', `View page ${pageNumber}`);
+        if (pageNumber === current) button.setAttribute('aria-current', 'page');
+        button.style.top = `${(pageNumber - 1) * THUMBNAIL_ROW_HEIGHT + 4}px`;
+        button.innerHTML = `<canvas aria-hidden="true"></canvas><span class="thumbnail-label">Page ${pageNumber}</span>`;
+        fragment.append(button);
+      }
+      track.replaceChildren(fragment);
+      const buttons = [...track.querySelectorAll<HTMLButtonElement>('.thumbnail-item')];
+      void (async () => {
+        for (const button of buttons) {
+          if (generation !== windowGeneration || previewController !== controller) return;
+          const pageNumber = Number(button.dataset.thumbnailPage);
+          const thumbnailCanvas = button.querySelector<HTMLCanvasElement>('canvas');
+          if (!thumbnailCanvas) continue;
+          button.dataset.thumbnailState = 'rendering';
+          try {
+            const completed = await controller.renderThumbnail(pageNumber, thumbnailCanvas);
+            if (generation !== windowGeneration || !button.isConnected) return;
+            button.dataset.thumbnailState = completed ? 'rendered' : 'idle';
+          } catch {
+            if (button.isConnected) button.dataset.thumbnailState = 'error';
+          }
+        }
+      })();
+    };
+
+    const scheduleThumbnailWindow = (): void => {
+      if (renderFrame) cancelAnimationFrame(renderFrame);
+      renderFrame = requestAnimationFrame(renderThumbnailWindow);
+    };
+
+    const ensureThumbnailVisible = (pageNumber: number): void => {
+      const top = (pageNumber - 1) * THUMBNAIL_ROW_HEIGHT;
+      const bottom = top + THUMBNAIL_ROW_HEIGHT;
+      if (top < rail.scrollTop || bottom > rail.scrollTop + rail.clientHeight) {
+        rail.scrollTop = Math.max(0, top - Math.max(0, (rail.clientHeight - THUMBNAIL_ROW_HEIGHT) / 2));
+      }
+    };
+
+    const showPage = async (pageNumber: number, revealThumbnail: boolean): Promise<void> => {
+      current = Math.max(1, Math.min(controller.pageCount, pageNumber));
+      if (revealThumbnail) ensureThumbnailVisible(current);
+      scheduleThumbnailWindow();
+      await controller.render(current);
+      markCurrent();
+    };
+
+    const onScroll = (): void => scheduleThumbnailWindow();
+    const onRailClick = (event: Event): void => {
+      const item = (event.target as HTMLElement).closest<HTMLElement>('[data-thumbnail-page]');
+      if (!item?.dataset.thumbnailPage) return;
+      void showPage(Number(item.dataset.thumbnailPage), false);
+    };
+    const onToolbarClick = (event: Event): void => {
       const direction = (event.target as HTMLElement).closest<HTMLElement>('[data-page]')?.dataset.page;
-      if (!direction || !previewController) return;
-      current = Math.max(1, Math.min(previewController.pageCount, current + (direction === 'next' ? 1 : -1)));
-      void previewController.render(current);
-    });
+      if (!direction) return;
+      void showPage(current + (direction === 'next' ? 1 : -1), true);
+    };
+
+    rail.addEventListener('scroll', onScroll, { passive: true });
+    rail.addEventListener('click', onRailClick);
+    toolbar.addEventListener('click', onToolbarClick);
+    previewUiCleanup = () => {
+      windowGeneration += 1;
+      if (renderFrame) cancelAnimationFrame(renderFrame);
+      controller.cancelThumbnails();
+      rail.removeEventListener('scroll', onScroll);
+      rail.removeEventListener('click', onRailClick);
+      toolbar.removeEventListener('click', onToolbarClick);
+    };
+
+    await showPage(1, true);
   };
 
   const execute = async (): Promise<void> => {
@@ -269,6 +371,8 @@ export function mountWorkspace(container: HTMLDivElement, tool: ToolDefinition):
     mainCancelled = true;
     running?.cancel();
     clearUrls();
+    previewUiCleanup?.();
+    previewUiCleanup = null;
     void previewController?.destroy();
     previewController = null;
     window.removeEventListener('beforeunload', beforeUnload);
