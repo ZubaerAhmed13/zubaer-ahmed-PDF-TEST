@@ -52,6 +52,10 @@ self.addEventListener('message', (event) => {
   if (event.data?.type === 'SKIP_WAITING') void self.skipWaiting();
 });
 
+async function matchStatic(request) {
+  return caches.match(request, { ignoreVary: true });
+}
+
 self.addEventListener('fetch', (event) => {
   const request = event.request;
   if (request.method !== 'GET') return;
@@ -68,14 +72,14 @@ self.addEventListener('fetch', (event) => {
         }
         return response;
       } catch {
-        return (await caches.match(request)) || (await caches.match(new URL('./', self.registration.scope))) || (await caches.match(new URL('./index.html', self.registration.scope))) || Response.error();
+        return (await matchStatic(request)) || (await matchStatic(new URL('./', self.registration.scope))) || (await matchStatic(new URL('./index.html', self.registration.scope))) || Response.error();
       }
     })());
     return;
   }
 
   event.respondWith((async () => {
-    const cached = await caches.match(request);
+    const cached = await matchStatic(request);
     if (cached) return cached;
     const response = await fetch(request);
     if (response.ok) {
