@@ -10,16 +10,18 @@ describe('normalizePdfError', () => {
     });
   });
 
-  it('preserves the stable PdfOperationError shape across module-instance boundaries', () => {
-    const boundaryError = new Error('Could not parse PDF.') as Error & { code: string; detail: string };
-    boundaryError.name = 'PdfOperationError';
-    boundaryError.code = 'INVALID_PDF';
-    boundaryError.detail = 'cross-module parser detail';
+  it('preserves the stable PdfOperationError shape without relying on Error realm identity', () => {
+    const boundaryError = {
+      name: 'PdfOperationError',
+      code: 'INVALID_PDF',
+      message: 'Could not parse PDF.',
+      detail: 'cross-realm parser detail'
+    };
 
     expect(normalizePdfError(boundaryError)).toEqual({
       code: 'INVALID_PDF',
       message: 'Could not parse PDF.',
-      detail: 'cross-module parser detail'
+      detail: 'cross-realm parser detail'
     });
   });
 
