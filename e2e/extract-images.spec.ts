@@ -31,14 +31,18 @@ test('extracts decoded embedded raster images without rendering whole pages', as
 
   const link = dialog.getByRole('link', { name: /Download embedded-images\.zip/ });
   await expect(link).toBeVisible();
-  const href = await link.getAttribute('href');
-  expect(href).toBeTruthy();
-  const bytes = await page.evaluate(async (url) => {
-    const response = await fetch(url);
-    return Array.from(new Uint8Array(await response.arrayBuffer()));
-  }, href!);
+  const [download] = await Promise.all([
+    page.waitForEvent('download'),
+    link.click()
+  ]);
+  expect(download.suggestedFilename()).toBe('embedded-images.zip');
+  const stream = await download.createReadStream();
+  if (!stream) throw new Error('DOWNLOAD_STREAM_UNAVAILABLE');
+  const chunks: Buffer[] = [];
+  for await (const chunk of stream) chunks.push(Buffer.from(chunk));
+  const bytes = Buffer.concat(chunks);
 
-  const zip = await JSZip.loadAsync(Uint8Array.from(bytes));
+  const zip = await JSZip.loadAsync(bytes);
   const pngNames = Object.keys(zip.files).filter((name) => name.endsWith('.png'));
   expect(pngNames.length).toBeGreaterThanOrEqual(1);
   const extracted = await zip.file(pngNames[0]!)!.async('uint8array');
