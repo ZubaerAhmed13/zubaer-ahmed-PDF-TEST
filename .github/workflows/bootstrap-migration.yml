@@ -33,7 +33,7 @@ jobs:
         run: npm install --package-lock-only --ignore-scripts
       - name: Commit modular application without workflow mutations
         run: |
-          rm -f .github/workflows/ci.yml
+          find .github/workflows -maxdepth 1 -type f ! -name 'bootstrap-migration.yml' -delete
           rm -f scripts/migration.payload scripts/migration.payload.000 scripts/migration.payload.001 scripts/migration.payload.002 scripts/apply_migration.py scripts/bootstrap-trigger*.txt
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
