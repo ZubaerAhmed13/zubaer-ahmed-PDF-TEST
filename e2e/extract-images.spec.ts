@@ -27,7 +27,7 @@ test('extracts decoded embedded raster images without rendering whole pages', as
   });
   await dialog.getByRole('button', { name: 'Run Extract images' }).click();
   await expect(dialog.locator('#stage')).toHaveText('Complete');
-  await expect(dialog.getByText(/embedded raster image/)).toBeVisible();
+  await expect(dialog.locator('#result').getByText(/^1 embedded raster image extracted$/)).toBeVisible();
 
   const link = dialog.getByRole('link', { name: /Download embedded-images\.zip/ });
   await expect(link).toBeVisible();
