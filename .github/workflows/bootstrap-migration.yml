@@ -1,34 +1,13 @@
-name: Apply DocFlow migration bootstrap
+name: Apply DocFlow migration bootstrap (disabled)
 
 on:
-  push:
-    branches: [professional-upgrade]
   workflow_dispatch:
 
 permissions:
-  contents: write
-
-concurrency:
-  group: docflow-migration-bootstrap
-  cancel-in-progress: false
+  contents: read
 
 jobs:
-  apply:
+  disabled:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-      - name: Apply deterministic migration payload
-        run: python scripts/apply_migration.py
-      - name: Commit modular migration
-        run: |
-          rm -f scripts/migration.payload scripts/apply_migration.py .github/workflows/bootstrap-migration.yml
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -A
-          git commit -m "refactor: migrate DocFlow to modular professional architecture"
-          git push origin HEAD:professional-upgrade
+      - run: echo "Legacy bootstrap is disabled because its integrity checksum does not match. Use the modular migration commits instead."
