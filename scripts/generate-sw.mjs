@@ -34,7 +34,11 @@ const source = `const CACHE_NAME = 'docflow-static-${version}';
 const PRECACHE = ${JSON.stringify(precache)};
 
 self.addEventListener('install', (event) => {
-  event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(PRECACHE)));
+  event.waitUntil((async () => {
+    const cache = await caches.open(CACHE_NAME);
+    const requests = PRECACHE.map((path) => new Request(new URL(path, self.registration.scope), { cache: 'reload' }));
+    await cache.addAll(requests);
+  })());
 });
 
 self.addEventListener('activate', (event) => {
@@ -64,7 +68,7 @@ self.addEventListener('fetch', (event) => {
         }
         return response;
       } catch {
-        return (await caches.match(request)) || (await caches.match('./')) || (await caches.match('./index.html')) || Response.error();
+        return (await caches.match(request)) || (await caches.match(new URL('./', self.registration.scope))) || (await caches.match(new URL('./index.html', self.registration.scope))) || Response.error();
       }
     })());
     return;
