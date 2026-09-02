@@ -23,7 +23,7 @@ export const toolCategories = [
 ] as const;
 
 function tool(definition: Omit<ToolDefinition, 'load'>): ToolDefinition {
-  return { ...definition, load: () => import('./workspace') };
+  return { ...definition, load: () => import('./workspaceWithRecovery') };
 }
 
 export const tools: ToolDefinition[] = [
