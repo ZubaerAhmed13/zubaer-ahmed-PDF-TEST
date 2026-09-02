@@ -7,10 +7,16 @@ async function pdfFixture(): Promise<Buffer> {
   return Buffer.from(await document.save());
 }
 
+async function openRotateTool(page: import('@playwright/test').Page): Promise<void> {
+  await page.getByLabel('Search tools').fill('rotate pages');
+  const rotateCard = page.locator('[data-tool="rotate"]');
+  await expect(rotateCard.getByRole('heading', { name: 'Rotate pages' })).toBeVisible();
+  await rotateCard.getByRole('button', { name: 'Open tool' }).click();
+}
+
 test('persists lightweight project metadata and settings without storing file contents', async ({ page }) => {
   await page.goto('/zubaer-ahmed-PDF-TEST/');
-  await page.getByLabel('Search tools').fill('rotate pages');
-  await page.getByRole('button', { name: 'Open tool' }).click();
+  await openRotateTool(page);
   let dialog = page.getByRole('dialog', { name: 'Workspace' });
 
   await dialog.locator('#workspace-file').setInputFiles({
@@ -50,8 +56,7 @@ test('persists lightweight project metadata and settings without storing file co
   await expect(dialog).toBeHidden();
 
   await page.reload();
-  await page.getByLabel('Search tools').fill('rotate pages');
-  await page.getByRole('button', { name: 'Open tool' }).click();
+  await openRotateTool(page);
   dialog = page.getByRole('dialog', { name: 'Workspace' });
   const recovery = dialog.locator('[data-recovery-panel]');
   await expect(recovery).toBeVisible();
