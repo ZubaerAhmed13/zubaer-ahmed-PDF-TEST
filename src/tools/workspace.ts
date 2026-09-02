@@ -8,7 +8,7 @@ interface FileRecord {
   id: string;
 }
 
-const pdfOnly = new Set(['preview','merge','split','organize','rotate','page-numbers','watermark','pdf-to-images','forms','metadata','compress']);
+const pdfOnly = new Set(['preview','merge','split','remove-pages','extract-pages','organize','rotate','page-numbers','watermark','pdf-to-images','forms','metadata','compress']);
 
 function escapeHtml(value: string): string {
   return value.replace(/[&<>"']/g, (character) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[character] ?? character));
@@ -24,6 +24,8 @@ function humanBytes(bytes: number): string {
 function optionMarkup(id: string): string {
   switch (id) {
     case 'split': return `<label>Split mode<select name="mode"><option value="ranges">Page ranges</option><option value="selected">Selected pages</option><option value="every">Every N pages</option><option value="individual">Individual pages</option></select></label><label>Ranges (separate outputs with semicolon)<input name="ranges" value="1-1" placeholder="1-10;11-25;26-40"></label><label>Selected pages<input name="pages" placeholder="1,3,5-8"></label><label>Every N pages<input name="every" type="number" min="1" value="5"></label>`;
+    case 'remove-pages': return `<label>Pages to remove<input name="pages" placeholder="2,4,7-10" required></label><p class="help">The selected pages are omitted from a newly written PDF. At least one page must remain.</p>`;
+    case 'extract-pages': return `<label>Pages to extract<input name="pages" placeholder="1,3,5-8" required></label><p class="help">Selected pages are copied structurally into a new PDF without intentional rasterization.</p>`;
     case 'organize': return `<label>New page order<input name="order" placeholder="1,2,4,3,5"></label><p class="help">Repeat a page number to duplicate it. Omit a page number to remove it. This migration preview uses a deterministic operation plan; drag-and-drop UI is still pending.</p>`;
     case 'rotate': return `<label>Apply to<select name="target"><option value="all">All pages</option><option value="odd">Odd pages</option><option value="even">Even pages</option><option value="selected">Selected pages</option></select></label><label>Selected pages<input name="pages" placeholder="1,3,5-8"></label><label>Rotation<select name="degrees"><option value="90">90° clockwise</option><option value="180">180°</option><option value="270">270° clockwise</option></select></label>`;
     case 'page-numbers': return `<label>Pages<input name="pages" placeholder="Blank = all pages"></label><label>Starting number<input name="start" type="number" value="1"></label><label>Format<select name="format"><option value="page-total">Page 1 of 20</option><option value="fraction">1 / 20</option><option value="page">Page 1</option><option value="number">1</option></select></label><label>Font size<input name="fontSize" type="number" min="6" max="72" value="11"></label><label>Bottom margin (pt)<input name="margin" type="number" min="4" value="24"></label>`;
@@ -33,7 +35,7 @@ function optionMarkup(id: string): string {
     case 'forms': return `<div class="form-inspector"><button type="button" class="secondary" data-inspect-form>Inspect form fields</button><div id="form-field-summary" class="help">Inspect first to distinguish supported AcroForm fields from XFA or documents without fields.</div></div><label class="wide">Field values (JSON)<textarea name="values" rows="7" placeholder='{"CustomerName":"Example","Accepted":true}'></textarea></label><label class="check"><input name="flatten" type="checkbox"> Flatten fields after filling (destructive)</label>`;
     case 'compress': return `<div class="notice"><strong>Limited structural optimization</strong><p>This does not claim professional image compression. It rewrites PDF structure with object streams and reports the before/after size. Images are not intentionally recompressed.</p></div>`;
     case 'preview': return `<p class="help">The viewer renders one active page at a time with the PDF.js worker enabled. This avoids creating full-resolution canvases for every page.</p>`;
-    case 'metadata': return `<p class="help">Reads standard metadata locally. Document content is not sent anywhere.</p>`;
+    case 'metadata': return `<p class="help">Reads standard metadata locally. Encrypted/password-protected files are detected and reported instead of being mislabeled as readable.</p>`;
     default: return '';
   }
 }
@@ -108,6 +110,13 @@ export function mountWorkspace(container: HTMLDivElement, tool: ToolDefinition):
   let mainCancelled = false;
   let previewController: PreviewController | null = null;
   let objectUrls: string[] = [];
+
+  const beforeUnload = (event: BeforeUnloadEvent): void => {
+    if (!records.length && !running) return;
+    event.preventDefault();
+    event.returnValue = '';
+  };
+  window.addEventListener('beforeunload', beforeUnload);
 
   const clearUrls = (): void => { objectUrls.forEach((url) => URL.revokeObjectURL(url)); objectUrls = []; };
   const setError = (message = ''): void => {
@@ -262,5 +271,6 @@ export function mountWorkspace(container: HTMLDivElement, tool: ToolDefinition):
     clearUrls();
     void previewController?.destroy();
     previewController = null;
+    window.removeEventListener('beforeunload', beforeUnload);
   }, { once: true });
 }

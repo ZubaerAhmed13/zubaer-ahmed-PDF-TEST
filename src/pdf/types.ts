@@ -28,6 +28,8 @@ export interface OperationResult {
 export type WorkerOperation =
   | 'merge'
   | 'split'
+  | 'remove-pages'
+  | 'extract-pages'
   | 'organize'
   | 'rotate'
   | 'page-numbers'

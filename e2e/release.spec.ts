@@ -116,6 +116,22 @@ test('split exports the requested ranges as reopenable PDFs', async ({ page }) =
   expect(pageCounts).toEqual([2, 1]);
 });
 
+test('remove and extract page workflows preserve selected page geometry', async ({ page }) => {
+  const input = await pdfFixture(4);
+
+  const removedBytes = await runPdfExport(page, 'remove pages', 'remove-pages', 'Remove pages', /^Download pages-removed\.pdf/, input, async (dialog) => {
+    await dialog.locator('input[name="pages"]').fill('2,4');
+  });
+  const removed = await PDFDocument.load(removedBytes);
+  expect(removed.getPages().map((pdfPage) => pdfPage.getWidth())).toEqual([300, 302]);
+
+  const extractedBytes = await runPdfExport(page, 'extract pages', 'extract-pages', 'Extract pages', /^Download extracted-pages\.pdf/, input, async (dialog) => {
+    await dialog.locator('input[name="pages"]').fill('2-3');
+  });
+  const extracted = await PDFDocument.load(extractedBytes);
+  expect(extracted.getPages().map((pdfPage) => pdfPage.getWidth())).toEqual([301, 302]);
+});
+
 test('PDF.js preview renders and navigates pages with the worker enabled', async ({ page }) => {
   const dialog = await openTool(page, 'view pdf', 'preview');
   await dialog.locator('#workspace-file').setInputFiles({ name: 'preview.pdf', mimeType: 'application/pdf', buffer: await pdfFixture(2) });

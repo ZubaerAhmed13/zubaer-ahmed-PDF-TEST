@@ -102,6 +102,42 @@ export async function splitPdf(files: InputFile[], options: Record<string, unkno
   return { outputs: [{ name: 'split-pdf.zip', type: 'application/zip', buffer: bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer }] };
 }
 
+export async function removePages(files: InputFile[], options: Record<string, unknown>, emit: Progress): Promise<OperationResult> {
+  const file = files[0];
+  if (!file) throw new PdfOperationError('INPUT_REQUIRED', 'Choose a PDF to remove pages from.');
+  const source = await loadPdf(file);
+  const pagesValue = asString(options.pages).trim();
+  if (!pagesValue) throw new PdfOperationError('INVALID_PAGE_RANGE', 'Enter at least one page to remove.');
+  const removed = new Set(parsePageSelection(pagesValue, source.getPageCount()));
+  const keep = source.getPageIndices().filter((page) => !removed.has(page));
+  if (!keep.length) throw new PdfOperationError('EMPTY_DOCUMENT', 'At least one page must remain in the PDF.');
+  const output = await PDFDocument.create();
+  const pages = await output.copyPages(source, keep);
+  pages.forEach((page, index) => {
+    output.addPage(page);
+    progress(emit, 'processing', index + 1, pages.length, `Kept page ${index + 1} of ${pages.length}`);
+  });
+  progress(emit, 'writing', pages.length, pages.length, 'Writing PDF with selected pages removed');
+  return { outputs: [pdfOutput('pages-removed.pdf', await savePdf(output))] };
+}
+
+export async function extractPages(files: InputFile[], options: Record<string, unknown>, emit: Progress): Promise<OperationResult> {
+  const file = files[0];
+  if (!file) throw new PdfOperationError('INPUT_REQUIRED', 'Choose a PDF to extract pages from.');
+  const source = await loadPdf(file);
+  const pagesValue = asString(options.pages).trim();
+  if (!pagesValue) throw new PdfOperationError('INVALID_PAGE_RANGE', 'Enter at least one page to extract.');
+  const selected = parsePageSelection(pagesValue, source.getPageCount());
+  const output = await PDFDocument.create();
+  const pages = await output.copyPages(source, selected);
+  pages.forEach((page, index) => {
+    output.addPage(page);
+    progress(emit, 'processing', index + 1, pages.length, `Extracted page ${index + 1} of ${pages.length}`);
+  });
+  progress(emit, 'writing', pages.length, pages.length, 'Writing extracted-pages PDF');
+  return { outputs: [pdfOutput('extracted-pages.pdf', await savePdf(output))] };
+}
+
 export async function organizePdf(files: InputFile[], options: Record<string, unknown>, emit: Progress): Promise<OperationResult> {
   const file = files[0];
   if (!file) throw new PdfOperationError('INPUT_REQUIRED', 'Choose a PDF to organize.');
@@ -270,6 +306,7 @@ export async function metadata(files: InputFile[], _options: Record<string, unkn
     creator: doc.getCreator() ?? '',
     producer: doc.getProducer() ?? '',
     pageCount: doc.getPageCount(),
+    encrypted: false,
     creationDate: doc.getCreationDate()?.toISOString() ?? '',
     modificationDate: doc.getModificationDate()?.toISOString() ?? ''
   }};
