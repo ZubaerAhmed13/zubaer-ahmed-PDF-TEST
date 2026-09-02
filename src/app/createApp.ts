@@ -109,7 +109,8 @@ export function createApp(root: HTMLDivElement | null): void {
     if (fav) {
       const id = fav.dataset.favorite;
       if (!id) return;
-      favorites.has(id) ? favorites.delete(id) : favorites.add(id);
+      if (favorites.has(id)) favorites.delete(id);
+      else favorites.add(id);
       saveFavorites();
       render();
       return;

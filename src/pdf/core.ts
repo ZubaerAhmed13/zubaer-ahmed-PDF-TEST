@@ -189,8 +189,15 @@ export async function imagesToPdf(files: InputFile[], options: Record<string, un
 
 function hasXfa(buffer: ArrayBuffer): boolean {
   const bytes = new Uint8Array(buffer);
-  const sample = new TextDecoder('latin1').decode(bytes.subarray(0, Math.min(bytes.length, 2_000_000)));
-  return /\/XFA\b/.test(sample);
+  const decoder = new TextDecoder('latin1');
+  const chunkSize = 1_048_576;
+  const overlap = 32;
+  for (let start = 0; start < bytes.length; start += chunkSize - overlap) {
+    const end = Math.min(bytes.length, start + chunkSize);
+    if (/\/XFA\b/.test(decoder.decode(bytes.subarray(start, end)))) return true;
+    if (end === bytes.length) break;
+  }
+  return false;
 }
 
 export async function inspectForms(files: InputFile[], _options: Record<string, unknown>, emit: Progress): Promise<OperationResult> {
@@ -228,7 +235,10 @@ export async function fillForms(files: InputFile[], options: Record<string, unkn
     const value = values[field.getName()];
     if (value === undefined) return;
     if (field instanceof PDFTextField) field.setText(String(value));
-    else if (field instanceof PDFCheckBox) asBoolean(value) ? field.check() : field.uncheck();
+    else if (field instanceof PDFCheckBox) {
+      if (asBoolean(value)) field.check();
+      else field.uncheck();
+    }
     else if (field instanceof PDFRadioGroup) field.select(String(value));
     else if (field instanceof PDFDropdown) field.select(String(value));
     else if (field instanceof PDFOptionList) field.select(Array.isArray(value) ? value.map(String) : [String(value)]);
