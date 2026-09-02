@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { PDFDocument } from 'pdf-lib';
+import { readFile } from 'node:fs/promises';
 
 async function pdfFixture(pageCount: number): Promise<Buffer> {
   const doc = await PDFDocument.create();
@@ -31,7 +32,7 @@ test('opens a unified workspace and closes with Escape', async ({ page }) => {
   await expect(dialog).toBeHidden();
 });
 
-test('runs a real worker-backed merge workflow', async ({ page }) => {
+test('runs a real worker-backed merge workflow and reopens the downloaded export', async ({ page }) => {
   await page.goto('/zubaer-ahmed-PDF-TEST/');
   await page.getByLabel('Search tools').fill('merge');
   await page.getByRole('button', { name: 'Open tool' }).click();
@@ -45,7 +46,18 @@ test('runs a real worker-backed merge workflow', async ({ page }) => {
   await expect(dialog.getByText('two.pdf')).toBeVisible();
   await dialog.getByRole('button', { name: 'Run Merge PDF' }).click();
   await expect(dialog.locator('#stage')).toHaveText('Complete');
-  await expect(dialog.getByRole('link', { name: /Download merged\.pdf/ })).toBeVisible();
+  const link = dialog.getByRole('link', { name: /Download merged\.pdf/ });
+  await expect(link).toBeVisible();
+
+  const downloadPromise = page.waitForEvent('download');
+  await link.click();
+  const download = await downloadPromise;
+  const path = await download.path();
+  if (!path) throw new Error('Playwright did not expose a merge download path.');
+  const merged = await PDFDocument.load(await readFile(path));
+  expect(merged.getPageCount()).toBe(3);
+  expect(merged.getPages().map((pdfPage) => pdfPage.getWidth())).toEqual([300, 300, 301]);
+  expect(merged.getPages().map((pdfPage) => pdfPage.getHeight())).toEqual([400, 400, 401]);
 });
 
 test('certifies offline app availability and local processing where the browser harness permits', async ({ page, context, browserName }) => {
