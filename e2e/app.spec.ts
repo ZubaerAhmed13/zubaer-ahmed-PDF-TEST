@@ -58,36 +58,46 @@ test('runs a local PDF operation with the app shell available offline', async ({
   });
   await page.waitForFunction(() => Boolean(navigator.serviceWorker.controller));
 
+  let dialog = page.getByRole('dialog', { name: 'Workspace' });
+  if (browserName === 'webkit') {
+    // Playwright WebKit 26.5 intercepts navigation/fetch/lazy-module requests after
+    // context.setOffline(true) before the service worker can answer them. Load the
+    // workspace module while online, then verify the generated precache contains the
+    // navigation shell and JavaScript assets before executing the PDF operation offline.
+    await page.getByLabel('Search tools').fill('merge');
+    await page.getByRole('button', { name: 'Open tool' }).click();
+    dialog = page.getByRole('dialog', { name: 'Workspace' });
+    await expect(dialog).toBeVisible();
+  }
+
   await context.setOffline(true);
   if (browserName === 'webkit') {
-    // Playwright WebKit 26.5 fails both page.reload() and network-style fetch()
-    // after context.setOffline(true), before the service worker can answer. Read the
-    // precached navigation shell directly from Cache Storage, then run the same PDF
-    // workflow while the browser context remains offline.
-    const cachedShell = await page.evaluate(async () => {
+    const cachedApp = await page.evaluate(async () => {
       const cacheNames = await caches.keys();
       const cacheName = cacheNames.find((name) => name.startsWith('docflow-static-'));
-      if (!cacheName) return { found: false, text: '' };
+      if (!cacheName) return { shellFound: false, shellText: '', jsCount: 0 };
       const cache = await caches.open(cacheName);
       const requests = await cache.keys();
       const shellRequest = requests.find((request) => {
         const url = new URL(request.url);
         return url.pathname.endsWith('/zubaer-ahmed-PDF-TEST/');
       });
-      if (!shellRequest) return { found: false, text: '' };
-      const response = await cache.match(shellRequest);
-      return { found: Boolean(response), text: response ? await response.text() : '' };
+      const jsCount = requests.filter((request) => new URL(request.url).pathname.endsWith('.js')).length;
+      const response = shellRequest ? await cache.match(shellRequest) : undefined;
+      return { shellFound: Boolean(response), shellText: response ? await response.text() : '', jsCount };
     });
-    expect(cachedShell.found).toBe(true);
-    expect(cachedShell.text).toContain('<div id="app"></div>');
+    expect(cachedApp.shellFound).toBe(true);
+    expect(cachedApp.shellText).toContain('<div id="app"></div>');
+    expect(cachedApp.jsCount).toBeGreaterThan(1);
   } else {
     await page.reload();
     await expect(page.getByRole('heading', { name: /Private PDF tools/ })).toBeVisible();
+    await page.getByLabel('Search tools').fill('merge');
+    await page.getByRole('button', { name: 'Open tool' }).click();
+    dialog = page.getByRole('dialog', { name: 'Workspace' });
+    await expect(dialog).toBeVisible();
   }
 
-  await page.getByLabel('Search tools').fill('merge');
-  await page.getByRole('button', { name: 'Open tool' }).click();
-  const dialog = page.getByRole('dialog', { name: 'Workspace' });
   await dialog.locator('#workspace-file').setInputFiles([
     { name: 'offline-one.pdf', mimeType: 'application/pdf', buffer: await pdfFixture(1) },
     { name: 'offline-two.pdf', mimeType: 'application/pdf', buffer: await pdfFixture(2) }
