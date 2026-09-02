@@ -184,6 +184,23 @@ test('image conversion workflows produce valid downloadable artifacts', async ({
   expect([...image.slice(0, 8)]).toEqual([137, 80, 78, 71, 13, 10, 26, 10]);
 });
 
+test('300-page mixed-dimension structural workflow reopens without rasterization claims', async ({ page }) => {
+  test.setTimeout(60_000);
+  const input = await pdfFixture(300);
+  const dialog = await openTool(page, 'rotate', 'rotate');
+  await dialog.locator('#workspace-file').setInputFiles({ name: 'three-hundred-pages.pdf', mimeType: 'application/pdf', buffer: input });
+  await dialog.locator('select[name="degrees"]').selectOption('90');
+  await dialog.getByRole('button', { name: 'Run Rotate pages' }).click();
+  await expect(dialog.locator('#stage')).toHaveText('Complete', { timeout: 40_000 });
+
+  const bytes = await downloadFrom(dialog, page, /^Download rotated\.pdf/);
+  const output = await PDFDocument.load(bytes);
+  expect(output.getPageCount()).toBe(300);
+  expect(output.getPages().every((pdfPage) => pdfPage.getRotation().angle === 90)).toBe(true);
+  expect([output.getPage(0).getWidth(), output.getPage(149).getWidth(), output.getPage(299).getWidth()]).toEqual([300, 449, 599]);
+  expect([output.getPage(0).getHeight(), output.getPage(149).getHeight(), output.getPage(299).getHeight()]).toEqual([400, 549, 699]);
+});
+
 test('core PDF processing makes no cross-origin network requests', async ({ page }) => {
   const externalRequests: string[] = [];
   const origin = new URL(page.url()).origin;
