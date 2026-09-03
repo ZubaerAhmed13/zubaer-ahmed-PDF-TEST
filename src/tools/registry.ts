@@ -29,7 +29,12 @@ function tool(definition: Omit<ToolDefinition, 'load'>): ToolDefinition {
 }
 
 export const tools: ToolDefinition[] = [
-  tool({ id: 'preview', name: 'View PDF', category: 'review', description: 'Inspect pages with worker-backed PDF.js rendering.', keywords: ['preview','view','inspect'], icon: '⌕', quality: 'Inspection', status: 'Migrated', multipleFiles: false }),
+  {
+    id: 'preview', name: 'View PDF', category: 'review',
+    description: 'Inspect pages with worker-backed PDF.js rendering, virtualized thumbnails, zoom, fit modes and keyboard/wheel navigation.',
+    keywords: ['preview','view','inspect','zoom','fit'], icon: '⌕', quality: 'Inspection', status: 'Migrated', multipleFiles: false,
+    load: () => import('./previewWorkspace')
+  },
   tool({ id: 'merge', name: 'Merge PDF', category: 'organize', description: 'Combine PDFs without intentionally rasterizing page content.', keywords: ['combine','join'], icon: '⊕', quality: 'Lossless', status: 'Migrated', multipleFiles: true }),
   tool({ id: 'split', name: 'Split PDF', category: 'organize', description: 'Extract ranges, individual pages, or chunks into new PDFs.', keywords: ['extract','range','pages'], icon: '✂', quality: 'Lossless', status: 'Migrated', multipleFiles: false }),
   tool({ id: 'remove-pages', name: 'Remove pages', category: 'organize', description: 'Remove selected pages structurally while preserving the remaining page content.', keywords: ['delete','remove','pages'], icon: '−', quality: 'Lossless', status: 'Migrated', multipleFiles: false }),
