@@ -60,3 +60,23 @@ The root monolith remains recoverable from git history and is copied to `legacy/
 10. No cross-browser release matrix backed by executed tests.
 
 This audit intentionally avoids labeling unexecuted workflows as PASS.
+
+## Migration-branch evidence update
+
+The historical findings above describe the audited legacy baseline and are intentionally preserved. On `professional-upgrade`, executed evidence now demonstrates:
+
+- modular TypeScript/Vite source architecture with a deterministic `npm ci` build pipeline;
+- CI gates for dependency audit, typecheck, lint, unit tests, production build and Chromium/Firefox/WebKit Playwright matrices;
+- worker-backed PDF.js preview with virtualized/lazy thumbnails and explicit cleanup;
+- dedicated worker-backed pdf-lib operations with progress and cancellation;
+- structural merge/split/remove/extract/organize/rotate/page-number/watermark outputs with reopen or artifact validation as applicable;
+- text watermarking plus PNG/JPEG image watermarking without intentional rasterization of the existing page content;
+- supported AcroForm text, checkbox, radio, dropdown and option-list workflows, flattening, and explicit valid-XFA rejection;
+- malformed-PDF structured recovery, standard metadata extraction and continued workspace usability after failure;
+- decoded embedded-raster image extraction with ZIP/manifest/signature validation;
+- lightweight IndexedDB recovery that stores settings and file metadata but not PDF/image bytes;
+- PWA path/offline evidence within the documented browser-harness limits;
+- responsive-width, automated axe, keyboard dialog focus-return and repeated preview worker/canvas cleanup evidence;
+- a 300-page mixed-dimension structural export/reopen certification.
+
+These results do **not** close the remaining professional-release gates for full legacy parity, obsolete duplicate-entry removal, encrypted unlock/protect workflows, professional image recompression, multi-gigabyte streaming/reference architecture and certification, heap-growth memory certification, high-resolution scanned/image-heavy stress testing, color/fidelity certification, manual WCAG/Safari validation, or production Pages verification.

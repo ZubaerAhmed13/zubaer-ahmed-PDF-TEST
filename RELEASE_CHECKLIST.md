@@ -15,20 +15,24 @@ A checkbox is only marked when executed evidence exists. This branch remains a m
 
 ## P1 reliability
 - [x] PDF.js worker-enabled active-page preview
+- [x] Virtualized, lazily rendered thumbnail rail sharing the active PDF.js document
 - [x] Dedicated worker for core pdf-lib operations
 - [x] Real page/document progress for migrated worker operations
 - [x] Worker cancellation terminates processing
 - [x] Error categories for invalid/encrypted/unsupported form inputs
+- [x] Malformed PDF recovery certified in Chromium/Firefox/WebKit with structured `INVALID_PDF` reporting
 - [x] Structural Remove pages and Extract pages with reopen/geometry validation
 - [x] Decoded embedded-raster Extract Images workflow certified in Chromium/Firefox/WebKit
 - [x] Lightweight IndexedDB project recovery implemented without document-byte persistence
-- [ ] Full form field certification across broader field types/XFA fixtures
+- [x] Supported AcroForm matrix certified for text, checkbox, radio, dropdown and option-list fields, including flattening
+- [x] Valid XFA-stream fixture detected and reported explicitly as `UNSUPPORTED_FORM`
+- [x] Text watermark structural export remains certified
+- [x] PNG/JPEG image watermark workflow implemented with structural PDF export/reopen validation
 - [ ] Professional image recompression
 - [ ] Encrypted unlock/protect workflows
-- [ ] Full thumbnail virtualization
 - [ ] Multi-gigabyte streaming/reference architecture
-- [ ] Output-reopen validation for every export-capable operation
-- [ ] Memory leak certification
+- [x] Output validation for every currently migrated export-capable operation (PDF reopen or artifact signature/manifest validation as applicable)
+- [ ] Memory leak certification — repeated preview cycles certify worker/canvas cleanup, but heap-growth certification is still required
 
 ## P2/P3/P4
 - [x] Search and keyboard command
@@ -39,13 +43,15 @@ A checkbox is only marked when executed evidence exists. This branch remains a m
 - [x] Service worker/manifest foundation
 - [x] Automated axe serious/critical homepage gate
 - [x] Automated responsive width matrix at 360/768/1280 px
+- [x] Automated keyboard dialog focus containment/return for workspace and information dialogs
 - [x] Chromium/Firefox/WebKit current automated PDF workflow matrix
 - [x] Chromium/Firefox offline reload + worker-backed PDF-operation certification
 - [x] WebKit application-shell/chunk precache certification plus normal worker workflow
 - [ ] Real Safari/WebKit forced-offline worker-operation manual certification
 - [ ] WCAG 2.2 AA manual certification
-- [ ] Large PDF/page-count certification
+- [x] 300-page mixed-dimension structural page-count certification
 - [ ] Multi-gigabyte file-size certification
+- [ ] High-resolution scanned/image-heavy PDF certification
 - [ ] Color/fidelity certification
 - [ ] Production Pages deployment verification
 
