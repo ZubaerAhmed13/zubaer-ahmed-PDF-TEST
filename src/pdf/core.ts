@@ -40,7 +40,11 @@ function ensurePdf(file: InputFile): void {
 async function loadPdf(file: InputFile): Promise<PDFDocument> {
   ensurePdf(file);
   try {
-    return await PDFDocument.load(file.buffer, { updateMetadata: false });
+    const doc = await PDFDocument.load(file.buffer, { updateMetadata: false });
+    // pdf-lib can accept a malformed container and fail only when its page tree is traversed.
+    // Validate that lazy structure here so every structural tool reports INVALID_PDF consistently.
+    doc.getPages();
+    return doc;
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     if (/encrypt|password/i.test(message)) throw new PdfOperationError('PASSWORD_REQUIRED', `${file.name} is encrypted or requires a password.`, message);
