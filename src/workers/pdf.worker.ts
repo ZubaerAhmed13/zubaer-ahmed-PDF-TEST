@@ -1,5 +1,6 @@
 /// <reference lib="webworker" />
 import { addPageNumbers, addWatermark, extractPages, fillForms, imagesToPdf, inspectForms, mergePdf, optimizePdf, organizePdf, removePages, rotatePdf, splitPdf } from '../pdf/core';
+import { addImageWatermark } from '../pdf/imageWatermark';
 import { metadata } from '../pdf/metadata';
 import { normalizePdfError } from '../pdf/errors';
 import type { OperationResult, WorkerRequest, WorkerResponse } from '../pdf/types';
@@ -13,6 +14,7 @@ const handlers = {
   rotate: rotatePdf,
   'page-numbers': addPageNumbers,
   watermark: addWatermark,
+  'watermark-image': addImageWatermark,
   'images-to-pdf': imagesToPdf,
   metadata,
   'forms-inspect': inspectForms,

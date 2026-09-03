@@ -35,7 +35,18 @@ export const tools: ToolDefinition[] = [
   tool({ id: 'organize', name: 'Organize pages', category: 'organize', description: 'Reorder, remove, duplicate, and rotate pages using an operation plan.', keywords: ['reorder','remove','rotate','duplicate'], icon: '▦', quality: 'Lossless', status: 'Preview', multipleFiles: false }),
   tool({ id: 'rotate', name: 'Rotate pages', category: 'organize', description: 'Rotate all, odd, even, or selected pages structurally.', keywords: ['orientation'], icon: '↻', quality: 'Lossless', status: 'Migrated', multipleFiles: false }),
   tool({ id: 'page-numbers', name: 'Add page numbers', category: 'edit', description: 'Add configurable numbering to selected page ranges.', keywords: ['number','footer'], icon: '#', quality: 'Lossless', status: 'Migrated', multipleFiles: false }),
-  tool({ id: 'watermark', name: 'Add watermark', category: 'edit', description: 'Add a text watermark while preserving existing page content.', keywords: ['stamp','text'], icon: 'W', quality: 'Lossless', status: 'Migrated', multipleFiles: false }),
+  {
+    id: 'watermark',
+    name: 'Add watermark',
+    category: 'edit',
+    description: 'Add text or PNG/JPEG image watermarks while preserving existing page content.',
+    keywords: ['stamp','text','image','logo','watermark'],
+    icon: 'W',
+    quality: 'Lossless',
+    status: 'Migrated',
+    multipleFiles: false,
+    load: () => import('./watermarkWorkspace')
+  },
   tool({ id: 'images-to-pdf', name: 'Images to PDF', category: 'convert', description: 'Create a PDF from JPEG or PNG images.', keywords: ['jpg','jpeg','png'], icon: '▣', quality: 'Potentially lossy', status: 'Migrated', multipleFiles: true }),
   tool({ id: 'pdf-to-images', name: 'PDF to images', category: 'convert', description: 'Render selected PDF pages to PNG or JPEG.', keywords: ['png','jpg','render'], icon: '▤', quality: 'Potentially lossy', status: 'Migrated', multipleFiles: false }),
   {

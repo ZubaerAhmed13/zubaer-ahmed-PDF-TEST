@@ -34,6 +34,7 @@ export type WorkerOperation =
   | 'rotate'
   | 'page-numbers'
   | 'watermark'
+  | 'watermark-image'
   | 'images-to-pdf'
   | 'metadata'
   | 'forms-inspect'
