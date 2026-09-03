@@ -83,7 +83,7 @@ export const tools: ToolDefinition[] = [
     keywords: ['encrypt','password','protect','aes-256','security','qpdf'],
     icon: '🔒',
     quality: 'Lossless',
-    status: 'Preview',
+    status: 'Migrated',
     multipleFiles: false,
     load: () => import('./encryptionWorkspace')
   },
@@ -95,7 +95,7 @@ export const tools: ToolDefinition[] = [
     keywords: ['decrypt','password','unlock','security','qpdf'],
     icon: '🔓',
     quality: 'Lossless',
-    status: 'Preview',
+    status: 'Migrated',
     multipleFiles: false,
     load: () => import('./encryptionWorkspace')
   },

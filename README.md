@@ -4,7 +4,7 @@ DocFlow is a local-first browser PDF workspace. The `professional-upgrade` branc
 
 ## Current migration status
 
-This branch is **not yet a production release**. The current migrated set includes structural PDF editing, worker-backed preview with virtualized thumbnails, supported AcroForm editing/flattening, text and image watermarking, image conversion/extraction, metadata inspection, and a bounded sequential batch queue. Professional image recompression, encrypted unlock/protect workflows, multi-gigabyte architecture/certification, remaining legacy parity, manual accessibility/Safari validation and production deployment verification remain release gates.
+This branch is **not yet a production release**. The current migrated set includes structural PDF editing, worker-backed preview with virtualized thumbnails, supported AcroForm editing/flattening, text and image watermarking, image conversion/extraction, metadata inspection, a bounded sequential batch queue, and local AES-256 PDF protect/unlock powered by a pinned qpdf 12.3.2 WebAssembly runtime. Professional image recompression, multi-gigabyte architecture/certification, remaining legacy parity, manual accessibility/Safari validation and production deployment verification remain release gates.
 
 The previous root application is preserved at `legacy/index.html` on the migration branch and remains recoverable from git history. Production `main` should not be replaced until `RELEASE_CHECKLIST.md` is satisfied.
 
@@ -29,6 +29,7 @@ CI installs the locked dependency graph with `npm ci`, runs dependency audit, ty
 - lazy-loaded specialized tool workspaces
 - PDF.js worker-backed page rendering and bounded thumbnail virtualization
 - dedicated module workers for pdf-lib processing
+- dedicated qpdf 12.3.2 WASM worker for AES-256 protect/unlock
 - deterministic operation inputs/options
 - cancellable worker operations by worker termination
 - bounded batch processing with one active PDF worker at a time
@@ -39,9 +40,15 @@ CI installs the locked dependency graph with `npm ci`, runs dependency audit, ty
 
 See `ARCHITECTURE.md`, `SECURITY.md`, `PRIVACY.md`, `TESTING.md` and `RELEASE_CHECKLIST.md`.
 
+## Security engine provenance
+
+The encryption runtime is vendored locally from `fayazara/pdfstudio` 0.4.0 at immutable upstream commit `c5c1f2d9f378199d1e2d333dbe4ca20e9ff737ad`, built with qpdf 12.3.2. Integrity metadata, upstream Git blob SHAs, SHA-256 values and the Apache-2.0 license are recorded under `src/vendor/qpdf/`.
+
+Passwords used by Protect PDF and Unlock PDF are sent only to the active local qpdf worker. Those security workspaces deliberately bypass project recovery so passwords are not stored in DocFlow's IndexedDB recovery state or localStorage.
+
 ## Capability boundaries
 
-DocFlow does not currently claim OCR, cryptographic digital-signature creation/validation, encrypted PDF unlock/protect, or professional image recompression. Those capabilities require dedicated engines and their own executed release evidence before they can be marketed as supported.
+DocFlow does not currently claim OCR, cryptographic digital-signature creation/validation, or professional image recompression. Those capabilities require dedicated engines and executed release evidence before they can be marketed as supported.
 
 ## GitHub Pages
 

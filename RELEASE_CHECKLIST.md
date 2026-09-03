@@ -17,6 +17,7 @@ A checkbox is only marked when executed evidence exists. This branch remains a m
 - [x] PDF.js worker-enabled active-page preview
 - [x] Virtualized, lazily rendered thumbnail rail sharing the active PDF.js document
 - [x] Dedicated worker for core pdf-lib operations
+- [x] Dedicated local qpdf 12.3.2 WASM worker for PDF protect/unlock
 - [x] Real page/document progress for migrated worker operations
 - [x] Worker cancellation terminates processing
 - [x] Error categories for invalid/encrypted/unsupported form inputs
@@ -31,7 +32,7 @@ A checkbox is only marked when executed evidence exists. This branch remains a m
 - [x] PNG/JPEG image watermark workflow implemented with structural PDF export/reopen validation
 - [x] Bounded local batch queue certified for sequential processing, per-file outputs, ZIP reopen validation, malformed-file isolation and cancellation
 - [ ] Professional image recompression
-- [ ] Encrypted unlock/protect workflows
+- [x] Encrypted unlock/protect workflows with AES-256 protect, wrong-password rejection, correct unlock, password non-persistence check and reopened geometry validation
 - [ ] OCR/text-layer generation
 - [ ] Cryptographic digital-signature creation/validation
 - [ ] Multi-gigabyte streaming/reference architecture
@@ -51,6 +52,7 @@ A checkbox is only marked when executed evidence exists. This branch remains a m
 - [x] Chromium/Firefox/WebKit current automated PDF workflow matrix
 - [x] Chromium/Firefox offline reload + worker-backed PDF-operation certification
 - [x] WebKit application-shell/chunk precache certification plus normal worker workflow
+- [ ] Dedicated offline Protect/Unlock certification in Chromium/Firefox
 - [ ] Real Safari/WebKit forced-offline worker-operation manual certification
 - [ ] WCAG 2.2 AA manual certification
 - [x] 300-page mixed-dimension structural page-count certification

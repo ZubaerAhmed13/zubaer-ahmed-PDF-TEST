@@ -14,12 +14,12 @@ Covers page/range validation, core structural PDF transformations, structured er
 ### Dependency/security gate
 `npm audit`
 
-CI currently reports zero known npm vulnerabilities for the locked dependency graph. This is evidence for the executed audit only, not a blanket security guarantee.
+CI currently reports zero known npm vulnerabilities for the locked dependency graph. This is evidence for the executed audit only, not a blanket security guarantee. The separately vendored qpdf WASM runtime is tracked by immutable upstream commit, Git blob SHAs, SHA-256 values and license provenance under `src/vendor/qpdf/`.
 
 ### Build
 `npm run build`
 
-The build must succeed with the nested GitHub Pages base path and produce `dist/`. Bundle sizes are reported by CI.
+The build must succeed with the nested GitHub Pages base path and produce `dist/`. Bundle sizes are reported by CI. The production build emits the qpdf worker and the local qpdf WASM asset and includes generated application assets in the service-worker precache manifest.
 
 ### End-to-end
 `npm run test:e2e`
@@ -51,6 +51,12 @@ The current automated matrix covers:
 - bounded batch processing of multiple PDFs sequentially with one active worker, per-file outputs, optional ZIP packaging and reopened-output validation;
 - batch isolation where one malformed PDF reports `INVALID_PDF` while later valid queue items still complete and remain downloadable;
 - deterministic batch cancellation leaving no queue item running/pending;
+- local AES-256 Protect PDF with a pinned qpdf 12.3.2 WASM worker;
+- protected-output validation using `%PDF-`, an `/Encrypt` dictionary and refusal by ordinary pdf-lib loading without a password;
+- direct verification that the known security test password is absent from DocFlow localStorage and the project-state IndexedDB snapshot after protection;
+- Unlock PDF wrong-password rejection with structured `INVALID_PASSWORD` recovery and a reusable workspace;
+- correct-password decryption followed by reopened output, page-count and mixed-dimension geometry validation;
+- no cross-origin network requests during the protect/wrong-password/unlock round trip;
 - a 300-page mixed-dimension rotate/export/reopen workflow with page count, rotation and sampled geometry assertions;
 - repeated preview open/navigate/close cycles with dedicated worker termination, canvas removal and page-error checks;
 - keyboard-triggered workspace/information dialogs with focus containment and exact trigger focus return;
@@ -66,6 +72,7 @@ The current automated matrix covers:
 
 Executed automated fixtures now include:
 - small 1–5 page PDFs across structural/export workflows;
+- a two-page mixed-dimension PDF protected with AES-256, tested with a wrong password, then unlocked and reopened with original geometry;
 - multiple-PDF batch queues, including a deliberately malformed item followed by a valid item;
 - a 40-page PDF for thumbnail virtualization behavior;
 - a 300-page mixed-dimension PDF, which also exercises the 50+ and 100+ page-count thresholds;
@@ -81,7 +88,6 @@ Page-count certification must not be described as multi-gigabyte certification; 
 ## Release fixtures still required
 
 The professional release still requires non-confidential fixtures/evidence for:
-- encrypted/password-protected PDF unlock/protect workflows;
 - high-resolution scanned PDFs;
 - image-heavy PDFs at realistic high resolution;
 - professional image recompression quality/size comparisons;
@@ -92,7 +98,6 @@ The professional release still requires non-confidential fixtures/evidence for:
 
 - OCR/text-layer generation;
 - cryptographic digital-signature creation or validation;
-- encrypted PDF unlock/protect;
 - professional image recompression.
 
 These must not be promoted as supported until a real engine and executed certification exist.
@@ -102,7 +107,7 @@ These must not be promoted as supported until a real engine and executed certifi
 - keyboard-only complete end-to-end workflows beyond the automated dialog-focus coverage;
 - screen reader semantics and announcements;
 - WCAG 2.2 AA manual certification;
-- real Safari/iOS behavior, including offline worker execution;
+- real Safari/iOS behavior, including forced-offline worker execution;
 - heap/memory growth measurement after repeated open/close/process cycles (the automated cleanup test verifies worker/canvas release but is not a heap-growth certification);
 - high-resolution scan and image-heavy memory behavior;
 - color/fidelity comparisons;

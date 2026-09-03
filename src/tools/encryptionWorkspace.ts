@@ -4,7 +4,7 @@ import { runQpdfOperation, type RunningQpdfOperation } from '../pdf/qpdfWorkerCl
 import type { InputFile, OperationProgress, OperationResult } from '../pdf/types';
 
 function escapeHtml(value: string): string {
-  return value.replace(/[&<>"']/g, (character) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot',"'":'&#39;'}[character] ?? character));
+  return value.replace(/[&<>"']/g, (character) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[character] ?? character));
 }
 
 function humanBytes(bytes: number): string {
