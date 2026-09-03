@@ -32,7 +32,18 @@ export const tools: ToolDefinition[] = [
   tool({ id: 'split', name: 'Split PDF', category: 'organize', description: 'Extract ranges, individual pages, or chunks into new PDFs.', keywords: ['extract','range','pages'], icon: '✂', quality: 'Lossless', status: 'Migrated', multipleFiles: false }),
   tool({ id: 'remove-pages', name: 'Remove pages', category: 'organize', description: 'Remove selected pages structurally while preserving the remaining page content.', keywords: ['delete','remove','pages'], icon: '−', quality: 'Lossless', status: 'Migrated', multipleFiles: false }),
   tool({ id: 'extract-pages', name: 'Extract pages', category: 'organize', description: 'Create a new PDF from selected pages without intentionally rasterizing them.', keywords: ['extract','copy','selected pages'], icon: '⇥', quality: 'Lossless', status: 'Migrated', multipleFiles: false }),
-  tool({ id: 'organize', name: 'Organize pages', category: 'organize', description: 'Reorder, remove, duplicate, and rotate pages using an operation plan.', keywords: ['reorder','remove','rotate','duplicate'], icon: '▦', quality: 'Lossless', status: 'Preview', multipleFiles: false }),
+  {
+    id: 'organize',
+    name: 'Organize pages',
+    category: 'organize',
+    description: 'Visually reorder, remove and duplicate pages with lazy thumbnails, multi-select and undo/redo while preserving a deterministic structural operation plan.',
+    keywords: ['reorder','remove','rotate','duplicate','drag','undo','pages'],
+    icon: '▦',
+    quality: 'Lossless',
+    status: 'Migrated',
+    multipleFiles: false,
+    load: () => import('./organizeWorkspace')
+  },
   tool({ id: 'rotate', name: 'Rotate pages', category: 'organize', description: 'Rotate all, odd, even, or selected pages structurally.', keywords: ['orientation'], icon: '↻', quality: 'Lossless', status: 'Migrated', multipleFiles: false }),
   tool({ id: 'page-numbers', name: 'Add page numbers', category: 'edit', description: 'Add configurable numbering to selected page ranges.', keywords: ['number','footer'], icon: '#', quality: 'Lossless', status: 'Migrated', multipleFiles: false }),
   {
