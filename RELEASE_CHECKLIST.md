@@ -57,7 +57,7 @@ A checkbox is only marked when executed evidence exists. This branch remains a m
 - [ ] WCAG 2.2 AA manual certification
 - [x] 300-page mixed-dimension structural page-count certification
 - [ ] Multi-gigabyte file-size certification
-- [ ] High-resolution scanned/image-heavy PDF certification
+- [x] High-resolution scanned/image-heavy PDF certification using three A4 pages with 2480×3508 JPEG-backed scans (300 DPI), PDF.js preview/navigation, structural rotation, JPEG stream preservation and reopened geometry across Chromium/Firefox/WebKit
 - [ ] Color/fidelity certification
 - [ ] Production Pages deployment verification
 

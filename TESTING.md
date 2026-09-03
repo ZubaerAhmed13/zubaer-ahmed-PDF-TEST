@@ -60,6 +60,7 @@ The current automated matrix covers:
 - Chromium and Firefox forced-offline reload followed by a real local qpdf AES-256 Protect PDF operation and encrypted output validation;
 - WebKit forced-offline Cache Storage verification for the hashed encryption workspace chunk, qpdf worker and qpdf WASM, combined with the separately executed normal WebKit qpdf protect/unlock workflow because Playwright WebKit 26.5 blocks newly created workers after its forced-offline shim is enabled;
 - a 300-page mixed-dimension rotate/export/reopen workflow with page count, rotation and sampled geometry assertions;
+- a three-page A4 raster-scan fixture with embedded 2480×3508 JPEG images (300 DPI), PDF.js preview/navigation through every page, structural 90° rotation, preserved `/DCTDecode` JPEG streams, and reopened A4 geometry validation;
 - repeated preview open/navigate/close cycles with dedicated worker termination, canvas removal and page-error checks;
 - keyboard-triggered workspace/information dialogs with focus containment and exact trigger focus return;
 - no cross-origin network requests during core PDF processing;
@@ -79,6 +80,7 @@ Executed automated fixtures now include:
 - multiple-PDF batch queues, including a deliberately malformed item followed by a valid item;
 - a 40-page PDF for thumbnail virtualization behavior;
 - a 300-page mixed-dimension PDF, which also exercises the 50+ and 100+ page-count thresholds;
+- a three-page A4 scan-style PDF backed by 2480×3508 JPEG images (300 DPI), exercised through preview, navigation, structural rotation, image-stream preservation and export/reopen validation in Chromium, Firefox and WebKit;
 - mixed page dimensions;
 - AcroForm text, checkbox, radio, dropdown and option-list fields;
 - a valid XFA-stream PDF boundary fixture;
@@ -86,13 +88,11 @@ Executed automated fixtures now include:
 - metadata-bearing PDF input;
 - PNG/JPEG image inputs for conversion/watermark paths.
 
-Page-count certification must not be described as multi-gigabyte certification; those remain separate gates.
+Page-count certification and the 300-DPI fixture must not be described as multi-gigabyte certification; that remains a separate gate.
 
 ## Release fixtures still required
 
 The professional release still requires non-confidential fixtures/evidence for:
-- high-resolution scanned PDFs;
-- image-heavy PDFs at realistic high resolution;
 - professional image recompression quality/size comparisons;
 - multi-gigabyte source-file architecture and certification;
 - color/fidelity comparisons where operations can alter rendered appearance.
@@ -112,6 +112,5 @@ These must not be promoted as supported until a real engine and executed certifi
 - WCAG 2.2 AA manual certification;
 - real Safari/iOS behavior, including forced-offline worker execution;
 - heap/memory growth measurement after repeated open/close/process cycles (the automated cleanup test verifies worker/canvas release but is not a heap-growth certification);
-- high-resolution scan and image-heavy memory behavior;
 - color/fidelity comparisons;
 - production GitHub Pages deployment verification after release-candidate merge.
