@@ -1,3 +1,30 @@
+:root{
+  /* Preserve the restored warm/coral identity while meeting WCAG AA for small text. */
+  --ink-muted:#596575;
+  --accent-coral:#bd4631;
+  --accent-coral-deep:#a83b2b;
+}
+
+/* Restored hero / workspace illustration */
+.window-feature-icon{color:#bd4631}
+.window-feature:nth-child(2) .window-feature-icon{color:#3d62a6}
+.window-feature:nth-child(3) .window-feature-icon{color:#24735f}
 .window-status{color:#1d6f50}
+
+/* Tool category accents: each remains visually distinct but clears AA on its soft tint. */
+.tool-card{--tool-accent:#3d62a6}
+.tool-card[data-category="organize"]{--tool-accent:#bd4631}
+.tool-card[data-category="edit"]{--tool-accent:#7143d1}
 .tool-card[data-category="convert"]{--tool-accent:#24735f}
+.tool-card[data-category="review"]{--tool-accent:#3d62a6}
+.tool-card[data-category="forms"]{--tool-accent:#8b5b0f}
 .tool-card[data-category="optimize"]{--tool-accent:#176f85}
+.tool-card[data-category="security"]{--tool-accent:#9b3f58}
+.tool-card[data-category="batch"]{--tool-accent:#596575}
+
+/* Neutral metadata chips were just below AA at the restored 9px label size. */
+.tool-meta span{color:#596575}
+
+/* Keep the three trust illustrations readable on their pastel surfaces. */
+.trust-card:nth-child(2) .trust-icon{color:#3d62a6}
+.trust-card:nth-child(3) .trust-icon{color:#8b5b0f}
