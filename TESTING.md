@@ -61,7 +61,9 @@ The current automated matrix covers:
 - WebKit forced-offline Cache Storage verification for the hashed encryption workspace chunk, qpdf worker and qpdf WASM, combined with the separately executed normal WebKit qpdf protect/unlock workflow because Playwright WebKit 26.5 blocks newly created workers after its forced-offline shim is enabled;
 - a 300-page mixed-dimension rotate/export/reopen workflow with page count, rotation and sampled geometry assertions;
 - a three-page A4 raster-scan fixture with embedded 2480×3508 JPEG images (300 DPI), PDF.js preview/navigation through every page, structural 90° rotation, preserved `/DCTDecode` JPEG streams, and reopened A4 geometry validation;
-- repeated preview open/navigate/close cycles with dedicated worker termination, canvas removal and page-error checks;
+- repeated preview open/navigate/close cycles with dedicated worker termination, canvas removal and page-error checks in all browser projects;
+- Chromium CDP heap-growth certification: one warm-up preview cycle followed by forced garbage collection, then eight repeated open/render/navigate/close cycles with GC after each; final used-heap growth must remain within `max(12 MiB, 45% of baseline)` and the final three settled samples must stay within an 8 MiB spread;
+- deterministic sRGB raster fidelity: red, green, blue and 50% gray vector patches rendered through the PDF-to-images path at 1×; PNG samples must remain within ±3 per RGB channel and JPEG samples within ±14, executed in Chromium, Firefox and WebKit;
 - keyboard-triggered workspace/information dialogs with focus containment and exact trigger focus return;
 - no cross-origin network requests during core PDF processing;
 - GitHub Pages PWA manifest/service-worker path resolution;
@@ -81,6 +83,8 @@ Executed automated fixtures now include:
 - a 40-page PDF for thumbnail virtualization behavior;
 - a 300-page mixed-dimension PDF, which also exercises the 50+ and 100+ page-count thresholds;
 - a three-page A4 scan-style PDF backed by 2480×3508 JPEG images (300 DPI), exercised through preview, navigation, structural rotation, image-stream preservation and export/reopen validation in Chromium, Firefox and WebKit;
+- a 16-page preview fixture used for deterministic resource cleanup and Chromium forced-GC heap-growth measurements;
+- a one-page sRGB color-patch PDF used for PNG/JPEG pixel-level raster export fidelity checks across all three browser engines;
 - mixed page dimensions;
 - AcroForm text, checkbox, radio, dropdown and option-list fields;
 - a valid XFA-stream PDF boundary fixture;
@@ -88,14 +92,13 @@ Executed automated fixtures now include:
 - metadata-bearing PDF input;
 - PNG/JPEG image inputs for conversion/watermark paths.
 
-Page-count certification and the 300-DPI fixture must not be described as multi-gigabyte certification; that remains a separate gate.
+Page-count certification and the 300-DPI fixture must not be described as multi-gigabyte certification; that remains a separate gate. The sRGB patch test is a baseline browser-render/export fidelity certification and must not be generalized to CMYK, ICC-profile, spot-color or print-proof workflows.
 
 ## Release fixtures still required
 
 The professional release still requires non-confidential fixtures/evidence for:
 - professional image recompression quality/size comparisons;
-- multi-gigabyte source-file architecture and certification;
-- color/fidelity comparisons where operations can alter rendered appearance.
+- multi-gigabyte source-file architecture and certification.
 
 ## Explicitly unsupported / not yet implemented
 
@@ -111,6 +114,4 @@ These must not be promoted as supported until a real engine and executed certifi
 - screen reader semantics and announcements;
 - WCAG 2.2 AA manual certification;
 - real Safari/iOS behavior, including forced-offline worker execution;
-- heap/memory growth measurement after repeated open/close/process cycles (the automated cleanup test verifies worker/canvas release but is not a heap-growth certification);
-- color/fidelity comparisons;
 - production GitHub Pages deployment verification after release-candidate merge.

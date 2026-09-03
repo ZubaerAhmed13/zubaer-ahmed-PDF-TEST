@@ -37,7 +37,7 @@ A checkbox is only marked when executed evidence exists. This branch remains a m
 - [ ] Cryptographic digital-signature creation/validation
 - [ ] Multi-gigabyte streaming/reference architecture
 - [x] Output validation for every currently migrated export-capable operation (PDF reopen or artifact signature/manifest validation as applicable)
-- [ ] Memory leak certification — repeated preview cycles certify worker/canvas cleanup, but heap-growth certification is still required
+- [x] Memory/resource certification: all-browser worker/canvas cleanup plus Chromium CDP forced-GC heap-growth test after warm-up across eight repeated preview cycles, with bounded final growth and settled tail samples
 
 ## P2/P3/P4
 - [x] Search and keyboard command
@@ -58,7 +58,7 @@ A checkbox is only marked when executed evidence exists. This branch remains a m
 - [x] 300-page mixed-dimension structural page-count certification
 - [ ] Multi-gigabyte file-size certification
 - [x] High-resolution scanned/image-heavy PDF certification using three A4 pages with 2480×3508 JPEG-backed scans (300 DPI), PDF.js preview/navigation, structural rotation, JPEG stream preservation and reopened geometry across Chromium/Firefox/WebKit
-- [ ] Color/fidelity certification
+- [x] Baseline raster color/fidelity certification: deterministic sRGB red/green/blue/gray patches exported through PNG and JPEG at 1× and checked at pixel level across Chromium/Firefox/WebKit (PNG ±3/channel; JPEG ±14/channel). This does not claim general ICC/CMYK color-management certification.
 - [ ] Production Pages deployment verification
 
 ## Release verdict

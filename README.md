@@ -6,7 +6,7 @@ DocFlow is a local-first browser PDF workspace. The `professional-upgrade` branc
 
 This branch is **not yet a production release**. The current migrated set includes structural PDF editing, worker-backed preview with virtualized thumbnails, supported AcroForm editing/flattening, text and image watermarking, image conversion/extraction, metadata inspection, a bounded sequential batch queue, and local AES-256 PDF protect/unlock powered by a pinned qpdf 12.3.2 WebAssembly runtime. Audited legacy parity is documented in `docs/LEGACY_PARITY_MATRIX.md`, and the obsolete second entry point is removed on the migration branch while the full historical root remains preserved at `legacy/index.html`.
 
-Professional image recompression, OCR/text-layer generation, cryptographic digital signatures, multi-gigabyte architecture/certification, heap-growth memory certification, manual accessibility/Safari validation, color/fidelity certification and production deployment verification remain release gates.
+Automated evidence now also covers a 300-page structural workflow, A4 300-DPI JPEG-backed scan handling, all-browser worker/canvas cleanup, Chromium forced-GC heap-growth bounds, and baseline sRGB PNG/JPEG raster-export fidelity. Professional image recompression, OCR/text-layer generation, cryptographic digital signatures, multi-gigabyte architecture/certification, manual accessibility/Safari validation and production deployment verification remain release gates.
 
 Production `main` should not be replaced until `RELEASE_CHECKLIST.md` is satisfied.
 
@@ -52,7 +52,7 @@ Passwords used by Protect PDF and Unlock PDF are sent only to the active local q
 
 DocFlow does not currently claim OCR, cryptographic digital-signature creation/validation, or professional image recompression. Those capabilities require dedicated engines and executed release evidence before they can be marketed as supported.
 
-The completed high-resolution fixture proves handling of three A4 pages backed by 2480×3508 JPEG scans (300 DPI); it does **not** prove multi-gigabyte file handling. Large-file streaming/reference architecture remains a separate gate.
+The completed high-resolution fixture proves handling of three A4 pages backed by 2480×3508 JPEG scans (300 DPI); it does **not** prove multi-gigabyte file handling. Large-file streaming/reference architecture remains a separate gate. The sRGB color test is a browser raster-export baseline and is not a blanket CMYK/ICC print-proof certification.
 
 ## GitHub Pages
 
