@@ -15,7 +15,7 @@ test('keyboard-only dialog flows keep focus contained and return it to the exact
   await expect(workspace).toBeHidden();
   await expect(openMerge).toBeFocused();
 
-  const privacy = page.getByRole('button', { name: 'Privacy' });
+  const privacy = page.locator('.topbar-nav').getByRole('button', { name: 'Privacy' });
   await privacy.focus();
   await expect(privacy).toBeFocused();
   await page.keyboard.press('Enter');
