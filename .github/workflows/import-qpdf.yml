@@ -47,19 +47,19 @@ jobs:
           cat > src/vendor/qpdf/PROVENANCE.md <<EOF
           # Vendored qpdf WASM provenance
 
-          These files are vendored unchanged from `fayazara/pdfstudio` 0.4.0 at immutable commit:
-
-          `${UPSTREAM_COMMIT}`
-
-          The upstream build script compiles **qpdf 12.3.2** to WebAssembly. Both the wrapper repository and qpdf 12.3.2 are distributed under Apache License 2.0. The full upstream wrapper license is included as `LICENSE.txt`.
+          Repository: fayazara/pdfstudio 0.4.0
+          Immutable upstream commit: ${UPSTREAM_COMMIT}
+          Embedded qpdf version: 12.3.2
+          License: Apache License 2.0
+          Full upstream wrapper license: LICENSE.txt
 
           ## Integrity
 
           | File | Upstream Git blob SHA | SHA-256 |
           | --- | --- | --- |
-          | `qpdf.wasm` | `${EXPECTED_WASM_BLOB}` | `${wasm_sha256}` |
-          | `qpdf.js` | `${EXPECTED_JS_BLOB}` | `${js_sha256}` |
-          | `qpdf.d.ts` | `${EXPECTED_DTS_BLOB}` | `${dts_sha256}` |
+          | qpdf.wasm | ${EXPECTED_WASM_BLOB} | ${wasm_sha256} |
+          | qpdf.js | ${EXPECTED_JS_BLOB} | ${js_sha256} |
+          | qpdf.d.ts | ${EXPECTED_DTS_BLOB} | ${dts_sha256} |
 
           The one-time import workflow verifies every upstream Git blob SHA before the files are committed. No CDN or runtime third-party fetch is required after vendoring.
           EOF
@@ -71,5 +71,9 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add src/vendor/qpdf
-          git commit -m "chore: vendor pinned qpdf 12.3.2 wasm runtime"
+          if git diff --cached --quiet; then
+            echo "Vendored runtime already matches the pinned upstream artifacts."
+            exit 0
+          fi
+          git commit -m "chore: record verified qpdf wasm provenance"
           git push origin HEAD:professional-upgrade
