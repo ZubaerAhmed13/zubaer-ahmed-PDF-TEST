@@ -71,19 +71,25 @@ test('batch queue continues after one malformed PDF and keeps successful outputs
   await expect(dialog.getByRole('button', { name: 'Run batch' })).toBeEnabled();
 });
 
-test('batch cancellation stops the active queue and leaves no pending items running', async ({ page }) => {
+test('batch cancellation stops an active queue and leaves no pending items running', async ({ page }) => {
   await page.goto('/zubaer-ahmed-PDF-TEST/');
   await page.getByLabel('Search tools').fill('batch');
   await page.locator('#tool-grid [data-open-tool="batch"]').click();
   const dialog = page.getByRole('dialog', { name: 'Workspace' });
 
-  await dialog.locator('#batch-files').setInputFiles([
-    { name: 'cancel-a.pdf', mimeType: 'application/pdf', buffer: await pdfFixture(320) },
-    { name: 'cancel-b.pdf', mimeType: 'application/pdf', buffer: await pdfFixture(340) }
-  ]);
+  // Use enough sequential worker jobs that the queue remains genuinely active long enough
+  // for the cancellation interaction on slower and faster browser engines alike.
+  const cancelFiles = await Promise.all(Array.from({ length: 16 }, async (_, index) => ({
+    name: `cancel-${String(index + 1).padStart(2, '0')}.pdf`,
+    mimeType: 'application/pdf',
+    buffer: await pdfFixture(320 + index)
+  })));
+  await dialog.locator('#batch-files').setInputFiles(cancelFiles);
+  await expect(dialog.locator('.batch-row')).toHaveCount(16);
   await dialog.getByRole('button', { name: 'Run batch' }).click();
-  await expect(dialog.getByRole('button', { name: 'Cancel batch' })).toBeEnabled();
-  await dialog.getByRole('button', { name: 'Cancel batch' }).click();
+  const cancel = dialog.getByRole('button', { name: 'Cancel batch' });
+  await expect(cancel).toBeEnabled();
+  await cancel.click();
 
   await expect(dialog.locator('#batch-stage')).toContainText('Batch cancelled');
   await expect(dialog.locator('.batch-row[data-state="running"]')).toHaveCount(0);
