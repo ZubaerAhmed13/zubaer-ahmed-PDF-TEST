@@ -1,0 +1,157 @@
+.batch-workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.6fr);
+  gap: 1rem;
+}
+
+.batch-side,
+.batch-main {
+  min-width: 0;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 20px;
+}
+
+.batch-side h2 {
+  font-size: 28px;
+  letter-spacing: -0.03em;
+  margin: 6px 0;
+}
+
+.batch-side > p:not(.eyebrow) {
+  color: var(--muted);
+}
+
+.batch-controls {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+  margin: 1rem 0;
+}
+
+.batch-controls .wide,
+.batch-operation-options,
+.batch-operation-options .wide {
+  grid-column: 1 / -1;
+}
+
+.batch-operation-options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.batch-controls label,
+.batch-operation-options label {
+  display: grid;
+  gap: 5px;
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.batch-controls input,
+.batch-controls select {
+  width: 100%;
+  min-height: 2.55rem;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  padding: 9px;
+  background: #fff;
+}
+
+.batch-drop {
+  border: 1.5px dashed #b6beca;
+  border-radius: 14px;
+  padding: 1.2rem;
+  display: grid;
+  gap: 0.35rem;
+  text-align: center;
+  cursor: pointer;
+  background: #fafbfc;
+}
+
+.batch-drop.dragging {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+}
+
+.batch-drop input {
+  inline-size: 100%;
+}
+
+.batch-queue {
+  display: grid;
+  gap: 0.55rem;
+  margin-top: 1rem;
+}
+
+.batch-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.65rem;
+  align-items: center;
+  padding: 0.7rem;
+  border: 1px solid color-mix(in srgb, currentColor 16%, transparent);
+  border-radius: 10px;
+}
+
+.batch-row small,
+.batch-row .batch-state {
+  display: block;
+  margin-top: 0.2rem;
+}
+
+.batch-row[data-state="running"] {
+  outline: 2px solid color-mix(in srgb, currentColor 55%, transparent);
+}
+
+.batch-row[data-state="failed"] .batch-state {
+  font-weight: 700;
+  color: #8a3030;
+}
+
+.batch-results {
+  display: grid;
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
+
+.batch-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.65rem;
+  margin-top: 1rem;
+}
+
+@media (max-width: 760px) {
+  .batch-workspace {
+    grid-template-columns: 1fr;
+  }
+
+  .batch-side {
+    display: none;
+  }
+}
+
+@media (max-width: 520px) {
+  .batch-controls,
+  .batch-operation-options {
+    grid-template-columns: 1fr;
+  }
+
+  .batch-controls .wide,
+  .batch-operation-options,
+  .batch-operation-options .wide {
+    grid-column: auto;
+  }
+
+  .batch-row {
+    grid-template-columns: 1fr;
+  }
+
+  .batch-actions > * {
+    flex: 1 1 100%;
+  }
+}

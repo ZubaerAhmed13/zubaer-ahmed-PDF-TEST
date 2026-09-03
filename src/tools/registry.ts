@@ -1,4 +1,4 @@
-export type ToolCategory = 'organize' | 'edit' | 'convert' | 'review' | 'forms' | 'optimize';
+export type ToolCategory = 'organize' | 'edit' | 'convert' | 'review' | 'forms' | 'optimize' | 'batch';
 
 export interface ToolDefinition {
   id: string;
@@ -19,7 +19,8 @@ export const toolCategories = [
   { id: 'convert', label: 'Convert' },
   { id: 'review', label: 'Review' },
   { id: 'forms', label: 'Forms' },
-  { id: 'optimize', label: 'Optimize' }
+  { id: 'optimize', label: 'Optimize' },
+  { id: 'batch', label: 'Batch' }
 ] as const;
 
 function tool(definition: Omit<ToolDefinition, 'load'>): ToolDefinition {
@@ -74,5 +75,17 @@ export const tools: ToolDefinition[] = [
   },
   tool({ id: 'forms', name: 'Fill PDF forms', category: 'forms', description: 'Edit supported AcroForm fields; XFA is detected and reported as unsupported.', keywords: ['acroform','xfa','fields'], icon: '☑', quality: 'Lossless', status: 'Preview', multipleFiles: false }),
   tool({ id: 'metadata', name: 'Document information', category: 'review', description: 'Inspect standard PDF metadata and encryption state.', keywords: ['metadata','author','title'], icon: 'i', quality: 'Inspection', status: 'Migrated', multipleFiles: false }),
-  tool({ id: 'compress', name: 'Optimize PDF', category: 'optimize', description: 'Structural re-save only. Image recompression is not yet release-certified.', keywords: ['compress','size','optimize'], icon: '⇲', quality: 'Potentially lossy', status: 'Limited', multipleFiles: false })
+  tool({ id: 'compress', name: 'Optimize PDF', category: 'optimize', description: 'Structural re-save only. Image recompression is not yet release-certified.', keywords: ['compress','size','optimize'], icon: '⇲', quality: 'Potentially lossy', status: 'Limited', multipleFiles: false }),
+  {
+    id: 'batch',
+    name: 'Batch process PDFs',
+    category: 'batch',
+    description: 'Process multiple PDFs sequentially with a bounded one-worker queue, per-file status, cancellation and optional ZIP packaging.',
+    keywords: ['batch','queue','multiple','bulk','rotate','number','watermark','optimize','zip'],
+    icon: '≣',
+    quality: 'Lossless',
+    status: 'Migrated',
+    multipleFiles: true,
+    load: () => import('./batchWorkspace')
+  }
 ];
