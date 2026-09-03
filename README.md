@@ -4,9 +4,11 @@ DocFlow is a local-first browser PDF workspace. The `professional-upgrade` branc
 
 ## Current migration status
 
-This branch is **not yet a production release**. The current migrated set includes structural PDF editing, worker-backed preview with virtualized thumbnails, supported AcroForm editing/flattening, text and image watermarking, image conversion/extraction, metadata inspection, a bounded sequential batch queue, and local AES-256 PDF protect/unlock powered by a pinned qpdf 12.3.2 WebAssembly runtime. Professional image recompression, multi-gigabyte architecture/certification, remaining legacy parity, manual accessibility/Safari validation and production deployment verification remain release gates.
+This branch is **not yet a production release**. The current migrated set includes structural PDF editing, worker-backed preview with virtualized thumbnails, supported AcroForm editing/flattening, text and image watermarking, image conversion/extraction, metadata inspection, a bounded sequential batch queue, and local AES-256 PDF protect/unlock powered by a pinned qpdf 12.3.2 WebAssembly runtime. Audited legacy parity is documented in `docs/LEGACY_PARITY_MATRIX.md`, and the obsolete second entry point is removed on the migration branch while the full historical root remains preserved at `legacy/index.html`.
 
-The previous root application is preserved at `legacy/index.html` on the migration branch and remains recoverable from git history. Production `main` should not be replaced until `RELEASE_CHECKLIST.md` is satisfied.
+Professional image recompression, OCR/text-layer generation, cryptographic digital signatures, multi-gigabyte architecture/certification, heap-growth memory certification, manual accessibility/Safari validation, color/fidelity certification and production deployment verification remain release gates.
+
+Production `main` should not be replaced until `RELEASE_CHECKLIST.md` is satisfied.
 
 ## Development
 
@@ -38,7 +40,7 @@ CI installs the locked dependency graph with `npm ci`, runs dependency audit, ty
 - PWA runtime/precache support with nested GitHub Pages scope
 - no remote PDF-processing API or analytics dependency
 
-See `ARCHITECTURE.md`, `SECURITY.md`, `PRIVACY.md`, `TESTING.md` and `RELEASE_CHECKLIST.md`.
+See `ARCHITECTURE.md`, `SECURITY.md`, `PRIVACY.md`, `TESTING.md`, `docs/LEGACY_PARITY_MATRIX.md` and `RELEASE_CHECKLIST.md`.
 
 ## Security engine provenance
 
@@ -49,6 +51,8 @@ Passwords used by Protect PDF and Unlock PDF are sent only to the active local q
 ## Capability boundaries
 
 DocFlow does not currently claim OCR, cryptographic digital-signature creation/validation, or professional image recompression. Those capabilities require dedicated engines and executed release evidence before they can be marketed as supported.
+
+The completed high-resolution fixture proves handling of three A4 pages backed by 2480×3508 JPEG scans (300 DPI); it does **not** prove multi-gigabyte file handling. Large-file streaming/reference architecture remains a separate gate.
 
 ## GitHub Pages
 

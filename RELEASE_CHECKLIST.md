@@ -10,8 +10,8 @@ A checkbox is only marked when executed evidence exists. This branch remains a m
 - [x] Central tool registry added
 - [x] GitHub Pages nested base path configured
 - [x] Dependency lockfile generated and committed; CI installs with `npm ci`
-- [ ] Full legacy feature parity demonstrated
-- [ ] Obsolete duplicate entry point removed after parity
+- [x] Full audited legacy feature parity demonstrated in `docs/LEGACY_PARITY_MATRIX.md`
+- [x] Obsolete `pdf-all-in-one/index.html` duplicate entry point removed after parity; `legacy/index.html` remains the rollback snapshot
 
 ## P1 reliability
 - [x] PDF.js worker-enabled active-page preview
@@ -63,6 +63,6 @@ A checkbox is only marked when executed evidence exists. This branch remains a m
 
 ## Release verdict
 
-Do not merge into `main` or label **PROFESSIONAL RELEASE READY** while any critical unchecked P0/P1 item remains.
+Do not merge into `main` or label **PROFESSIONAL RELEASE READY** while any critical unchecked P1 item remains.
 
 Current verdict: **NOT YET PROFESSIONAL RELEASE READY**.

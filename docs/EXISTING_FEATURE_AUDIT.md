@@ -72,11 +72,18 @@ The historical findings above describe the audited legacy baseline and are inten
 - structural merge/split/remove/extract/organize/rotate/page-number/watermark outputs with reopen or artifact validation as applicable;
 - text watermarking plus PNG/JPEG image watermarking without intentional rasterization of the existing page content;
 - supported AcroForm text, checkbox, radio, dropdown and option-list workflows, flattening, and explicit valid-XFA rejection;
+- local qpdf 12.3.2 WebAssembly AES-256 Protect/Unlock with wrong-password recovery, password non-persistence, normal Chromium/Firefox/WebKit round-trip evidence and dedicated offline evidence within the documented browser-harness boundary;
 - malformed-PDF structured recovery, standard metadata extraction and continued workspace usability after failure;
 - decoded embedded-raster image extraction with ZIP/manifest/signature validation;
 - lightweight IndexedDB recovery that stores settings and file metadata but not PDF/image bytes;
 - PWA path/offline evidence within the documented browser-harness limits;
 - responsive-width, automated axe, keyboard dialog focus-return and repeated preview worker/canvas cleanup evidence;
-- a 300-page mixed-dimension structural export/reopen certification.
+- a 300-page mixed-dimension structural export/reopen certification;
+- a three-page A4 scan-style fixture backed by 2480×3508 JPEG images (300 DPI), certified across Chromium/Firefox/WebKit for PDF.js preview/navigation, structural rotation, JPEG-stream preservation and reopened geometry;
+- a formal audited-capability parity mapping in `docs/LEGACY_PARITY_MATRIX.md`.
 
-These results do **not** close the remaining professional-release gates for full legacy parity, obsolete duplicate-entry removal, encrypted unlock/protect workflows, professional image recompression, multi-gigabyte streaming/reference architecture and certification, heap-growth memory certification, high-resolution scanned/image-heavy stress testing, color/fidelity certification, manual WCAG/Safari validation, or production Pages verification.
+The legacy parity record covers capabilities actually observed as working/limited/partial in the baseline. Legacy items that were only unverified are not silently treated as proven old functionality; several, including forms and encryption, have nevertheless been independently implemented and certified on the migration branch.
+
+After parity documentation, the obsolete `pdf-all-in-one/index.html` duplicate entry point is removed from the migration branch. The full original root remains preserved at `legacy/index.html` and in git history.
+
+These results do **not** close the remaining professional-release gates for professional image recompression, OCR/text-layer generation, cryptographic digital-signature creation/validation, multi-gigabyte streaming/reference architecture and certification, heap-growth memory certification, color/fidelity certification, manual WCAG/Safari validation, or production Pages verification.
