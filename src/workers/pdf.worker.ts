@@ -1,5 +1,6 @@
 /// <reference lib="webworker" />
-import { addPageNumbers, addWatermark, extractPages, fillForms, imagesToPdf, inspectForms, mergePdf, optimizePdf, organizePdf, removePages, rotatePdf, splitPdf } from '../pdf/core';
+import { addPageNumbers, addWatermark, extractPages, fillForms, imagesToPdf, inspectForms, mergePdf, organizePdf, removePages, rotatePdf, splitPdf } from '../pdf/core';
+import { recompressPdfImages } from '../pdf/imageRecompression';
 import { addImageWatermark } from '../pdf/imageWatermark';
 import { metadata } from '../pdf/metadata';
 import { normalizePdfError } from '../pdf/errors';
@@ -19,7 +20,7 @@ const handlers = {
   metadata,
   'forms-inspect': inspectForms,
   'forms-fill': fillForms,
-  optimize: optimizePdf
+  optimize: recompressPdfImages
 } as const;
 
 self.addEventListener('message', (event: MessageEvent<WorkerRequest>) => {
