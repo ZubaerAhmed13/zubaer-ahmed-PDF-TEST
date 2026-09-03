@@ -57,6 +57,8 @@ The current automated matrix covers:
 - Unlock PDF wrong-password rejection with structured `INVALID_PASSWORD` recovery and a reusable workspace;
 - correct-password decryption followed by reopened output, page-count and mixed-dimension geometry validation;
 - no cross-origin network requests during the protect/wrong-password/unlock round trip;
+- Chromium and Firefox forced-offline reload followed by a real local qpdf AES-256 Protect PDF operation and encrypted output validation;
+- WebKit forced-offline Cache Storage verification for the hashed encryption workspace chunk, qpdf worker and qpdf WASM, combined with the separately executed normal WebKit qpdf protect/unlock workflow because Playwright WebKit 26.5 blocks newly created workers after its forced-offline shim is enabled;
 - a 300-page mixed-dimension rotate/export/reopen workflow with page count, rotation and sampled geometry assertions;
 - repeated preview open/navigate/close cycles with dedicated worker termination, canvas removal and page-error checks;
 - keyboard-triggered workspace/information dialogs with focus containment and exact trigger focus return;
@@ -64,8 +66,8 @@ The current automated matrix covers:
 - GitHub Pages PWA manifest/service-worker path resolution;
 - automated axe checks for serious/critical homepage violations;
 - responsive shell/workspace overflow checks at 360, 768 and 1280 px;
-- Chromium and Firefox offline reload plus local worker-backed PDF processing;
-- WebKit offline precache inspection plus a separate normal WebKit worker-backed PDF workflow, because Playwright WebKit 26.5 blocks worker/network creation after forced-offline mode before the service worker can answer;
+- Chromium and Firefox offline reload plus local worker-backed core PDF processing;
+- WebKit application-shell/chunk precache certification plus normal worker workflows;
 - IndexedDB recovery of tool settings/file metadata with direct verification that document bytes are not stored and that file reselection is required.
 
 ## Executed fixture coverage
@@ -73,6 +75,7 @@ The current automated matrix covers:
 Executed automated fixtures now include:
 - small 1–5 page PDFs across structural/export workflows;
 - a two-page mixed-dimension PDF protected with AES-256, tested with a wrong password, then unlocked and reopened with original geometry;
+- the same security path executed after a forced-offline reload in Chromium and Firefox;
 - multiple-PDF batch queues, including a deliberately malformed item followed by a valid item;
 - a 40-page PDF for thumbnail virtualization behavior;
 - a 300-page mixed-dimension PDF, which also exercises the 50+ and 100+ page-count thresholds;

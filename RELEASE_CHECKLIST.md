@@ -52,7 +52,7 @@ A checkbox is only marked when executed evidence exists. This branch remains a m
 - [x] Chromium/Firefox/WebKit current automated PDF workflow matrix
 - [x] Chromium/Firefox offline reload + worker-backed PDF-operation certification
 - [x] WebKit application-shell/chunk precache certification plus normal worker workflow
-- [ ] Dedicated offline Protect/Unlock certification in Chromium/Firefox
+- [x] Dedicated offline Protect PDF certification in Chromium/Firefox plus WebKit qpdf asset precache verification combined with normal WebKit qpdf execution
 - [ ] Real Safari/WebKit forced-offline worker-operation manual certification
 - [ ] WCAG 2.2 AA manual certification
 - [x] 300-page mixed-dimension structural page-count certification
