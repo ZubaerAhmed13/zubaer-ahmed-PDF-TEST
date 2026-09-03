@@ -1,4 +1,4 @@
-export type ToolCategory = 'organize' | 'edit' | 'convert' | 'review' | 'forms' | 'optimize' | 'batch';
+export type ToolCategory = 'organize' | 'edit' | 'convert' | 'review' | 'forms' | 'security' | 'optimize' | 'batch';
 
 export interface ToolDefinition {
   id: string;
@@ -19,6 +19,7 @@ export const toolCategories = [
   { id: 'convert', label: 'Convert' },
   { id: 'review', label: 'Review' },
   { id: 'forms', label: 'Forms' },
+  { id: 'security', label: 'Security' },
   { id: 'optimize', label: 'Optimize' },
   { id: 'batch', label: 'Batch' }
 ] as const;
@@ -74,6 +75,30 @@ export const tools: ToolDefinition[] = [
     load: () => import('./extractImagesWorkspace')
   },
   tool({ id: 'forms', name: 'Fill PDF forms', category: 'forms', description: 'Edit supported AcroForm fields; XFA is detected and reported as unsupported.', keywords: ['acroform','xfa','fields'], icon: '☑', quality: 'Lossless', status: 'Migrated', multipleFiles: false }),
+  {
+    id: 'protect-pdf',
+    name: 'Protect PDF',
+    category: 'security',
+    description: 'Encrypt a PDF locally with AES-256 using the pinned qpdf 12.3.2 WebAssembly engine. Passwords are not persisted by DocFlow.',
+    keywords: ['encrypt','password','protect','aes-256','security','qpdf'],
+    icon: '🔒',
+    quality: 'Lossless',
+    status: 'Preview',
+    multipleFiles: false,
+    load: () => import('./encryptionWorkspace')
+  },
+  {
+    id: 'unlock-pdf',
+    name: 'Unlock PDF',
+    category: 'security',
+    description: 'Remove PDF encryption locally after validating the supplied user or owner password with qpdf 12.3.2.',
+    keywords: ['decrypt','password','unlock','security','qpdf'],
+    icon: '🔓',
+    quality: 'Lossless',
+    status: 'Preview',
+    multipleFiles: false,
+    load: () => import('./encryptionWorkspace')
+  },
   tool({ id: 'metadata', name: 'Document information', category: 'review', description: 'Inspect standard PDF metadata and encryption state.', keywords: ['metadata','author','title'], icon: 'i', quality: 'Inspection', status: 'Migrated', multipleFiles: false }),
   tool({ id: 'compress', name: 'Optimize PDF', category: 'optimize', description: 'Structural re-save only. Image recompression is not yet release-certified.', keywords: ['compress','size','optimize'], icon: '⇲', quality: 'Potentially lossy', status: 'Limited', multipleFiles: false }),
   {
