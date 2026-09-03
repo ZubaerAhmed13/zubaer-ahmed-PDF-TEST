@@ -4,7 +4,7 @@ DocFlow is a local-first browser PDF workspace. The `professional-upgrade` branc
 
 ## Current migration status
 
-This branch is **not yet a production release**. Core structural operations have been migrated, while compression quality, large-document memory certification, forms breadth, browser certification and complete feature parity remain release gates.
+This branch is **not yet a production release**. The current migrated set includes structural PDF editing, worker-backed preview with virtualized thumbnails, supported AcroForm editing/flattening, text and image watermarking, image conversion/extraction, metadata inspection, and a bounded sequential batch queue. Professional image recompression, encrypted unlock/protect workflows, multi-gigabyte architecture/certification, remaining legacy parity, manual accessibility/Safari validation and production deployment verification remain release gates.
 
 The previous root application is preserved at `legacy/index.html` on the migration branch and remains recoverable from git history. Production `main` should not be replaced until `RELEASE_CHECKLIST.md` is satisfied.
 
@@ -20,22 +20,28 @@ npm run build
 npm run test:e2e
 ```
 
-On the first CI run only, if `package-lock.json` is not yet present, the migration workflow runs `npm install` and commits the generated lockfile. Subsequent CI runs use `npm ci`.
+CI installs the locked dependency graph with `npm ci`, runs dependency audit, typecheck, lint, unit tests and the production build, then executes Playwright projects for Chromium, Firefox and WebKit.
 
 ## Architecture
 
 - TypeScript + Vite
 - central tool registry
-- lazy-loaded tool workspace
-- PDF.js worker-backed page rendering
-- dedicated module worker for pdf-lib processing
+- lazy-loaded specialized tool workspaces
+- PDF.js worker-backed page rendering and bounded thumbnail virtualization
+- dedicated module workers for pdf-lib processing
 - deterministic operation inputs/options
 - cancellable worker operations by worker termination
+- bounded batch processing with one active PDF worker at a time
 - local preferences only for favorites/recent tools
-- PWA runtime cache with nested GitHub Pages scope
+- lightweight IndexedDB recovery without document-byte persistence
+- PWA runtime/precache support with nested GitHub Pages scope
 - no remote PDF-processing API or analytics dependency
 
 See `ARCHITECTURE.md`, `SECURITY.md`, `PRIVACY.md`, `TESTING.md` and `RELEASE_CHECKLIST.md`.
+
+## Capability boundaries
+
+DocFlow does not currently claim OCR, cryptographic digital-signature creation/validation, encrypted PDF unlock/protect, or professional image recompression. Those capabilities require dedicated engines and their own executed release evidence before they can be marketed as supported.
 
 ## GitHub Pages
 

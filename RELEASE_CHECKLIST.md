@@ -20,16 +20,20 @@ A checkbox is only marked when executed evidence exists. This branch remains a m
 - [x] Real page/document progress for migrated worker operations
 - [x] Worker cancellation terminates processing
 - [x] Error categories for invalid/encrypted/unsupported form inputs
-- [x] Malformed PDF recovery certified in Chromium/Firefox/WebKit with structured `INVALID_PDF` reporting
+- [x] Malformed PDF recovery certified in Chromium/Firefox/WebKit with structured `INVALID_PDF` reporting, including lazy page-tree corruption
 - [x] Structural Remove pages and Extract pages with reopen/geometry validation
+- [x] Visual Organize pages workflow certified with lazy thumbnails, duplicate, multi-select delete, undo, move controls and deterministic-order compatibility
 - [x] Decoded embedded-raster Extract Images workflow certified in Chromium/Firefox/WebKit
 - [x] Lightweight IndexedDB project recovery implemented without document-byte persistence
 - [x] Supported AcroForm matrix certified for text, checkbox, radio, dropdown and option-list fields, including flattening
 - [x] Valid XFA-stream fixture detected and reported explicitly as `UNSUPPORTED_FORM`
 - [x] Text watermark structural export remains certified
 - [x] PNG/JPEG image watermark workflow implemented with structural PDF export/reopen validation
+- [x] Bounded local batch queue certified for sequential processing, per-file outputs, ZIP reopen validation, malformed-file isolation and cancellation
 - [ ] Professional image recompression
 - [ ] Encrypted unlock/protect workflows
+- [ ] OCR/text-layer generation
+- [ ] Cryptographic digital-signature creation/validation
 - [ ] Multi-gigabyte streaming/reference architecture
 - [x] Output validation for every currently migrated export-capable operation (PDF reopen or artifact signature/manifest validation as applicable)
 - [ ] Memory leak certification — repeated preview cycles certify worker/canvas cleanup, but heap-growth certification is still required

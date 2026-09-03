@@ -73,7 +73,7 @@ export const tools: ToolDefinition[] = [
     multipleFiles: false,
     load: () => import('./extractImagesWorkspace')
   },
-  tool({ id: 'forms', name: 'Fill PDF forms', category: 'forms', description: 'Edit supported AcroForm fields; XFA is detected and reported as unsupported.', keywords: ['acroform','xfa','fields'], icon: '☑', quality: 'Lossless', status: 'Preview', multipleFiles: false }),
+  tool({ id: 'forms', name: 'Fill PDF forms', category: 'forms', description: 'Edit supported AcroForm fields; XFA is detected and reported as unsupported.', keywords: ['acroform','xfa','fields'], icon: '☑', quality: 'Lossless', status: 'Migrated', multipleFiles: false }),
   tool({ id: 'metadata', name: 'Document information', category: 'review', description: 'Inspect standard PDF metadata and encryption state.', keywords: ['metadata','author','title'], icon: 'i', quality: 'Inspection', status: 'Migrated', multipleFiles: false }),
   tool({ id: 'compress', name: 'Optimize PDF', category: 'optimize', description: 'Structural re-save only. Image recompression is not yet release-certified.', keywords: ['compress','size','optimize'], icon: '⇲', quality: 'Potentially lossy', status: 'Limited', multipleFiles: false }),
   {

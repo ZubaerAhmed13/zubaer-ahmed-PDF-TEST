@@ -37,15 +37,20 @@ The current automated matrix covers:
 - split, remove-pages and extract-pages output checks;
 - PDF.js worker preview/navigation;
 - a 40-page virtualized thumbnail rail that keeps only an overscanned visible window in the DOM and navigates to page 40;
+- visual page organization with lazy thumbnails, duplicate, multi-select delete, undo, move controls and structural export/reopen validation;
+- deterministic typed page-order compatibility with the visual organizer;
 - AcroForm inspection/fill/export/reopen across text, checkbox, radio, dropdown and option-list fields;
 - AcroForm flattening with reopened-export verification;
 - a valid PDF containing an AcroForm `/XFA` stream, which must be rejected explicitly as `UNSUPPORTED_FORM`;
 - metadata extraction from a real fixture;
-- malformed `%PDF-` input recovery with structured `INVALID_PDF` reporting and a still-usable workspace;
+- malformed `%PDF-` input recovery with structured `INVALID_PDF` reporting and a still-usable workspace, including lazy page-tree corruption detected after initial container parsing;
 - text-watermark export/reopen validation;
 - PNG/JPEG image-watermark UI, worker export, PDF reopen and embedded-image resource validation;
 - image conversion workflows;
 - decoded embedded-raster `Extract images`, including real ZIP download, PNG signature and manifest/dimension validation;
+- bounded batch processing of multiple PDFs sequentially with one active worker, per-file outputs, optional ZIP packaging and reopened-output validation;
+- batch isolation where one malformed PDF reports `INVALID_PDF` while later valid queue items still complete and remain downloadable;
+- deterministic batch cancellation leaving no queue item running/pending;
 - a 300-page mixed-dimension rotate/export/reopen workflow with page count, rotation and sampled geometry assertions;
 - repeated preview open/navigate/close cycles with dedicated worker termination, canvas removal and page-error checks;
 - keyboard-triggered workspace/information dialogs with focus containment and exact trigger focus return;
@@ -61,12 +66,13 @@ The current automated matrix covers:
 
 Executed automated fixtures now include:
 - small 1–5 page PDFs across structural/export workflows;
+- multiple-PDF batch queues, including a deliberately malformed item followed by a valid item;
 - a 40-page PDF for thumbnail virtualization behavior;
 - a 300-page mixed-dimension PDF, which also exercises the 50+ and 100+ page-count thresholds;
 - mixed page dimensions;
 - AcroForm text, checkbox, radio, dropdown and option-list fields;
 - a valid XFA-stream PDF boundary fixture;
-- malformed/corrupt PDF input;
+- malformed/corrupt PDF input, including a `%PDF-` container whose lazy page tree fails traversal;
 - metadata-bearing PDF input;
 - PNG/JPEG image inputs for conversion/watermark paths.
 
@@ -81,6 +87,15 @@ The professional release still requires non-confidential fixtures/evidence for:
 - professional image recompression quality/size comparisons;
 - multi-gigabyte source-file architecture and certification;
 - color/fidelity comparisons where operations can alter rendered appearance.
+
+## Explicitly unsupported / not yet implemented
+
+- OCR/text-layer generation;
+- cryptographic digital-signature creation or validation;
+- encrypted PDF unlock/protect;
+- professional image recompression.
+
+These must not be promoted as supported until a real engine and executed certification exist.
 
 ## Manual verification still required
 
