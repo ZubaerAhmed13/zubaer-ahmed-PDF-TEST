@@ -11,6 +11,15 @@ async function pdfFixture(): Promise<Buffer> {
   return Buffer.from(await doc.save());
 }
 
+async function waitForControlledServiceWorker(page: import('@playwright/test').Page): Promise<void> {
+  await page.waitForFunction(async () => {
+    if (!('serviceWorker' in navigator)) return false;
+    const registration = await navigator.serviceWorker.ready;
+    return Boolean(registration.active);
+  });
+  await page.waitForFunction(() => Boolean(navigator.serviceWorker.controller));
+}
+
 test('protects with AES-256, rejects a wrong password, and unlocks to a reopenable PDF', async ({ page }) => {
   const source = await pdfFixture();
   const externalRequests: string[] = [];
@@ -98,4 +107,59 @@ test('protects with AES-256, rejects a wrong password, and unlocks to a reopenab
   expect(reopened.getPageCount()).toBe(2);
   expect(reopened.getPages().map((pdfPage) => [pdfPage.getWidth(), pdfPage.getHeight()])).toEqual([[320, 480], [640, 360]]);
   expect(externalRequests).toEqual([]);
+});
+
+test('certifies offline encryption execution or qpdf precache coverage', async ({ page, context, browserName }) => {
+  await page.goto('/zubaer-ahmed-PDF-TEST/');
+  await waitForControlledServiceWorker(page);
+
+  if (browserName === 'webkit') {
+    // Playwright WebKit 26.5 blocks newly created workers after its forced-offline shim is enabled,
+    // before a controlling service worker can answer the worker request. Verify the exact qpdf
+    // runtime and lazy security workspace are already in Cache Storage while genuinely offline;
+    // the normal WebKit test above separately executes the qpdf worker end to end.
+    await context.setOffline(true);
+    try {
+      const cached = await page.evaluate(async () => {
+        const cacheName = (await caches.keys()).find((name) => name.startsWith('docflow-static-'));
+        if (!cacheName) return { wasm: false, worker: false, workspace: false };
+        const cache = await caches.open(cacheName);
+        const paths = (await cache.keys()).map((request) => new URL(request.url).pathname);
+        return {
+          wasm: paths.some((path) => /\/assets\/qpdf-[^/]+\.wasm$/.test(path)),
+          worker: paths.some((path) => /\/assets\/qpdf\.worker-[^/]+\.js$/.test(path)),
+          workspace: paths.some((path) => /\/assets\/encryptionWorkspace-[^/]+\.js$/.test(path))
+        };
+      });
+      expect(cached).toEqual({ wasm: true, worker: true, workspace: true });
+    } finally {
+      await context.setOffline(false);
+    }
+    return;
+  }
+
+  await context.setOffline(true);
+  try {
+    await page.reload();
+    await expect(page.getByRole('heading', { name: /Private PDF tools/ })).toBeVisible();
+    await page.getByLabel('Search tools').fill('protect');
+    await page.locator('#tool-grid [data-open-tool="protect-pdf"]').click();
+    const dialog = page.getByRole('dialog', { name: 'Workspace' });
+    await expect(dialog).toBeVisible();
+    await dialog.locator('#workspace-file').setInputFiles({ name: 'offline-security.pdf', mimeType: 'application/pdf', buffer: await pdfFixture() });
+    await dialog.locator('#encryption-password').fill(PASSWORD);
+    await dialog.locator('#encryption-password-confirm').fill(PASSWORD);
+    await dialog.getByRole('button', { name: 'Run Protect PDF' }).click();
+    await expect(dialog.locator('#stage')).toHaveText('Complete', { timeout: 60_000 });
+
+    const downloadPromise = page.waitForEvent('download');
+    await dialog.getByRole('link', { name: /Download offline-security-protected\.pdf/ }).click();
+    const path = await (await downloadPromise).path();
+    if (!path) throw new Error('Playwright did not expose the offline protected PDF path.');
+    const bytes = await readFile(path);
+    expect(bytes.subarray(0, 5).toString('ascii')).toBe('%PDF-');
+    expect(bytes.toString('latin1')).toContain('/Encrypt');
+  } finally {
+    await context.setOffline(false);
+  }
 });
