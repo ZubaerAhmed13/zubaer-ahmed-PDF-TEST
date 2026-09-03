@@ -8,6 +8,12 @@ async function previewFixture(): Promise<Buffer> {
 }
 
 test('repeated preview cycles terminate dedicated workers and release canvas DOM resources', async ({ page }) => {
+  // This is intentionally a stress test: six complete PDF.js worker/render/close cycles.
+  // Fresh WebKit CI runners can need materially longer than ordinary single-preview tests,
+  // especially while software-rendering the first page. Keep the full workload and cleanup
+  // assertions, but give the real work a deterministic budget instead of racing the default.
+  test.setTimeout(120_000);
+
   await page.addInitScript(() => {
     const NativeWorker = window.Worker;
     const stats = { created: 0, terminated: 0, active: 0 };
@@ -42,13 +48,22 @@ test('repeated preview cycles terminate dedicated workers and release canvas DOM
     const dialog = page.getByRole('dialog', { name: 'Workspace' });
     await dialog.locator('#workspace-file').setInputFiles({ name: `preview-${cycle}.pdf`, mimeType: 'application/pdf', buffer: fixture });
     await dialog.getByRole('button', { name: 'Run View PDF' }).click();
-    await expect(dialog.locator('#stage')).toHaveText('Preview ready');
-    await expect(dialog.locator('#viewer-status')).toHaveText('Page 1 of 12');
-    await dialog.getByRole('button', { name: 'Next' }).click();
-    await expect(dialog.locator('#viewer-status')).toHaveText('Page 2 of 12');
+
+    await expect(dialog.locator('#stage')).toHaveText('Preview ready', { timeout: 20_000 });
+    await expect(dialog.locator('#viewer-status')).toHaveText('Page 1 of 12', { timeout: 20_000 });
+
+    const next = dialog.getByRole('button', { name: 'Next' });
+    await expect(next).toBeVisible({ timeout: 20_000 });
+    await expect(next).toBeEnabled({ timeout: 20_000 });
+    await next.click({ timeout: 20_000 });
+    await expect(dialog.locator('#viewer-status')).toHaveText('Page 2 of 12', { timeout: 20_000 });
+
     await dialog.getByRole('button', { name: 'Close workspace' }).click();
-    await expect(dialog).toBeHidden();
-    await expect.poll(async () => page.evaluate(() => (window as Window & { __docflowWorkerStats?: { active: number } }).__docflowWorkerStats?.active ?? -1)).toBe(0);
+    await expect(dialog).toBeHidden({ timeout: 20_000 });
+    await expect.poll(
+      async () => page.evaluate(() => (window as Window & { __docflowWorkerStats?: { active: number } }).__docflowWorkerStats?.active ?? -1),
+      { timeout: 20_000 }
+    ).toBe(0);
     expect(await page.locator('#workspace canvas').count()).toBe(0);
   }
 
