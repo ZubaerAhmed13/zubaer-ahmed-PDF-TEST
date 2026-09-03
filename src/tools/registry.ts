@@ -73,7 +73,7 @@ export const tools: ToolDefinition[] = [
   {
     id: 'compress', name: 'Optimize PDF', category: 'optimize',
     description: 'Selectively recompress safe RGB JPEG image XObjects while preserving PDF page, text, vector and form structure. Complex image/color cases are left untouched.',
-    keywords: ['compress','size','optimize','jpeg','image','recompress'], icon: '⇲', quality: 'Potentially lossy', status: 'Preview', multipleFiles: false,
+    keywords: ['compress','size','optimize','jpeg','image','recompress'], icon: '⇲', quality: 'Potentially lossy', status: 'Migrated', multipleFiles: false,
     load: () => import('./compressionWorkspace')
   },
   {

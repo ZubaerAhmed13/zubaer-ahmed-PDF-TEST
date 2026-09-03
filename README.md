@@ -1,14 +1,25 @@
 # DocFlow Professional
 
-DocFlow is a local-first browser PDF workspace. The `professional-upgrade` branch is a safe migration from the previous monolithic deployment to a modular TypeScript/Vite architecture.
+DocFlow Professional is a local-first browser PDF workspace migrated from the former monolithic deployment to a modular TypeScript/Vite architecture.
 
-## Current migration status
+## Release-candidate status
 
-This branch is **not yet a production release**. The current migrated set includes structural PDF editing, worker-backed preview with virtualized thumbnails, supported AcroForm editing/flattening, text and image watermarking, image conversion/extraction, metadata inspection, a bounded sequential batch queue, and local AES-256 PDF protect/unlock powered by a pinned qpdf 12.3.2 WebAssembly runtime. Audited legacy parity is documented in `docs/LEGACY_PARITY_MATRIX.md`, and the obsolete second entry point is removed on the migration branch while the full historical root remains preserved at `legacy/index.html`.
+The `professional-upgrade` branch now has audited legacy parity and automated evidence across Chromium, Firefox and WebKit for the advertised PDF workflows. The historical root remains preserved at `legacy/index.html`; the obsolete duplicate `pdf-all-in-one` entry point has been removed.
 
-Automated evidence now also covers a 300-page structural workflow, A4 300-DPI JPEG-backed scan handling, all-browser worker/canvas cleanup, Chromium forced-GC heap-growth bounds, and baseline sRGB PNG/JPEG raster-export fidelity. Professional image recompression, OCR/text-layer generation, cryptographic digital signatures, multi-gigabyte architecture/certification, manual accessibility/Safari validation and production deployment verification remain release gates.
+Implemented capabilities include:
+- worker-backed PDF.js preview with virtualized thumbnails;
+- merge, split, extract/remove pages, organize and rotate without intentional page rasterization;
+- page numbering and text/image watermarking;
+- images-to-PDF, PDF-to-images and decoded embedded-raster extraction;
+- supported AcroForm inspection/fill/flatten with explicit XFA detection;
+- document metadata inspection;
+- bounded sequential batch processing;
+- local AES-256 Protect/Unlock with pinned qpdf 12.3.2 WebAssembly;
+- professional selective JPEG image recompression with Light/Balanced/Strong/Custom modes.
 
-Production `main` should not be replaced until `RELEASE_CHECKLIST.md` is satisfied.
+Automated evidence also covers a 300-page mixed-dimension workflow, A4 300-DPI JPEG-backed scans, deterministic resource cleanup, Chromium forced-GC heap-growth bounds, sRGB PNG/JPEG raster-export fidelity and professional image-recompression size/geometry/renderability checks.
+
+The final remaining release gate is production GitHub Pages deployment from the built `dist/` artifact followed by a real post-deployment browser workflow against the canonical URL.
 
 ## Development
 
@@ -22,44 +33,49 @@ npm run build
 npm run test:e2e
 ```
 
-CI installs the locked dependency graph with `npm ci`, runs dependency audit, typecheck, lint, unit tests and the production build, then executes Playwright projects for Chromium, Firefox and WebKit.
+The release workflow on `main` repeats quality and all three Playwright browser projects before deployment, deploys only `dist/`, then runs a separate Chromium suite against the real Pages URL.
 
 ## Architecture
 
 - TypeScript + Vite
 - central tool registry
-- lazy-loaded specialized tool workspaces
-- PDF.js worker-backed page rendering and bounded thumbnail virtualization
+- lazy-loaded specialized workspaces
+- PDF.js worker-backed rendering and bounded thumbnail virtualization
 - dedicated module workers for pdf-lib processing
 - dedicated qpdf 12.3.2 WASM worker for AES-256 protect/unlock
+- worker-side selective JPEG recompression using decoded image bitmaps/canvas only for explicitly lossy optimization
 - deterministic operation inputs/options
-- cancellable worker operations by worker termination
+- cancellation through worker termination or cooperative cancellation
 - bounded batch processing with one active PDF worker at a time
-- local preferences only for favorites/recent tools
-- lightweight IndexedDB recovery without document-byte persistence
-- PWA runtime/precache support with nested GitHub Pages scope
+- safe local preferences for favorites/recent tools
+- lightweight IndexedDB recovery without PDF/image byte persistence
+- versioned PWA runtime/precache support under `/zubaer-ahmed-PDF-TEST/`
 - no remote PDF-processing API or analytics dependency
 
 See `ARCHITECTURE.md`, `SECURITY.md`, `PRIVACY.md`, `TESTING.md`, `docs/LEGACY_PARITY_MATRIX.md` and `RELEASE_CHECKLIST.md`.
 
 ## Security engine provenance
 
-The encryption runtime is vendored locally from `fayazara/pdfstudio` 0.4.0 at immutable upstream commit `c5c1f2d9f378199d1e2d333dbe4ca20e9ff737ad`, built with qpdf 12.3.2. Integrity metadata, upstream Git blob SHAs, SHA-256 values and the Apache-2.0 license are recorded under `src/vendor/qpdf/`.
+The encryption runtime is vendored locally from `fayazara/pdfstudio` 0.4.0 at immutable upstream commit `c5c1f2d9f378199d1e2d333dbe4ca20e9ff737ad`, built with qpdf 12.3.2. Integrity metadata, upstream Git blob SHAs, SHA-256 values and Apache-2.0 license provenance are recorded under `src/vendor/qpdf/`.
 
-Passwords used by Protect PDF and Unlock PDF are sent only to the active local qpdf worker. Those security workspaces deliberately bypass project recovery so passwords are not stored in DocFlow's IndexedDB recovery state or localStorage.
+Passwords used by Protect PDF and Unlock PDF are sent only to the active local qpdf worker. Those security workspaces deliberately bypass project recovery so passwords are not persisted in DocFlow IndexedDB recovery state or localStorage.
 
 ## Capability boundaries
 
-DocFlow does not currently claim OCR, cryptographic digital-signature creation/validation, or professional image recompression. Those capabilities require dedicated engines and executed release evidence before they can be marketed as supported.
+DocFlow does not advertise OCR or certificate-based cryptographic digital signing. The original upgrade brief requires those capabilities only if they are genuinely implemented; DocFlow therefore keeps the boundary explicit instead of shipping placeholders or misleading terminology.
 
-The completed high-resolution fixture proves handling of three A4 pages backed by 2480×3508 JPEG scans (300 DPI); it does **not** prove multi-gigabyte file handling. Large-file streaming/reference architecture remains a separate gate. The sRGB color test is a browser raster-export baseline and is not a blanket CMYK/ICC print-proof certification.
+Large documents are handled defensively with virtualization, workers, transferable buffers, bounded queues, warnings, cancellation and certified 300-page/high-resolution fixtures. Current pdf-lib and qpdf paths still use full in-memory document buffers, so this release does **not** claim arbitrary multi-gigabyte PDF processing.
+
+The selective JPEG optimizer is intentionally potentially lossy. It targets eligible ordinary RGB JPEG XObjects and leaves complex color/mask cases untouched. Structural operations do not route normal PDFs through this recompression path.
+
+The sRGB color fixture is a browser raster-export baseline; it is not a blanket CMYK/ICC/spot-color or print-proof certification.
 
 ## GitHub Pages
 
-Vite base path is explicitly configured for:
+Vite is configured for:
 
 `/zubaer-ahmed-PDF-TEST/`
 
-The canonical production URL remains:
+Canonical production URL:
 
 `https://zubaerahmed13.github.io/zubaer-ahmed-PDF-TEST/`

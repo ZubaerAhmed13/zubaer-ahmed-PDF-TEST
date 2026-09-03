@@ -11,6 +11,7 @@
     "test": "vitest run",
     "test:e2e": "playwright test",
     "test:e2e:chromium": "playwright test --project=chromium",
+    "test:production": "playwright test --config=playwright.production.config.ts --project=chromium",
     "preview": "vite preview"
   },
   "dependencies": {

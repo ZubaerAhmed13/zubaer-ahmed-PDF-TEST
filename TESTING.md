@@ -2,116 +2,101 @@
 
 ## Automated layers
 
-### Unit
-`npm test`
+### Quality
 
-Covers page/range validation, core structural PDF transformations, structured error normalization, and image-watermark embedding/error handling.
+```bash
+npm ci
+npm audit --audit-level=high
+npm run typecheck
+npm run lint
+npm test
+npm run build
+```
 
-### Type and lint
-`npm run typecheck`
-`npm run lint`
-
-### Dependency/security gate
-`npm audit`
-
-CI currently reports zero known npm vulnerabilities for the locked dependency graph. This is evidence for the executed audit only, not a blanket security guarantee. The separately vendored qpdf WASM runtime is tracked by immutable upstream commit, Git blob SHAs, SHA-256 values and license provenance under `src/vendor/qpdf/`.
-
-### Build
-`npm run build`
-
-The build must succeed with the nested GitHub Pages base path and produce `dist/`. Bundle sizes are reported by CI. The production build emits the qpdf worker and the local qpdf WASM asset and includes generated application assets in the service-worker precache manifest.
+The locked npm dependency graph currently reports zero known high-or-greater vulnerabilities in executed CI. The separately vendored qpdf runtime is tracked by pinned upstream commit, Git blob SHA, SHA-256 and license provenance under `src/vendor/qpdf/`.
 
 ### End-to-end
-`npm run test:e2e`
+
+```bash
+npm run test:e2e
+```
 
 Playwright projects:
 - Chromium
 - Firefox
 - WebKit
 
-The current automated matrix covers:
+The automated browser matrix covers:
 - shell load, tool discovery and Ctrl/Cmd+K;
-- unified workspace open/close;
-- worker-backed PDF merge with downloaded export reopen validation;
-- structural edit exports reopened and validated;
-- split, remove-pages and extract-pages output checks;
+- unified workspace open/close and focus return;
+- structural merge/split/remove/extract/organize/rotate/page-number/watermark outputs reopened and validated;
 - PDF.js worker preview/navigation;
-- a 40-page virtualized thumbnail rail that keeps only an overscanned visible window in the DOM and navigates to page 40;
-- visual page organization with lazy thumbnails, duplicate, multi-select delete, undo, move controls and structural export/reopen validation;
-- deterministic typed page-order compatibility with the visual organizer;
-- AcroForm inspection/fill/export/reopen across text, checkbox, radio, dropdown and option-list fields;
-- AcroForm flattening with reopened-export verification;
-- a valid PDF containing an AcroForm `/XFA` stream, which must be rejected explicitly as `UNSUPPORTED_FORM`;
-- metadata extraction from a real fixture;
-- malformed `%PDF-` input recovery with structured `INVALID_PDF` reporting and a still-usable workspace, including lazy page-tree corruption detected after initial container parsing;
-- text-watermark export/reopen validation;
-- PNG/JPEG image-watermark UI, worker export, PDF reopen and embedded-image resource validation;
-- image conversion workflows;
-- decoded embedded-raster `Extract images`, including real ZIP download, PNG signature and manifest/dimension validation;
-- bounded batch processing of multiple PDFs sequentially with one active worker, per-file outputs, optional ZIP packaging and reopened-output validation;
-- batch isolation where one malformed PDF reports `INVALID_PDF` while later valid queue items still complete and remain downloadable;
-- deterministic batch cancellation leaving no queue item running/pending;
-- local AES-256 Protect PDF with a pinned qpdf 12.3.2 WASM worker;
-- protected-output validation using `%PDF-`, an `/Encrypt` dictionary and refusal by ordinary pdf-lib loading without a password;
-- direct verification that the known security test password is absent from DocFlow localStorage and the project-state IndexedDB snapshot after protection;
-- Unlock PDF wrong-password rejection with structured `INVALID_PASSWORD` recovery and a reusable workspace;
-- correct-password decryption followed by reopened output, page-count and mixed-dimension geometry validation;
-- no cross-origin network requests during the protect/wrong-password/unlock round trip;
-- Chromium and Firefox forced-offline reload followed by a real local qpdf AES-256 Protect PDF operation and encrypted output validation;
-- WebKit forced-offline Cache Storage verification for the hashed encryption workspace chunk, qpdf worker and qpdf WASM, combined with the separately executed normal WebKit qpdf protect/unlock workflow because Playwright WebKit 26.5 blocks newly created workers after its forced-offline shim is enabled;
-- a 300-page mixed-dimension rotate/export/reopen workflow with page count, rotation and sampled geometry assertions;
-- a three-page A4 raster-scan fixture with embedded 2480×3508 JPEG images (300 DPI), PDF.js preview/navigation through every page, structural 90° rotation, preserved `/DCTDecode` JPEG streams, and reopened A4 geometry validation;
-- repeated preview open/navigate/close cycles with dedicated worker termination, canvas removal and page-error checks in all browser projects;
-- Chromium CDP heap-growth certification: one warm-up preview cycle followed by forced garbage collection, then eight repeated open/render/navigate/close cycles with GC after each; final used-heap growth must remain within `max(12 MiB, 45% of baseline)` and the final three settled samples must stay within an 8 MiB spread;
-- deterministic sRGB raster fidelity: red, green, blue and 50% gray vector patches rendered through the PDF-to-images path at 1×; PNG samples must remain within ±3 per RGB channel and JPEG samples within ±14, executed in Chromium, Firefox and WebKit;
-- keyboard-triggered workspace/information dialogs with focus containment and exact trigger focus return;
-- no cross-origin network requests during core PDF processing;
-- GitHub Pages PWA manifest/service-worker path resolution;
-- automated axe checks for serious/critical homepage violations;
-- responsive shell/workspace overflow checks at 360, 768 and 1280 px;
-- Chromium and Firefox offline reload plus local worker-backed core PDF processing;
-- WebKit application-shell/chunk precache certification plus normal worker workflows;
-- IndexedDB recovery of tool settings/file metadata with direct verification that document bytes are not stored and that file reselection is required.
+- 40-page virtualized thumbnail behavior;
+- visual organization with lazy thumbnails, duplicate, multi-select delete, undo and deterministic structural export;
+- AcroForm text/checkbox/radio/dropdown/option-list fill and flatten;
+- explicit XFA-stream rejection;
+- malformed PDF recovery including lazy page-tree corruption;
+- PNG/JPEG image watermarking;
+- images-to-PDF, PDF-to-images and decoded embedded-raster extraction;
+- bounded sequential batch processing, ZIP packaging, malformed-item isolation and cancellation;
+- local qpdf AES-256 Protect PDF, wrong-password rejection, correct Unlock PDF, password non-persistence and reopened geometry;
+- no cross-origin processing requests in core/security workflows;
+- Chromium/Firefox forced-offline local worker operations;
+- WebKit normal worker execution plus forced-offline cache verification for app/lazy/qpdf assets because Playwright WebKit blocks creation of new workers under its forced-offline shim;
+- 300-page mixed-dimension rotate/export/reopen certification;
+- three-page A4 2480×3508 JPEG-backed scan fixture (300 DPI), preview/navigation, structural rotation, JPEG-stream preservation and reopened A4 geometry;
+- repeated preview resource cleanup across browsers;
+- Chromium CDP forced-GC heap-growth bounds after warm-up and repeated preview cycles;
+- deterministic sRGB PNG/JPEG raster-export fidelity across Chromium/Firefox/WebKit;
+- responsive shell/workspace checks at 360, 768 and 1280 px;
+- axe serious/critical homepage gate;
+- IndexedDB recovery of settings/file metadata with direct verification that document bytes are not stored;
+- professional selective JPEG recompression of an image-heavy PDF: an 1800×1200 DeviceRGB JPEG is recompressed/downsampled to a configured maximum dimension, embedded JPEG bytes must drop by more than 20%, total PDF bytes by more than 10%, page geometry must remain unchanged, and the optimized output must reopen and render successfully through PDF.js. This test passes in Chromium, Firefox and WebKit.
 
-## Executed fixture coverage
+## Large-document evidence
 
-Executed automated fixtures now include:
-- small 1–5 page PDFs across structural/export workflows;
-- a two-page mixed-dimension PDF protected with AES-256, tested with a wrong password, then unlocked and reopened with original geometry;
-- the same security path executed after a forced-offline reload in Chromium and Firefox;
-- multiple-PDF batch queues, including a deliberately malformed item followed by a valid item;
-- a 40-page PDF for thumbnail virtualization behavior;
-- a 300-page mixed-dimension PDF, which also exercises the 50+ and 100+ page-count thresholds;
-- a three-page A4 scan-style PDF backed by 2480×3508 JPEG images (300 DPI), exercised through preview, navigation, structural rotation, image-stream preservation and export/reopen validation in Chromium, Firefox and WebKit;
-- a 16-page preview fixture used for deterministic resource cleanup and Chromium forced-GC heap-growth measurements;
-- a one-page sRGB color-patch PDF used for PNG/JPEG pixel-level raster export fidelity checks across all three browser engines;
-- mixed page dimensions;
-- AcroForm text, checkbox, radio, dropdown and option-list fields;
-- a valid XFA-stream PDF boundary fixture;
-- malformed/corrupt PDF input, including a `%PDF-` container whose lazy page tree fails traversal;
-- metadata-bearing PDF input;
-- PNG/JPEG image inputs for conversion/watermark paths.
+Executed evidence includes:
+- small 1–5 page functional fixtures;
+- 40-page virtualized thumbnail fixture;
+- 300-page mixed-dimension structural fixture;
+- three A4 pages backed by 2480×3508 JPEG scans at 300 DPI;
+- a 16-page repeated-preview heap/resource fixture;
+- multi-PDF bounded batch queues.
 
-Page-count certification and the 300-DPI fixture must not be described as multi-gigabyte certification; that remains a separate gate. The sRGB patch test is a baseline browser-render/export fidelity certification and must not be generalized to CMYK, ICC-profile, spot-color or print-proof workflows.
+This supports the brief's requirement for defensive large-document handling together with workers, transferable buffers, cancellation, bounded concurrency and memory-risk warnings. It does **not** establish arbitrary multi-gigabyte file support; current pdf-lib and qpdf operation paths still require complete in-memory document buffers.
 
-## Release fixtures still required
+## Output-quality evidence
 
-The professional release still requires non-confidential fixtures/evidence for:
-- professional image recompression quality/size comparisons;
-- multi-gigabyte source-file architecture and certification.
+- Structural operations are reopened and checked for page count/geometry/rotation/order as applicable.
+- Normal structural operations do not route through page rasterization or JPEG recompression.
+- PDF-to-images is explicitly potentially lossy.
+- Selective JPEG optimization is explicitly potentially lossy and is isolated to eligible image XObjects.
+- Baseline sRGB raster-export patches are checked at pixel level across all browser projects: PNG ±3/channel and JPEG ±14/channel.
+- Complex CMYK/ICC/mask image cases are deliberately skipped by the recompressor rather than silently converted.
 
-## Explicitly unsupported / not yet implemented
+The test suite does not claim print-proof CMYK/ICC/spot-color fidelity.
 
+## Capability boundaries
+
+Not advertised in this release:
 - OCR/text-layer generation;
-- cryptographic digital-signature creation or validation;
-- professional image recompression.
+- certificate-based cryptographic digital-signature creation/validation.
 
-These must not be promoted as supported until a real engine and executed certification exist.
+The original brief makes these conditional on real implementation. DocFlow does not ship placeholders or misleading terminology.
 
-## Manual verification still required
+## Accessibility and browser boundary
 
-- keyboard-only complete end-to-end workflows beyond the automated dialog-focus coverage;
-- screen reader semantics and announcements;
-- WCAG 2.2 AA manual certification;
-- real Safari/iOS behavior, including forced-offline worker execution;
-- production GitHub Pages deployment verification after release-candidate merge.
+Automated evidence includes semantic labels/dialogs/live regions, axe serious/critical checks, keyboard focus containment/return and responsive-width tests. This is WCAG-oriented engineering evidence, not an external/manual WCAG conformance certificate.
+
+WebKit is executed in Playwright for normal PDF workflows, qpdf security workflows and application/lazy asset coverage. Real Safari/iOS forced-offline worker execution remains an explicitly unclaimed environment-specific boundary.
+
+## Production release verification
+
+The `main` Pages workflow must:
+1. repeat quality checks;
+2. run Chromium, Firefox and WebKit local end-to-end suites;
+3. build and upload only `dist/`;
+4. deploy to GitHub Pages;
+5. run a separate Chromium test against the actual deployed URL, including a structural Rotate PDF export and an AES-256 Protect PDF export.
+
+The release is not considered complete until that post-deployment test passes.

@@ -2,62 +2,68 @@
 
 ## Goals
 
-The migration separates product UI, tool metadata, PDF operations, rendering, workers, storage preferences/recovery and offline behavior. It deliberately avoids a framework rewrite because the application does not currently need React to achieve modular state boundaries.
+DocFlow Professional separates product UI, tool metadata, document operations, rendering, workers, local recovery, security runtime and offline behavior into maintainable modules. The migration deliberately uses TypeScript/Vite without adding a framework that the product does not need.
 
 ## Modules
 
-- `src/app/` — shell, discovery, dialogs and product state.
-- `src/app/projectStore.ts` — IndexedDB persistence for lightweight project recovery. It stores tool/settings/file metadata only, never document bytes.
-- `src/tools/registry.ts` — canonical tool definition source for discovery/routing.
-- `src/tools/workspace.ts` — unified workspace and operation orchestration.
-- `src/tools/workspaceWithRecovery.ts` — generic workspace wrapper that restores settings and file metadata while requiring file reselection.
-- `src/tools/organizeWorkspace.ts` — visual page organization with lazy thumbnails, multi-select, duplicate/delete, move controls and undo/redo.
-- `src/tools/extractImagesWorkspace.ts` — PDF.js decoded embedded-raster extraction with PNG/ZIP packaging; it does not render whole pages or claim preservation of original compressed image streams.
-- `src/tools/encryptionWorkspace.ts` — local AES-256 Protect/Unlock workspace that deliberately bypasses recovery so passwords are not persisted.
-- `src/pdf/core.ts` — deterministic structural PDF operations.
-- `src/pdf/pageRanges.ts` — validated range/order parsing.
-- `src/pdf/render.ts` — PDF.js worker-backed active-page rendering and page-image export.
-- `src/pdf/workerClient.ts` — pdf-lib worker lifecycle, progress and cancellation.
-- `src/pdf/qpdfWorkerClient.ts` — qpdf worker lifecycle, progress and cancellation.
-- `src/workers/pdf.worker.ts` — heavy pdf-lib/ZIP processing outside the UI thread.
-- `src/workers/qpdf.worker.ts` — pinned local qpdf 12.3.2 WebAssembly execution for encryption/decryption.
-- `scripts/generate-sw.mjs` — deterministic production service-worker/precache generation after the Vite build.
+- `src/app/` — application shell, discovery, dialogs and safe product state.
+- `src/app/projectStore.ts` — IndexedDB persistence for lightweight recovery metadata/options only; document bytes are never persisted.
+- `src/tools/registry.ts` — canonical tool-definition source for homepage/search/favorites/recent/routing.
+- `src/tools/workspace.ts` — unified workspace and generic operation orchestration.
+- `src/tools/workspaceWithRecovery.ts` — generic workspace wrapper restoring settings/file metadata while requiring file reselection.
+- `src/tools/organizeWorkspace.ts` — visual page organization with lazy thumbnails and deterministic structural export plan.
+- `src/tools/compressionWorkspace.ts` — explicit potentially-lossy JPEG optimization controls.
+- `src/tools/encryptionWorkspace.ts` — password-handling boundary for local qpdf protect/unlock; no project-state persistence.
+- `src/tools/extractImagesWorkspace.ts` — decoded embedded-raster extraction without whole-page screenshots.
+- `src/pdf/core.ts` — deterministic structural pdf-lib operations.
+- `src/pdf/imageRecompression.ts` — selective worker-side RGB JPEG XObject recompression.
+- `src/pdf/render.ts` — PDF.js worker-backed active-page rendering and raster export.
+- `src/pdf/workerClient.ts` — worker lifecycle, progress and cancellation.
+- `src/workers/pdf.worker.ts` — heavy pdf-lib and compression operations off the UI thread.
+- `src/workers/qpdf.worker.ts` — pinned qpdf 12.3.2 WASM AES-256 protect/unlock runtime.
+- `public/sw.js` + generated precache manifest — versioned offline application shell/runtime cache.
 - `legacy/index.html` — recoverable snapshot of the previous root deployment.
 
-## Document model
+## Document model and memory boundary
 
-Generic workspaces keep `File` references in UI state and only materialize ArrayBuffers immediately before an operation. Worker operations receive transferable buffers and return transferable output buffers. Lightweight recovery stores metadata only, so document bytes are not duplicated into IndexedDB.
+Generic workspaces keep browser `File` references in UI state and materialize ArrayBuffers only immediately before an operation. Worker operations receive transferable buffers and return transferable output buffers. Bounded batch processing runs one PDF worker at a time.
 
-This is materially safer than keeping decoded copies in UI state, but it is **not yet sufficient for multi-gigabyte PDFs** because current pdf-lib and qpdf worker paths still materialize complete input/output buffers for processing. Multi-gigabyte streaming/reference architecture and real large-file certification therefore remain open and must not be inferred from the 300-page or 300-DPI fixture results.
-
-## Project recovery model
-
-Generic tool workspaces persist one lightweight recovery snapshot in IndexedDB. The snapshot contains the selected tool ID, option values, timestamp and file metadata (`name`, `size`, `type`, `lastModified`). PDF/image bytes are intentionally excluded. After a reload, settings and metadata can be restored, but the user must reselect the original file before processing continues.
-
-Security workspaces for Protect PDF and Unlock PDF deliberately do not use this recovery wrapper. Password values exist only in the active UI/worker lifetime and are cleared after completion, failure, cancellation or workspace cleanup.
+The UI estimates risk from source size and `navigator.deviceMemory` where available and warns before potentially expensive in-memory operations. Current pdf-lib and qpdf paths still require complete document buffers; therefore DocFlow does not claim arbitrary multi-gigabyte PDFs or pretend that MEMFS is a streaming file system. The release instead certifies the defensive behaviors actually required by the brief: virtualization, workers, transfers, warnings, cancellation, bounded concurrency, cleanup, 300-page processing and high-resolution scan handling.
 
 ## Preview model
 
-PDF.js uses its worker and renders only the active page canvas. Changing pages cancels the previous render task and calls page cleanup. The thumbnail rail is virtualized: only an overscanned visible page window exists in the DOM and thumbnails are rendered lazily. This avoids the legacy pattern of rendering a full-resolution canvas for every page.
+PDF.js uses its own worker and renders one full active-page canvas. Thumbnail rendering is virtualized to a small overscanned window. Changing pages cancels obsolete rendering; page cleanup is called after render tasks and the document/worker is destroyed when the workspace closes.
 
-Automated evidence includes a 40-page thumbnail-virtualization flow, a 300-page mixed-dimension structural workflow, and a three-page A4 300-DPI scan-style fixture backed by 2480×3508 JPEG images.
+## Structural output policy
+
+Merge, split, remove/extract, organize and rotate copy or transform PDF page structures and do not intentionally rasterize pages. Page numbering and watermarking add content to the existing PDF rather than rendering the source pages to images.
+
+Preview resolution never determines final structural export quality.
+
+## Professional image optimization
+
+`Optimize PDF` is explicitly potentially lossy. It enumerates indirect PDF image streams and only considers conservative ordinary `/Subtype /Image`, `/Filter /DCTDecode`, `/DeviceRGB`, 8-bit JPEG XObjects without masks/complex color metadata. Eligible JPEGs are decoded in the worker, downsampled/re-encoded according to Light/Balanced/Strong/Custom settings, and replaced at the same PDF object reference only when the encoded replacement is smaller.
+
+Text, vectors, forms, page geometry and unrelated objects remain structural. Complex CMYK/ICC/mask cases are skipped rather than silently color-converted. Normal structural tools never invoke this recompression path.
 
 ## Embedded image extraction
 
-`Extract images` inspects PDF.js page operator lists and resolves supported embedded raster image objects. Decoded pixels are exported as PNG files in a ZIP with a manifest. Vector artwork, image masks and page screenshots are not mislabeled as extracted embedded images. Because extraction uses decoded pixel data, DocFlow does not claim preservation of the original JPEG/JPX/compressed image-stream bytes or source metadata.
+`Extract images` inspects PDF.js operator lists and resolves supported embedded raster image objects. Decoded pixels are exported to PNG/ZIP with a manifest. Vector artwork, image masks and page screenshots are not mislabeled as extracted embedded images. The feature does not claim preservation of original JPEG/JPX stream bytes or source metadata.
 
 ## Operation cancellation
 
-Worker-backed operations create one dedicated worker per run. Cancel terminates that worker and rejects the active operation. Main-thread PDF-to-image and embedded-image workflows use cooperative cancellation between pages/objects.
+Worker-backed operations create a dedicated worker per run; Cancel terminates that worker. Main-thread PDF.js raster/export paths use cooperative cancellation between pages/objects. Closing the workspace terminates active work and revokes generated object URLs.
 
-## Output fidelity
+## Recovery model
 
-Structural operations (merge, split, remove/extract pages, reorder, rotate) use PDF page copying/transforms and do not intentionally rasterize. The 300-DPI scan certification additionally verifies that structural rotation preserves JPEG `/DCTDecode` image streams while the reopened PDF retains expected page geometry. PDF-to-image is explicitly marked potentially lossy. Embedded-image extraction converts supported decoded raster data to PNG and is not described as byte-preserving. `Optimize PDF` is intentionally labeled Limited because the current implementation performs structural optimization rather than professional image recompression.
+One lightweight recovery snapshot stores tool ID, option values, timestamp and file metadata (`name`, `size`, `type`, `lastModified`). Document/image contents and security passwords are excluded. On reload, settings can be restored but the original files must be reselected.
 
-## Legacy parity and duplicate entry point
+## Security model
 
-`docs/LEGACY_PARITY_MATRIX.md` maps the audited legacy capabilities to the modular implementation and executed evidence. Once that parity record is committed, the obsolete `pdf-all-in-one/index.html` duplicate entry point is removed from the migration branch. `legacy/index.html` remains the explicit historical rollback snapshot.
+AES-256 Protect/Unlock uses a pinned local qpdf 12.3.2 WASM runtime in its own worker. Password fields are cleared after operations and the security workspace bypasses IndexedDB recovery. No remote PDF-processing service is configured.
 
-## Offline certification boundary
+## Offline and deployment boundary
 
-Chromium and Firefox automated tests certify an offline reload followed by local worker-backed core PDF processing and a separate real offline qpdf AES-256 Protect PDF operation. Playwright WebKit 26.5 intercepts newly created workers after `context.setOffline(true)` before the service worker can answer, so the automated WebKit gate verifies the application shell, encryption workspace chunk, qpdf worker and qpdf WASM are precached while offline and separately verifies normal WebKit worker-backed PDF/qpdf workflows. Real Safari/iOS forced-offline worker execution remains a manual release gate; the harness limitation is not presented as product certification.
+The generated service-worker precache includes application assets and lazy runtime chunks under the GitHub Pages base `/zubaer-ahmed-PDF-TEST/`. Chromium and Firefox execute real worker-backed operations after a forced-offline reload. Playwright WebKit blocks creation of new workers after its forced-offline shim is enabled, so automated WebKit evidence combines genuine offline cache inspection for the exact lazy/qpdf assets with separately executed normal WebKit worker workflows. This is accurately reported and is not presented as real Safari forced-offline worker certification.
+
+The final `main` release workflow builds `dist/`, repeats quality and Chromium/Firefox/WebKit local suites before deployment, uploads only `dist/`, deploys to Pages and then runs a separate Chromium suite against the real deployed URL.
