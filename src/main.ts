@@ -8,8 +8,10 @@ import './styles/pre-edit-preview.css';
 import './styles/state.css';
 import { createApp } from './app/createApp';
 import { installPreEditPreview } from './app/preEditPreview';
+import { installPreEditPreviewLabels } from './app/preEditPreviewLabels';
 import { registerServiceWorker } from './pwa';
 
 createApp(document.querySelector<HTMLDivElement>('#app'));
+installPreEditPreviewLabels();
 installPreEditPreview();
 void registerServiceWorker();
