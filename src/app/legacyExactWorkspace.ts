@@ -78,9 +78,6 @@ function createLegacyShell(root: HTMLElement, grid: HTMLElement, tool: ToolDefin
   const main = grid.querySelector<HTMLElement>('.workspace-main');
   if (!side || !main) return;
 
-  grid.dataset.legacyExact = 'true';
-  grid.classList.add('legacy-editor-shell');
-
   const description = side.querySelector<HTMLElement>(':scope > p:not(.eyebrow)');
   const quality = side.querySelector<HTMLElement>('.quality-box');
   const privacy = side.querySelector<HTMLElement>('.privacy-box');
@@ -94,6 +91,9 @@ function createLegacyShell(root: HTMLElement, grid: HTMLElement, tool: ToolDefin
   const result = main.querySelector<HTMLElement>('#result');
   if (!drop || !fileList || !options || !previewArea || !status || !actions || !result) return;
 
+  grid.dataset.legacyExact = 'true';
+  grid.classList.add('legacy-editor-shell');
+
   const dialog = root.closest<HTMLDialogElement>('.workspace-dialog');
   const dialogBar = dialog?.querySelector<HTMLFormElement>(':scope > .dialog-bar') ?? null;
   const nativeClose = dialogBar?.querySelector<HTMLButtonElement>('button') ?? null;
@@ -106,7 +106,8 @@ function createLegacyShell(root: HTMLElement, grid: HTMLElement, tool: ToolDefin
   header.className = 'legacy-editor-header';
   header.innerHTML = `<div class="legacy-tool-icon" aria-hidden="true">${escapeHtml(tool.icon)}</div>`;
   side.classList.add('legacy-title-block');
-  side.querySelector<HTMLElement>('.eyebrow')!.textContent = categoryLabel(tool);
+  const eyebrow = side.querySelector<HTMLElement>('.eyebrow');
+  if (eyebrow) eyebrow.textContent = categoryLabel(tool);
   const meta = document.createElement('div');
   meta.className = 'legacy-title-meta';
   meta.innerHTML = `<span class="legacy-full-badge">${tool.status === 'Migrated' ? 'Full' : escapeHtml(tool.status)}</span><span>${escapeHtml(outputLabel(tool))}</span>`;
@@ -142,7 +143,7 @@ function createLegacyShell(root: HTMLElement, grid: HTMLElement, tool: ToolDefin
 
   const filesPane = document.createElement('aside');
   filesPane.className = 'legacy-files-pane';
-  filesPane.innerHTML = `<div class="legacy-pane-title"><strong>Files</strong><span data-legacy-file-count>0</span></div>`;
+  filesPane.innerHTML = '<div class="legacy-pane-title"><strong>Files</strong><span data-legacy-file-count>0</span></div>';
   filesPane.append(drop, fileList);
   if (memory) filesPane.append(memory);
 
@@ -193,8 +194,7 @@ function createLegacyShell(root: HTMLElement, grid: HTMLElement, tool: ToolDefin
 
   grid.replaceChildren(header, info, body, footer);
 
-  const selectionButtons = [...centerToolbar.querySelectorAll<HTMLButtonElement>('[data-legacy-select]')];
-  selectionButtons.forEach((button) => button.disabled = true);
+  [...centerToolbar.querySelectorAll<HTMLButtonElement>('[data-legacy-select]')].forEach((button) => { button.disabled = true; });
   centerToolbar.querySelector('[data-legacy-overview]')?.addEventListener('click', () => { void openOverview(root); });
 
   const observer = new MutationObserver(() => syncLegacyWorkspace(root));
@@ -280,7 +280,7 @@ function removeTrackedFile(button: HTMLElement): void {
 
 interface OverviewState {
   overlay: HTMLElement;
-  document: PDFDocumentProxy;
+  pdfDocument: PDFDocumentProxy;
   currentPage: number;
   scale: number;
   renderTask: RenderTask | null;
@@ -347,17 +347,17 @@ async function openOverview(root: HTMLElement): Promise<void> {
 
   try {
     const loadingTask = pdfjs.getDocument({ data: new Uint8Array(await file.arrayBuffer()) });
-    const document = await loadingTask.promise;
+    const pdfDocument = await loadingTask.promise;
     const state: OverviewState = {
-      overlay, document, currentPage: 1, scale: 1, renderTask: null,
+      overlay, pdfDocument, currentPage: 1, scale: 1, renderTask: null,
       thumbnailTasks: new Set(), thumbnailObserver: null, disposed: false
     };
 
-    total.textContent = `/ ${document.numPages}`;
-    pageCount.textContent = `${document.numPages} page${document.numPages === 1 ? '' : 's'}`;
-    input.max = String(document.numPages);
+    total.textContent = `/ ${pdfDocument.numPages}`;
+    pageCount.textContent = `${pdfDocument.numPages} page${pdfDocument.numPages === 1 ? '' : 's'}`;
+    input.max = String(pdfDocument.numPages);
 
-    for (let pageNumber = 1; pageNumber <= document.numPages; pageNumber += 1) {
+    for (let pageNumber = 1; pageNumber <= pdfDocument.numPages; pageNumber += 1) {
       const button = document.createElement('button');
       button.type = 'button';
       button.className = 'legacy-overview-thumbnail';
@@ -373,7 +373,7 @@ async function openOverview(root: HTMLElement): Promise<void> {
       const pageNumber = Number(button.dataset.overviewThumbnail);
       const target = button.querySelector<HTMLCanvasElement>('canvas');
       if (!target) return;
-      const page = await state.document.getPage(pageNumber);
+      const page = await state.pdfDocument.getPage(pageNumber);
       const viewport = page.getViewport({ scale: 0.18 });
       const ratio = Math.min(window.devicePixelRatio || 1, 1.5);
       target.width = Math.max(1, Math.floor(viewport.width * ratio));
@@ -408,9 +408,9 @@ async function openOverview(root: HTMLElement): Promise<void> {
 
     const renderPage = async (pageNumber: number): Promise<void> => {
       if (state.disposed) return;
-      state.currentPage = Math.max(1, Math.min(state.document.numPages, pageNumber));
+      state.currentPage = Math.max(1, Math.min(state.pdfDocument.numPages, pageNumber));
       state.renderTask?.cancel();
-      const page = await state.document.getPage(state.currentPage);
+      const page = await state.pdfDocument.getPage(state.currentPage);
       const base = page.getViewport({ scale: 1 });
       const viewport = page.getViewport({ scale: state.scale });
       const ratio = Math.min(window.devicePixelRatio || 1, 2);
@@ -432,13 +432,13 @@ async function openOverview(root: HTMLElement): Promise<void> {
       textState.textContent = pageText ? 'Text available' : 'No text';
       input.value = String(state.currentPage);
       zoom.textContent = `${Math.round(state.scale * 100)}%`;
-      meta.textContent = `${file.name} / workspace page ${state.currentPage} of ${state.document.numPages} / source page ${state.currentPage} / ${humanBytes(file.size)} / ${Math.round(base.width)} × ${Math.round(base.height)} pt`;
+      meta.textContent = `${file.name} / workspace page ${state.currentPage} of ${state.pdfDocument.numPages} / source page ${state.currentPage} / ${humanBytes(file.size)} / ${Math.round(base.width)} × ${Math.round(base.height)} pt`;
       markCurrent();
       page.cleanup();
     };
 
     const fit = async (mode: 'page' | 'width'): Promise<void> => {
-      const page = await state.document.getPage(state.currentPage);
+      const page = await state.pdfDocument.getPage(state.currentPage);
       const base = page.getViewport({ scale: 1 });
       const availableWidth = Math.max(280, canvasShell.clientWidth - 48);
       const availableHeight = Math.max(360, canvasShell.clientHeight - 36);
@@ -455,7 +455,7 @@ async function openOverview(root: HTMLElement): Promise<void> {
       state.thumbnailTasks.clear();
       state.thumbnailObserver?.disconnect();
       overlay.remove();
-      await state.document.destroy().catch(() => undefined);
+      await state.pdfDocument.destroy().catch(() => undefined);
     };
 
     overlay.querySelector('[data-overview-close]')?.addEventListener('click', () => { void close(); });
