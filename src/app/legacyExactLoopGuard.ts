@@ -80,9 +80,12 @@ function queueSync(state: GuardState): void {
 
 function guardRoot(root: HTMLElement): void {
   if (states.has(root)) return;
-  let state: GuardState;
-  const observer = new MutationObserver(() => queueSync(state));
-  state = { root, selectedCount: 0, frame: 0, observer };
+  const state: GuardState = {
+    root,
+    selectedCount: 0,
+    frame: 0,
+    observer: new MutationObserver(() => queueSync(state))
+  };
   states.set(root, state);
 
   root.addEventListener('click', (event) => {
@@ -97,13 +100,13 @@ function guardRoot(root: HTMLElement): void {
   });
 
   root.addEventListener('docflow-cleanup', () => {
-    observer.disconnect();
+    state.observer.disconnect();
     if (state.frame) cancelAnimationFrame(state.frame);
     states.delete(root);
   }, { once: true });
 
   claimLegacyUi(root);
-  observer.observe(root, observerOptions);
+  state.observer.observe(root, observerOptions);
   queueSync(state);
 }
 
