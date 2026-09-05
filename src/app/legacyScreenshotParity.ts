@@ -46,8 +46,11 @@ function humanBytes(bytes: number): string {
 }
 
 function safePdfFilename(value: string): string {
-  const stripped = value
-    .replace(/[\u0000-\u001f\u007f]/g, '')
+  const withoutControls = [...value].filter((character) => {
+    const codePoint = character.codePointAt(0) ?? 0;
+    return codePoint >= 32 && codePoint !== 127;
+  }).join('');
+  const stripped = withoutControls
     .replace(/[\\/:*?"<>|]/g, '')
     .trim()
     .replace(/^\.+/, '');
