@@ -23,6 +23,12 @@ interface ParityState {
 
 const states = new WeakMap<HTMLElement, ParityState>();
 let installed = false;
+const observerOptions: MutationObserverInit = {
+  subtree: true,
+  childList: true,
+  attributes: true,
+  attributeFilter: ['hidden', 'aria-current']
+};
 
 function workspaceRoot(target: Element): HTMLElement | null {
   return target.closest<HTMLElement>('.workspace');
@@ -50,10 +56,7 @@ function safePdfFilename(value: string): string {
     const codePoint = character.codePointAt(0) ?? 0;
     return codePoint >= 32 && codePoint !== 127;
   }).join('');
-  const stripped = withoutControls
-    .replace(/[\\/:*?"<>|]/g, '')
-    .trim()
-    .replace(/^\.+/, '');
+  const stripped = withoutControls.replace(/[\\/:*?"<>|]/g, '').trim().replace(/^\.+/, '');
   const base = stripped || 'merged.pdf';
   return /\.pdf$/i.test(base) ? base : `${base}.pdf`;
 }
@@ -91,14 +94,18 @@ function queueSync(state: ParityState): void {
   if (state.syncFrame) cancelAnimationFrame(state.syncFrame);
   state.syncFrame = requestAnimationFrame(() => {
     state.syncFrame = 0;
-    syncState(state);
+    state.observer?.disconnect();
+    try {
+      syncState(state);
+    } finally {
+      if (state.root.isConnected) state.observer?.observe(state.root, observerOptions);
+    }
   });
 }
 
 async function refreshMetadata(state: ParityState): Promise<void> {
   const generation = ++state.generation;
-  const files = [...state.files];
-  const metadata = await Promise.all(files.map((file) => readPdfMeta(file)));
+  const metadata = await Promise.all(state.files.map((file) => readPdfMeta(file)));
   if (generation !== state.generation) return;
   state.metadata = metadata;
   state.selectedCount = Math.min(state.selectedCount, totalPages(state));
@@ -130,7 +137,6 @@ function enhanceDropZone(state: ParityState): void {
   icon.setAttribute('aria-hidden', 'true');
   icon.textContent = '↥';
   drop.prepend(icon);
-
   input.classList.add('legacy-native-file-input');
   const choose = document.createElement('button');
   choose.type = 'button';
@@ -145,24 +151,16 @@ function ensureToolbar(state: ParityState): void {
   const selection = toolbar?.querySelector<HTMLElement>('.legacy-selection-tools');
   const overview = toolbar?.querySelector<HTMLElement>('[data-legacy-overview]');
   if (!toolbar || !selection || !overview) return;
-
   if (!toolbar.querySelector('[data-parity-trash]')) {
     const destructive = document.createElement('div');
     destructive.className = 'legacy-toolbar-group legacy-page-edit-tools';
-    destructive.innerHTML = `
-      <button type="button" data-parity-trash disabled aria-label="Remove selected pages" title="Page removal remains tool-specific">♲</button>
-      <button type="button" data-parity-restore disabled>Restore</button>
-    `;
+    destructive.innerHTML = '<button type="button" data-parity-trash disabled aria-label="Remove selected pages" title="Page removal remains tool-specific">♲</button><button type="button" data-parity-restore disabled>Restore</button>';
     selection.insertAdjacentElement('afterend', destructive);
   }
-
   if (!toolbar.querySelector('[data-parity-undo]')) {
     const history = document.createElement('div');
     history.className = 'legacy-toolbar-group legacy-history-tools';
-    history.innerHTML = `
-      <button type="button" data-parity-undo disabled aria-label="Undo">↶</button>
-      <button type="button" data-parity-redo disabled aria-label="Redo">↷</button>
-    `;
+    history.innerHTML = '<button type="button" data-parity-undo disabled aria-label="Undo">↶</button><button type="button" data-parity-redo disabled aria-label="Redo">↷</button>';
     overview.insertAdjacentElement('beforebegin', history);
   }
 }
@@ -171,17 +169,11 @@ function ensureMergeSettings(state: ParityState): void {
   if (toolName(state.root) !== 'Merge PDF') return;
   const form = state.root.querySelector<HTMLFormElement>('#tool-options');
   if (!form) return;
-
   if (!form.querySelector('[data-parity-output-name]')) {
     const wrapper = document.createElement('div');
     wrapper.className = 'legacy-output-name';
     wrapper.dataset.parityOutputName = 'true';
-    wrapper.innerHTML = `
-      <label>Output filename
-        <input name="outputFilename" value="merged.pdf" autocomplete="off" spellcheck="false">
-      </label>
-      <p class="help">Unsafe path and control characters are removed automatically.</p>
-    `;
+    wrapper.innerHTML = '<label>Output filename<input name="outputFilename" value="merged.pdf" autocomplete="off" spellcheck="false"></label><p class="help">Unsafe path and control characters are removed automatically.</p>';
     form.prepend(wrapper);
     const input = wrapper.querySelector<HTMLInputElement>('input[name="outputFilename"]');
     input?.addEventListener('blur', () => {
@@ -189,7 +181,6 @@ function ensureMergeSettings(state: ParityState): void {
       applyDownloadName(state);
     });
   }
-
   if (!state.root.querySelector('[data-parity-file-status]')) {
     const status = document.createElement('div');
     status.className = 'legacy-file-added-status';
@@ -205,6 +196,7 @@ function applyDownloadName(state: ParityState): void {
   const anchor = state.root.querySelector<HTMLAnchorElement>('#result a.download');
   if (!input || !anchor) return;
   const name = safePdfFilename(input.value);
+  if (anchor.download === name) return;
   anchor.download = name;
   const size = anchor.querySelector<HTMLElement>('span');
   if (size) anchor.replaceChildren(document.createTextNode(`Download ${name} `), size);
@@ -252,8 +244,8 @@ function rebuildWorkspaceFiles(state: ParityState): void {
     input.files = transfer.files;
     input.dispatchEvent(new Event('change', { bubbles: true }));
   } catch {
-    // If a browser blocks synthetic FileList replacement, keep the operation state
-    // authoritative and rebuild the parity state from the rendered rows on the next user change.
+    // Some browsers may block synthetic FileList replacement. The next user file
+    // change restores authoritative ordering without changing document bytes.
   } finally {
     window.setTimeout(() => {
       state.rebuilding = false;
@@ -271,7 +263,8 @@ function enhanceFileRows(state: ParityState): void {
     const size = row.querySelector<HTMLElement>('small');
     if (size) {
       const pageText = meta?.pageCount ? `${meta.pageCount} page${meta.pageCount === 1 ? '' : 's'} / ` : '';
-      size.textContent = `${pageText}${humanBytes(file.size)}`;
+      const nextText = `${pageText}${humanBytes(file.size)}`;
+      if (size.textContent !== nextText) size.textContent = nextText;
     }
     row.querySelector<HTMLElement>('.order')?.setAttribute('aria-hidden', 'true');
     if (row.dataset.parityEnhanced === 'true') {
@@ -329,7 +322,8 @@ function syncPreviewMeta(state: ParityState): void {
   const activeSource = state.root.querySelector<HTMLButtonElement>('[data-pre-edit-source][aria-current="true"]');
   const index = activeSource ? Number(activeSource.dataset.preEditSource) : 0;
   const meta = state.metadata[index];
-  right.textContent = meta?.width && meta?.height ? `${meta.width} × ${meta.height} pt / ${meta.rotation} degrees` : '';
+  const text = meta?.width && meta?.height ? `${meta.width} × ${meta.height} pt / ${meta.rotation} degrees` : '';
+  if (right.textContent !== text) right.textContent = text;
 }
 
 function syncSelection(state: ParityState): void {
@@ -340,15 +334,16 @@ function syncSelection(state: ParityState): void {
   if (all) all.disabled = total === 0;
   if (none) none.disabled = state.selectedCount === 0;
   if (invert) invert.disabled = total === 0;
-  const everythingSelected = total > 0 && state.selectedCount === total;
+  const selected = String(total > 0 && state.selectedCount === total);
   state.root.querySelectorAll<HTMLElement>('.pre-edit-thumbnail-item').forEach((item) => {
-    item.dataset.paritySelected = String(everythingSelected);
+    if (item.dataset.paritySelected !== selected) item.dataset.paritySelected = selected;
   });
 }
 
 function syncFooter(state: ParityState): void {
   const footer = state.root.querySelector<HTMLElement>('[data-legacy-footer-state]');
-  if (footer) footer.textContent = `${state.selectedCount} selected / 0 removed / ${totalPages(state)} output pages`;
+  const text = `${state.selectedCount} selected / 0 removed / ${totalPages(state)} output pages`;
+  if (footer && footer.textContent !== text) footer.textContent = text;
 }
 
 function syncSettingsStatus(state: ParityState): void {
@@ -356,7 +351,8 @@ function syncSettingsStatus(state: ParityState): void {
   if (!status) return;
   const count = state.files.length;
   status.hidden = count === 0;
-  status.textContent = count ? `${count} file${count === 1 ? '' : 's'} added.` : '';
+  const text = count ? `${count} file${count === 1 ? '' : 's'} added.` : '';
+  if (status.textContent !== text) status.textContent = text;
 }
 
 function syncState(state: ParityState): void {
@@ -389,9 +385,8 @@ function ensureState(root: HTMLElement): ParityState {
     observer: null
   };
   states.set(root, state);
-
   const observer = new MutationObserver(() => queueSync(state));
-  observer.observe(root, { subtree: true, childList: true, attributes: true, attributeFilter: ['hidden', 'aria-current'] });
+  observer.observe(root, observerOptions);
   state.observer = observer;
 
   root.addEventListener('click', (event) => {
@@ -432,7 +427,6 @@ function ensureState(root: HTMLElement): ParityState {
     state.generation += 1;
     states.delete(root);
   }, { once: true });
-
   queueSync(state);
   return state;
 }
@@ -447,7 +441,6 @@ function enhanceAvailable(): void {
 export function installLegacyScreenshotParity(): void {
   if (installed) return;
   installed = true;
-
   const bodyObserver = new MutationObserver(enhanceAvailable);
   bodyObserver.observe(document.body, { subtree: true, childList: true });
   enhanceAvailable();
