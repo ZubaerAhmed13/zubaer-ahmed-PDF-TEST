@@ -23,7 +23,34 @@ test('restored DocFlow shell keeps the legacy visual hierarchy without breaking 
   await page.getByLabel('Search tools').fill('merge');
   await expect(page.getByRole('heading', { name: 'Merge PDF' })).toBeVisible();
   await page.getByRole('button', { name: 'Open tool' }).click();
-  await expect(page.getByRole('dialog', { name: 'Workspace' })).toBeVisible();
+
+  const dialog = page.getByRole('dialog', { name: 'Workspace' });
+  await expect(dialog).toBeVisible();
+  await expect(dialog.locator('.workspace-grid')).toBeVisible();
+  await expect(dialog.locator('.drop-zone')).toBeVisible();
+
+  const dialogPresentation = await dialog.evaluate((element) => {
+    const style = getComputedStyle(element);
+    return {
+      borderRadius: Number.parseFloat(style.borderRadius),
+      shadow: style.boxShadow,
+    };
+  });
+  expect(dialogPresentation.borderRadius).toBeGreaterThanOrEqual(20);
+  expect(dialogPresentation.shadow).not.toBe('none');
+
+  const workspaceColumns = await dialog.locator('.workspace-grid').evaluate((element) => getComputedStyle(element).gridTemplateColumns.split(' ').length);
+  expect(workspaceColumns).toBe(2);
+
+  const dropZonePresentation = await dialog.locator('.drop-zone').evaluate((element) => {
+    const style = getComputedStyle(element);
+    return {
+      borderRadius: Number.parseFloat(style.borderRadius),
+      borderStyle: style.borderStyle,
+    };
+  });
+  expect(dropZonePresentation.borderRadius).toBeGreaterThanOrEqual(15);
+  expect(dropZonePresentation.borderStyle).toBe('dashed');
 });
 
 test('restored shell remains compact and single-column on mobile', async ({ page }) => {
