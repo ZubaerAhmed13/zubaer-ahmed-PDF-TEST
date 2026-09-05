@@ -2,6 +2,17 @@
  * This layer changes presentation and safe file-order/output-name controls only.
  */
 
+/* Keep the native dialog close bar available for specialized workspaces such
+ * as View PDF. The exact restored editor uses its own visual header close
+ * button while the native form remains a stable direct child of the dialog. */
+.workspace-dialog > .dialog-bar {
+  display: flex;
+}
+
+.workspace-dialog.legacy-exact-active > .dialog-bar {
+  display: none;
+}
+
 .legacy-files-pane .legacy-native-file-input {
   position: absolute !important;
   width: 1px !important;
