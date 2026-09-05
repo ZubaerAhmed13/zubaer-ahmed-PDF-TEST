@@ -24,7 +24,7 @@ function pageCountFromRows(root: HTMLElement): number {
   return total;
 }
 
-function claimCounters(root: HTMLElement): void {
+function claimLegacyUi(root: HTMLElement): void {
   const legacyCount = root.querySelector<HTMLElement>('[data-legacy-file-count]');
   if (legacyCount) {
     legacyCount.removeAttribute('data-legacy-file-count');
@@ -36,12 +36,18 @@ function claimCounters(root: HTMLElement): void {
     legacyFooter.removeAttribute('data-legacy-footer-state');
     legacyFooter.dataset.legacyFooterStateUi = 'true';
   }
+
+  const legacyEmpty = root.querySelector<HTMLElement>('.legacy-preview-empty');
+  if (legacyEmpty) {
+    legacyEmpty.classList.remove('legacy-preview-empty');
+    legacyEmpty.classList.add('legacy-preview-empty-ui');
+  }
 }
 
 function sync(state: GuardState): void {
   const { root } = state;
   if (!root.isConnected) return;
-  claimCounters(root);
+  claimLegacyUi(root);
 
   const fileCount = root.querySelector<HTMLElement>('[data-legacy-file-count-ui]');
   const rows = root.querySelectorAll('#file-list .file-row').length;
@@ -52,6 +58,11 @@ function sync(state: GuardState): void {
   const footer = root.querySelector<HTMLElement>('[data-legacy-footer-state-ui]');
   const footerText = `${state.selectedCount} selected / 0 removed / ${totalPages} output pages`;
   if (footer && footer.textContent !== footerText) footer.textContent = footerText;
+
+  const empty = root.querySelector<HTMLElement>('.legacy-preview-empty-ui');
+  const preview = root.querySelector<HTMLElement>('.pre-edit-preview');
+  const shouldHideEmpty = Boolean(preview && !preview.hidden);
+  if (empty && empty.hidden !== shouldHideEmpty) empty.hidden = shouldHideEmpty;
 }
 
 function queueSync(state: GuardState): void {
@@ -69,8 +80,9 @@ function queueSync(state: GuardState): void {
 
 function guardRoot(root: HTMLElement): void {
   if (states.has(root)) return;
+  let state: GuardState;
   const observer = new MutationObserver(() => queueSync(state));
-  const state: GuardState = { root, selectedCount: 0, frame: 0, observer };
+  state = { root, selectedCount: 0, frame: 0, observer };
   states.set(root, state);
 
   root.addEventListener('click', (event) => {
@@ -90,7 +102,7 @@ function guardRoot(root: HTMLElement): void {
     states.delete(root);
   }, { once: true });
 
-  claimCounters(root);
+  claimLegacyUi(root);
   observer.observe(root, observerOptions);
   queueSync(state);
 }
