@@ -39,7 +39,7 @@ test('Merge PDF matches the preserved four-pane editor experience', async ({ pag
   await expect(dialog.locator('#file-list .file-row small')).toContainText('2 pages');
   await expect(dialog.locator('.legacy-replace-file')).toBeVisible();
   await expect(dialog.locator('[data-parity-file-status]')).toHaveText('1 file added.');
-  await expect(dialog.locator('[data-legacy-footer-state]')).toHaveText('0 selected / 0 removed / 2 output pages');
+  await expect(dialog.locator('[data-legacy-footer-state-ui]')).toHaveText('0 selected / 0 removed / 2 output pages');
   await expect(dialog.locator('[data-parity-page-meta]')).toContainText('595 × 842 pt');
 
   const filesBox = await dialog.locator('.legacy-files-pane').boundingBox();
@@ -63,7 +63,7 @@ test('Merge file ordering, custom output name and PDF Overview stay connected to
   await expect(dialog.locator('#file-list .file-row').nth(0)).toContainText('first.pdf');
   await dialog.locator('#file-list .file-row').nth(1).getByRole('button', { name: 'Move second.pdf up' }).click();
   await expect(dialog.locator('#file-list .file-row').nth(0)).toContainText('second.pdf');
-  await expect(dialog.locator('[data-legacy-footer-state]')).toContainText('3 output pages');
+  await expect(dialog.locator('[data-legacy-footer-state-ui]')).toContainText('3 output pages');
 
   await dialog.locator('[data-legacy-overview]').click();
   const overview = dialog.getByRole('dialog', { name: /PDF overview for/i });
