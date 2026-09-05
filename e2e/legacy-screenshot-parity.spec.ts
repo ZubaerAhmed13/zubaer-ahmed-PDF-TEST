@@ -68,8 +68,8 @@ test('Merge file ordering, custom output name and PDF Overview stay connected to
   await dialog.locator('[data-legacy-overview]').click();
   const overview = dialog.getByRole('dialog', { name: /PDF overview for/i });
   await expect(overview).toBeVisible();
-  await expect(overview.locator('.legacy-overview-thumbnails')).toBeVisible();
-  await expect(overview.locator('.legacy-overview-canvas')).toBeVisible();
+  await expect(overview.locator('[data-overview-thumbnails]')).toBeVisible();
+  await expect(overview.locator('[data-overview-canvas]')).toBeVisible();
   await expect(overview.locator('.legacy-overview-text')).toBeVisible();
   await overview.getByRole('button', { name: 'Close PDF overview' }).click();
   await expect(overview).toBeHidden();
