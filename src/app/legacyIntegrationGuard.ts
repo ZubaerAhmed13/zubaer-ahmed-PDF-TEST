@@ -10,12 +10,34 @@ function workspaceRoot(target: Element): HTMLElement | null {
 function ensureDialogBar(): void {
   const dialog = document.querySelector<HTMLDialogElement>('#workspace-dialog');
   const workspace = document.querySelector<HTMLElement>('#workspace');
-  if (!dialog || !workspace || dialog.querySelector('.dialog-bar')) return;
-  const form = document.createElement('form');
-  form.method = 'dialog';
-  form.className = 'dialog-bar';
-  form.innerHTML = '<strong id="workspace-title">Workspace</strong><button aria-label="Close workspace">Close</button>';
-  dialog.insertBefore(form, workspace);
+  if (!dialog || !workspace) return;
+
+  let form = dialog.querySelector<HTMLFormElement>('.dialog-bar');
+  if (!form) {
+    form = document.createElement('form');
+    form.method = 'dialog';
+    form.className = 'dialog-bar';
+    form.innerHTML = '<strong id="workspace-title">Workspace</strong><button aria-label="Close workspace">Close</button>';
+  }
+
+  const legacyHeaderActions = workspace.querySelector<HTMLElement>('.legacy-editor-header .legacy-header-actions');
+  const button = form.querySelector<HTMLButtonElement>('button');
+  if (legacyHeaderActions) {
+    form.classList.add('legacy-header-close-form');
+    if (button) {
+      button.textContent = '×';
+      button.title = 'Close';
+    }
+    if (form.parentElement !== legacyHeaderActions) legacyHeaderActions.append(form);
+    return;
+  }
+
+  form.classList.remove('legacy-header-close-form');
+  if (button) {
+    button.textContent = 'Close';
+    button.removeAttribute('title');
+  }
+  if (form.parentElement !== dialog) dialog.insertBefore(form, workspace);
 }
 
 function preserveRecoveryNodes(): void {
@@ -134,6 +156,7 @@ function handleReplacementInput(input: HTMLInputElement, event: Event): void {
 }
 
 function enhance(): void {
+  ensureDialogBar();
   preserveRecoveryNodes();
   makePlaceholdersDecorative();
 }
@@ -145,7 +168,8 @@ export function installLegacyIntegrationGuard(): void {
   const dialog = document.querySelector<HTMLDialogElement>('#workspace-dialog');
   dialog?.addEventListener('close', () => {
     ensureDialogBar();
-    trackedFiles.delete(document.querySelector<HTMLElement>('#workspace')!);
+    const workspace = document.querySelector<HTMLElement>('#workspace');
+    if (workspace) trackedFiles.delete(workspace);
   });
 
   const observer = new MutationObserver(enhance);
@@ -168,6 +192,19 @@ export function installLegacyIntegrationGuard(): void {
   document.addEventListener('click', (event) => {
     const target = event.target instanceof Element ? event.target : null;
     if (!target) return;
+
+    const overviewClose = target.closest<HTMLElement>('[data-overview-close]');
+    if (overviewClose) {
+      const overlay = overviewClose.closest<HTMLElement>('.legacy-overview-overlay');
+      // The native overview handler performs PDF.js cancellation/destruction.
+      // This microtask is only a DOM fallback for a previously observed race
+      // where cleanup had already disposed the state before removing its shell.
+      queueMicrotask(() => {
+        if (overlay?.isConnected) overlay.remove();
+      });
+      return;
+    }
+
     const move = target.closest<HTMLElement>('[data-parity-move]');
     if (move) { handleMove(move, event); return; }
     const replace = target.closest<HTMLElement>('[data-parity-replace]');
