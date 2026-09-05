@@ -6,15 +6,18 @@ import './styles/legacy-contrast.css';
 import './styles/legacy-workspace.css';
 import './styles/pre-edit-preview.css';
 import './styles/legacy-exact-workspace.css';
+import './styles/legacy-screenshot-parity.css';
 import './styles/state.css';
 import { createApp } from './app/createApp';
 import { installPreEditPreview } from './app/preEditPreview';
 import { installPreEditPreviewLabels } from './app/preEditPreviewLabels';
 import { installLegacyExactWorkspace } from './app/legacyExactWorkspace';
+import { installLegacyScreenshotParity } from './app/legacyScreenshotParity';
 import { registerServiceWorker } from './pwa';
 
 createApp(document.querySelector<HTMLDivElement>('#app'));
 installPreEditPreviewLabels();
 installPreEditPreview();
 installLegacyExactWorkspace();
+installLegacyScreenshotParity();
 void registerServiceWorker();
