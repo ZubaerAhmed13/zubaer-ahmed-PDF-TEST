@@ -20,24 +20,38 @@ function ensureDialogBar(): void {
     form.innerHTML = '<strong id="workspace-title">Workspace</strong><button aria-label="Close workspace">Close</button>';
   }
 
-  const legacyHeaderActions = workspace.querySelector<HTMLElement>('.legacy-editor-header .legacy-header-actions');
-  const button = form.querySelector<HTMLButtonElement>('button');
-  if (legacyHeaderActions) {
-    form.classList.add('legacy-header-close-form');
-    if (button) {
-      button.textContent = '×';
-      button.title = 'Close';
-    }
-    if (form.parentElement !== legacyHeaderActions) legacyHeaderActions.append(form);
-    return;
-  }
-
+  // The native dialog form is lifecycle infrastructure. Keep it permanently
+  // outside #workspace so workspace.replaceChildren() can never destroy the
+  // only close control during repeated preview/open/close cycles.
   form.classList.remove('legacy-header-close-form');
-  if (button) {
-    button.textContent = 'Close';
-    button.removeAttribute('title');
+  const nativeButton = form.querySelector<HTMLButtonElement>('button');
+  if (nativeButton) {
+    nativeButton.textContent = 'Close';
+    nativeButton.removeAttribute('title');
   }
   if (form.parentElement !== dialog) dialog.insertBefore(form, workspace);
+
+  const legacyHeaderActions = workspace.querySelector<HTMLElement>('.legacy-editor-header .legacy-header-actions');
+  dialog.classList.toggle('legacy-exact-active', Boolean(legacyHeaderActions));
+  if (!legacyHeaderActions) return;
+
+  // The restored legacy editor gets a presentation-only header close button.
+  // It closes the same native dialog, while the real form remains a stable
+  // direct child of the dialog for lifecycle and accessibility fallbacks.
+  let visualClose = legacyHeaderActions.querySelector<HTMLButtonElement>('[data-legacy-header-close]');
+  if (!visualClose) {
+    visualClose = document.createElement('button');
+    visualClose.type = 'button';
+    visualClose.className = 'legacy-favorite-button legacy-header-close-button';
+    visualClose.dataset.legacyHeaderClose = 'true';
+    visualClose.setAttribute('aria-label', 'Close workspace');
+    visualClose.title = 'Close';
+    visualClose.textContent = '×';
+    visualClose.addEventListener('click', () => {
+      if (dialog.open) dialog.close();
+    });
+    legacyHeaderActions.append(visualClose);
+  }
 }
 
 function preserveRecoveryNodes(): void {
@@ -168,6 +182,7 @@ export function installLegacyIntegrationGuard(): void {
   const dialog = document.querySelector<HTMLDialogElement>('#workspace-dialog');
   dialog?.addEventListener('close', () => {
     ensureDialogBar();
+    dialog.classList.remove('legacy-exact-active');
     const workspace = document.querySelector<HTMLElement>('#workspace');
     if (workspace) trackedFiles.delete(workspace);
   });
