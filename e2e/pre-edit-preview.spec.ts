@@ -9,8 +9,7 @@ async function pdfFixture(pageCount: number): Promise<Buffer> {
 
 test('opens a large preview automatically before rotating pages', async ({ page }) => {
   await page.goto('/zubaer-ahmed-PDF-TEST/');
-  await page.getByLabel('Search tools').fill('rotate');
-  await page.getByRole('button', { name: 'Open tool' }).click();
+  await page.locator('[data-open-tool="rotate"]').click();
   const dialog = page.getByRole('dialog', { name: 'Workspace' });
 
   await dialog.locator('#workspace-file').setInputFiles({
@@ -50,8 +49,10 @@ test('lets Merge PDF switch between every selected source before merging', async
   const preview = dialog.locator('[data-pre-edit-preview]');
   await expect(preview).toBeVisible();
   await expect(preview.locator('[data-pre-edit-source]')).toHaveCount(2);
-  await expect(preview.locator('[data-pre-edit-source="0"]')).toContainText('first.pdf');
-  await expect(preview.locator('[data-pre-edit-source="1"]')).toContainText('second.pdf');
+  await expect(preview.locator('[data-pre-edit-source="0"]')).toHaveText('PDF 1');
+  await expect(preview.locator('[data-pre-edit-source="0"]')).toHaveAttribute('aria-label', 'Preview source 1: first.pdf');
+  await expect(preview.locator('[data-pre-edit-source="1"]')).toHaveText('PDF 2');
+  await expect(preview.locator('[data-pre-edit-source="1"]')).toHaveAttribute('aria-label', 'Preview source 2: second.pdf');
 
   await preview.locator('[data-pre-edit-source="1"]').click();
   await expect(preview).toHaveAttribute('data-preview-ready', 'true');
