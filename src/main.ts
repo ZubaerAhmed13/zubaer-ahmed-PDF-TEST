@@ -13,12 +13,17 @@ import { installPreEditPreview } from './app/preEditPreview';
 import { installPreEditPreviewLabels } from './app/preEditPreviewLabels';
 import { installLegacyExactLoopGuard } from './app/legacyExactLoopGuard';
 import { installLegacyExactWorkspace } from './app/legacyExactWorkspace';
+import { installLegacyIntegrationGuard } from './app/legacyIntegrationGuard';
 import { installLegacyScreenshotParity } from './app/legacyScreenshotParity';
 import { registerServiceWorker } from './pwa';
 
 createApp(document.querySelector<HTMLDivElement>('#app'));
 installPreEditPreviewLabels();
 installPreEditPreview();
+// Install the integration guard before the legacy workspace observers so it can
+// preserve recovery/status nodes and dialog lifecycle controls before the
+// presentation adapters move or replace DOM nodes.
+installLegacyIntegrationGuard();
 installLegacyExactLoopGuard();
 installLegacyExactWorkspace();
 installLegacyScreenshotParity();
