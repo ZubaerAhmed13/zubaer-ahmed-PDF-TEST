@@ -3,7 +3,7 @@ import { mountWorkspace as mountBaseWorkspace } from './workspace';
 import { clearProjectSnapshot, loadProjectSnapshot, saveProjectSnapshot, type ProjectFileMetadata, type ProjectOptionValue } from '../app/projectStore';
 
 function escapeHtml(value: string): string {
-  return value.replace(/[&<>"']/g, (character) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot',"'":'&#39;'}[character] ?? character));
+  return value.replace(/[&<>"']/g, (character) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[character] ?? character));
 }
 
 function humanBytes(bytes: number): string {
