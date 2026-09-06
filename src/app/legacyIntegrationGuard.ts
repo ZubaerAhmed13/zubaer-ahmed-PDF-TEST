@@ -57,6 +57,15 @@ function ensureDialogBar(): void {
     });
     legacyHeaderActions.append(visualClose);
   }
+
+  // The legacy adapter can replace/reparent workspace content immediately after
+  // showModal(). If that transition causes a browser to drop focus to <body>,
+  // move it to the visible header close control. Never steal focus from an
+  // already-focused field/control inside the modal workspace.
+  const activeElement = document.activeElement;
+  if (dialog.open && (activeElement === nativeButton || !activeElement || !dialog.contains(activeElement))) {
+    visualClose.focus({ preventScroll: true });
+  }
 }
 
 function preserveRecoveryNodes(): void {
