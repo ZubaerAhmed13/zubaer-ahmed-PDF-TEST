@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 
-test('restored DocFlow shell keeps the legacy visual hierarchy without breaking tool discovery', async ({ page }) => {
+test('restored DocFlow shell keeps the approved legacy visual hierarchy without breaking tool discovery', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 1000 });
   await page.goto('/zubaer-ahmed-PDF-TEST/');
 
@@ -26,8 +26,10 @@ test('restored DocFlow shell keeps the legacy visual hierarchy without breaking 
 
   const dialog = page.getByRole('dialog', { name: 'Workspace' });
   await expect(dialog).toBeVisible();
-  await expect(dialog.locator('.workspace-grid')).toBeVisible();
-  await expect(dialog.locator('.drop-zone')).toBeVisible();
+  await expect(dialog.locator('.workspace-grid.legacy-editor-shell')).toBeVisible();
+  await expect(dialog.locator('.legacy-files-pane .drop-zone')).toBeVisible();
+  await expect(dialog.locator('.legacy-center-pane')).toBeVisible();
+  await expect(dialog.locator('.legacy-settings-pane')).toBeVisible();
 
   const dialogPresentation = await dialog.evaluate((element) => {
     const style = getComputedStyle(element);
@@ -36,20 +38,25 @@ test('restored DocFlow shell keeps the legacy visual hierarchy without breaking 
       shadow: style.boxShadow,
     };
   });
-  expect(dialogPresentation.borderRadius).toBeGreaterThanOrEqual(20);
+  // The approved screenshot-parity workspace deliberately uses a compact
+  // ~11px frame radius rather than the superseded rounded-card shell.
+  expect(dialogPresentation.borderRadius).toBeGreaterThanOrEqual(10);
   expect(dialogPresentation.shadow).not.toBe('none');
 
-  const workspaceColumns = await dialog.locator('.workspace-grid').evaluate((element) => getComputedStyle(element).gridTemplateColumns.split(' ').length);
-  expect(workspaceColumns).toBe(2);
+  const shellColumns = await dialog.locator('.workspace-grid.legacy-editor-shell').evaluate((element) => getComputedStyle(element).gridTemplateColumns.split(' ').length);
+  expect(shellColumns).toBe(1);
 
-  const dropZonePresentation = await dialog.locator('.drop-zone').evaluate((element) => {
+  const editorColumns = await dialog.locator('.legacy-editor-body').evaluate((element) => getComputedStyle(element).gridTemplateColumns.split(' ').length);
+  expect(editorColumns).toBe(3);
+
+  const dropZonePresentation = await dialog.locator('.legacy-files-pane .drop-zone').evaluate((element) => {
     const style = getComputedStyle(element);
     return {
       borderRadius: Number.parseFloat(style.borderRadius),
       borderStyle: style.borderStyle,
     };
   });
-  expect(dropZonePresentation.borderRadius).toBeGreaterThanOrEqual(15);
+  expect(dropZonePresentation.borderRadius).toBeGreaterThanOrEqual(7);
   expect(dropZonePresentation.borderStyle).toBe('dashed');
 });
 
