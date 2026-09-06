@@ -2,6 +2,7 @@ const trackedFiles = new WeakMap<HTMLElement, File[]>();
 const replacementIndex = new WeakMap<HTMLElement, number>();
 const rebuilding = new WeakSet<HTMLElement>();
 let installed = false;
+let enhanceQueued = false;
 
 function workspaceRoot(target: Element): HTMLElement | null {
   return target.closest<HTMLElement>('.workspace');
@@ -22,17 +23,21 @@ function ensureDialogBar(): void {
 
   // The native dialog form is lifecycle infrastructure. Keep it permanently
   // outside #workspace so workspace.replaceChildren() can never destroy the
-  // only close control during repeated preview/open/close cycles.
-  form.classList.remove('legacy-header-close-form');
+  // only close control during repeated preview/open/close cycles. Every write
+  // below is guarded so this function is safe when called by a MutationObserver.
+  if (form.classList.contains('legacy-header-close-form')) form.classList.remove('legacy-header-close-form');
   const nativeButton = form.querySelector<HTMLButtonElement>('button');
   if (nativeButton) {
-    nativeButton.textContent = 'Close';
-    nativeButton.removeAttribute('title');
+    if (nativeButton.textContent !== 'Close') nativeButton.textContent = 'Close';
+    if (nativeButton.hasAttribute('title')) nativeButton.removeAttribute('title');
   }
   if (form.parentElement !== dialog) dialog.insertBefore(form, workspace);
 
   const legacyHeaderActions = workspace.querySelector<HTMLElement>('.legacy-editor-header .legacy-header-actions');
-  dialog.classList.toggle('legacy-exact-active', Boolean(legacyHeaderActions));
+  const exactActive = Boolean(legacyHeaderActions);
+  if (dialog.classList.contains('legacy-exact-active') !== exactActive) {
+    dialog.classList.toggle('legacy-exact-active', exactActive);
+  }
   if (!legacyHeaderActions) return;
 
   // The restored legacy editor gets a presentation-only header close button.
@@ -66,9 +71,9 @@ function preserveRecoveryNodes(): void {
 
 function makePlaceholdersDecorative(): void {
   document.querySelectorAll<HTMLButtonElement>('[data-parity-trash],[data-parity-restore],[data-parity-undo],[data-parity-redo]').forEach((button) => {
-    button.setAttribute('aria-hidden', 'true');
-    button.tabIndex = -1;
-    button.removeAttribute('aria-label');
+    if (button.getAttribute('aria-hidden') !== 'true') button.setAttribute('aria-hidden', 'true');
+    if (button.tabIndex !== -1) button.tabIndex = -1;
+    if (button.hasAttribute('aria-label')) button.removeAttribute('aria-label');
   });
 }
 
@@ -175,6 +180,15 @@ function enhance(): void {
   makePlaceholdersDecorative();
 }
 
+function scheduleEnhance(): void {
+  if (enhanceQueued) return;
+  enhanceQueued = true;
+  queueMicrotask(() => {
+    enhanceQueued = false;
+    enhance();
+  });
+}
+
 export function installLegacyIntegrationGuard(): void {
   if (installed) return;
   installed = true;
@@ -182,12 +196,12 @@ export function installLegacyIntegrationGuard(): void {
   const dialog = document.querySelector<HTMLDialogElement>('#workspace-dialog');
   dialog?.addEventListener('close', () => {
     ensureDialogBar();
-    dialog.classList.remove('legacy-exact-active');
+    if (dialog.classList.contains('legacy-exact-active')) dialog.classList.remove('legacy-exact-active');
     const workspace = document.querySelector<HTMLElement>('#workspace');
     if (workspace) trackedFiles.delete(workspace);
   });
 
-  const observer = new MutationObserver(enhance);
+  const observer = new MutationObserver(scheduleEnhance);
   observer.observe(document.body, { subtree: true, childList: true });
   enhance();
 
