@@ -3,7 +3,7 @@ import { createPreview, type PreviewController } from '../pdf/render';
 const THUMBNAIL_ROW_HEIGHT = 176;
 const THUMBNAIL_OVERSCAN = 3;
 const DEFAULT_SCALE = 1.25;
-const MIN_SCALE = 0.35;
+const MIN_SCALE = 0.1;
 const MAX_SCALE = 4;
 
 interface PreviewSource {
@@ -421,7 +421,7 @@ async function renderPdfPreview(session: PreviewSession, file: File): Promise<vo
     };
 
     await showPage(1);
-    if (shell.clientWidth >= 640) await fit('page');
+    await fit('page');
   } catch (error) {
     if (generation !== session.generation) return;
     session.panel.dataset.previewReady = 'false';
