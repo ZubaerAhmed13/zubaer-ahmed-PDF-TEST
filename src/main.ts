@@ -8,6 +8,7 @@ import './styles/pre-edit-preview.css';
 import './styles/legacy-exact-workspace.css';
 import './styles/legacy-screenshot-parity.css';
 import './styles/state.css';
+import './styles/editor-interaction-hardening.css';
 import { createApp } from './app/createApp';
 import { installPreEditPreview } from './app/preEditPreview';
 import { installPreEditPreviewLabels } from './app/preEditPreviewLabels';
