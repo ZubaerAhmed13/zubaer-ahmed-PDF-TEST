@@ -16,6 +16,52 @@
   min-height: 0;
 }
 
+/* Grid/flex descendants must never grow their ancestor tracks to the size of
+ * an oversized PDF or a long file/settings list. The legacy presentation uses
+ * several nested percentage heights; in Chromium, Firefox and WebKit those can
+ * otherwise turn the intended scroll owner into a content-sized box. Keep the
+ * outer workspace fixed to the dialog and let each inner grid item stretch only
+ * inside its assigned track. */
+.workspace,
+.workspace > .legacy-editor-shell {
+  height: 100%;
+  max-height: 100%;
+  overflow: hidden;
+}
+
+.legacy-editor-body,
+.legacy-files-pane,
+.legacy-settings-pane,
+.legacy-center-pane,
+.legacy-live-preview,
+.legacy-live-preview > .pre-edit-preview,
+.legacy-live-preview .pre-edit-preview-body,
+.legacy-live-preview .pre-edit-viewer-layout,
+.legacy-live-preview .pre-edit-thumbnail-rail,
+.legacy-live-preview .pre-edit-canvas-shell {
+  max-height: 100%;
+}
+
+.legacy-editor-body,
+.legacy-center-pane,
+.legacy-live-preview,
+.legacy-live-preview > .pre-edit-preview,
+.legacy-live-preview .pre-edit-preview-body,
+.legacy-live-preview .pre-edit-viewer-layout {
+  overflow: hidden;
+}
+
+/* These elements are grid items already. `height:100%` makes their percentage
+ * resolve against an ancestor rather than their allocated grid track in some
+ * engines, so use normal stretch sizing instead. */
+.legacy-live-preview .pre-edit-preview-body,
+.legacy-live-preview .pre-edit-viewer-layout,
+.legacy-live-preview .pre-edit-thumbnail-rail,
+.legacy-live-preview .pre-edit-canvas-shell {
+  height: auto;
+  align-self: stretch;
+}
+
 .legacy-files-pane,
 .legacy-settings-pane,
 .legacy-live-preview .pre-edit-thumbnail-rail,
@@ -23,6 +69,12 @@
 .legacy-overview-canvas-shell {
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
+}
+
+.legacy-files-pane,
+.legacy-settings-pane,
+.legacy-live-preview .pre-edit-thumbnail-rail {
+  overflow: auto;
 }
 
 /* The viewer toolbar already exists in preEditPreview.ts. The legacy visual
@@ -91,9 +143,7 @@
  * fits and naturally collapse when it becomes wider than the viewport. */
 .legacy-live-preview .pre-edit-canvas-shell {
   width: 100%;
-  height: 100%;
   max-width: 100%;
-  max-height: 100%;
   min-width: 0;
   min-height: 0;
   padding: 18px 24px;
@@ -205,6 +255,7 @@
  * still retains its own bounded scrolling where it has a maximum height. */
 @media (max-width: 820px) {
   .legacy-editor-body {
+    max-height: 100%;
     min-height: 0;
     overflow: auto;
     overscroll-behavior: contain;
