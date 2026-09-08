@@ -107,7 +107,9 @@ function resumeRetriedTool(): void {
     clearRetryMarker();
   };
 
-  const begin = (): void => requestAnimationFrame(() => requestAnimationFrame(resume));
+  const begin = (): void => {
+    requestAnimationFrame(() => requestAnimationFrame(resume));
+  };
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', begin, { once: true });
   else begin();
 }
