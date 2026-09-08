@@ -19,7 +19,8 @@
 .legacy-files-pane,
 .legacy-settings-pane,
 .legacy-live-preview .pre-edit-thumbnail-rail,
-.legacy-live-preview .pre-edit-canvas-shell {
+.legacy-live-preview .pre-edit-canvas-shell,
+.legacy-overview-canvas-shell {
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
 }
@@ -110,11 +111,53 @@
   margin: 0 auto;
 }
 
-/* Keep the generic pre-edit viewer WebKit/touch-friendly too, including when
- * it is rendered outside the legacy adapter. */
-.pre-edit-canvas-shell {
+/* Keep both preview surfaces WebKit/touch-friendly. */
+.pre-edit-canvas-shell,
+.legacy-overview-canvas-shell {
   touch-action: pan-x pan-y;
   -webkit-overflow-scrolling: touch;
+}
+
+/* Recoverable lazy-load failure state. This is intentionally simple and uses
+ * the existing button language rather than introducing another workspace UI. */
+.workspace-load-error {
+  width: min(620px, calc(100% - 32px));
+  min-height: 280px;
+  margin: 24px auto;
+  padding: 32px;
+  display: grid;
+  align-content: center;
+  justify-items: start;
+  gap: 12px;
+  border: 1px solid #dce4eb;
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 12px 30px rgba(34, 50, 67, .08);
+  color: #5e7082;
+}
+
+.workspace-load-error h3 {
+  margin: 0;
+  color: #26384a;
+  font-size: 20px;
+}
+
+.workspace-load-error p {
+  margin: 0;
+  line-height: 1.5;
+}
+
+.workspace-load-error-actions {
+  margin-top: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.workspace-load-error-actions button {
+  min-height: 40px;
+  padding: 0 14px;
+  border-radius: 7px;
 }
 
 /* The footer is a real grid row, never an overlay over the PDF viewport. */
@@ -190,5 +233,11 @@
 
   .legacy-live-preview .pre-edit-viewer-toolbar {
     max-height: 84px;
+  }
+
+  .workspace-load-error {
+    width: calc(100% - 20px);
+    margin: 10px auto;
+    padding: 20px;
   }
 }
