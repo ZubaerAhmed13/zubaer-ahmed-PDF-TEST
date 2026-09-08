@@ -3,9 +3,10 @@ import { expect, test } from '@playwright/test';
 const appUrl = '/zubaer-ahmed-PDF-TEST/';
 const workspaceChunk = '**/assets/workspaceWithRecovery-*.js';
 
-test.beforeEach(async ({ page }) => {
-  await page.goto(appUrl);
-});
+/* Network-failure certification must observe the real chunk request rather
+ * than a previously installed service worker response. Production PWA behavior
+ * is covered separately by the existing release/offline tests. */
+test.use({ serviceWorkers: 'block' });
 
 test('lazy-load failure is recoverable and Retry really opens the editor', async ({ page }) => {
   let failuresRemaining = 1;
@@ -17,6 +18,7 @@ test('lazy-load failure is recoverable and Retry really opens the editor', async
     }
     await route.continue();
   });
+  await page.goto(appUrl);
 
   await page.locator('[data-open-tool="merge"]').first().click();
   const dialog = page.getByRole('dialog', { name: 'Workspace' });
@@ -24,7 +26,7 @@ test('lazy-load failure is recoverable and Retry really opens the editor', async
   await expect(dialog.locator('.workspace-loading')).toHaveCount(0);
   await expect(dialog.getByRole('heading', { name: 'Unable to open Merge PDF' })).toBeVisible();
   await expect(dialog.getByRole('button', { name: 'Retry' })).toBeVisible();
-  await expect(dialog.getByRole('button', { name: 'Close' })).toBeVisible();
+  await expect(dialog.getByRole('button', { name: 'Close', exact: true })).toBeVisible();
   await expect(dialog.getByRole('button', { name: 'Reload application' })).toBeVisible();
 
   await dialog.getByRole('button', { name: 'Retry' }).click();
@@ -44,6 +46,7 @@ test('closing during a delayed lazy load permanently invalidates that open sessi
     }
     await route.continue();
   });
+  await page.goto(appUrl);
 
   await page.locator('[data-open-tool="merge"]').first().click();
   const dialog = page.getByRole('dialog', { name: 'Workspace' });
