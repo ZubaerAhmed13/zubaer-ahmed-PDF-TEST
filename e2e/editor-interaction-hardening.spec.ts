@@ -194,7 +194,7 @@ test('workspace favorite synchronizes with Home immediately in both directions',
   await page.evaluate(() => localStorage.removeItem('docflow.favorites.v1'));
   await page.reload();
   const dialog = await openTool(page, 'rotate');
-  const editorFavorite = dialog.locator('.legacy-favorite-button');
+  const editorFavorite = dialog.locator('.legacy-favorite-button[aria-pressed]');
   await expect(editorFavorite).toHaveAttribute('aria-pressed', 'false');
   await editorFavorite.click();
   await expect(editorFavorite).toHaveAttribute('aria-pressed', 'true');
@@ -208,11 +208,11 @@ test('workspace favorite synchronizes with Home immediately in both directions',
   await expect(homeFavorite).toHaveCount(0);
 
   await page.locator('[data-open-tool="rotate"]').first().click();
-  await expect(page.getByRole('dialog', { name: 'Workspace' }).locator('.legacy-favorite-button')).toHaveAttribute('aria-pressed', 'false');
+  await expect(page.getByRole('dialog', { name: 'Workspace' }).locator('.legacy-favorite-button[aria-pressed]')).toHaveAttribute('aria-pressed', 'false');
 });
 
 test('failed lazy tool load leaves a recoverable error instead of endless Loading', async ({ page, browserName }) => {
-  test.skip(browserName !== 'chromium', 'Network interception certification is required in Chromium; cross-engine coverage is best-effort.');
+  test.skip(browserName !== 'chromium', 'Network interception certification is required in Chromium; cross-engine coverage is handled by the dedicated lifecycle suite.');
   let failed = false;
   await page.route('**/*.js', async (route) => {
     if (!failed && route.request().url().includes('/assets/')) {
@@ -229,11 +229,11 @@ test('failed lazy tool load leaves a recoverable error instead of endless Loadin
   await expect(dialog.locator('.workspace-loading')).toHaveCount(0);
   await expect(dialog.getByRole('heading', { name: 'Unable to open Merge PDF' })).toBeVisible();
   await expect(dialog.getByRole('button', { name: 'Retry' })).toBeVisible();
-  await expect(dialog.getByRole('button', { name: 'Close' })).toBeVisible();
+  await expect(dialog.getByRole('button', { name: 'Close', exact: true })).toBeVisible();
 });
 
 test('closing during lazy load invalidates the stale open session', async ({ page, browserName }) => {
-  test.skip(browserName !== 'chromium', 'Deterministic delayed-chunk interception is certified in Chromium.');
+  test.skip(browserName !== 'chromium', 'Deterministic delayed-chunk interception is additionally certified across engines by the dedicated lifecycle suite.');
   let release!: () => void;
   const gate = new Promise<void>((resolve) => { release = resolve; });
   let delayed = false;
