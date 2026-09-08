@@ -12,7 +12,7 @@ async function pdfFixture(pageCount: number): Promise<Buffer> {
 
 async function openTool(page: import('@playwright/test').Page, id: string) {
   await page.goto('/zubaer-ahmed-PDF-TEST/');
-  await page.locator(`[data-open-tool="${id}"]`).click();
+  await page.locator(`#tool-grid [data-open-tool="${id}"]`).click();
   const dialog = page.getByRole('dialog', { name: 'Workspace' });
   await expect(dialog).toBeVisible();
   return dialog;
@@ -103,7 +103,7 @@ test('favoriting inside the workspace immediately updates Home quick access', as
   await page.evaluate(() => localStorage.clear());
   await page.reload();
 
-  await page.locator('[data-open-tool="rotate"]').click();
+  await page.locator('#tool-grid [data-open-tool="rotate"]').click();
   const dialog = page.getByRole('dialog', { name: 'Workspace' });
   await expect(dialog).toBeVisible();
 
@@ -122,7 +122,7 @@ test('a real failed lazy tool chunk load never leaves the user trapped on Loadin
     await route.abort();
   });
 
-  await page.locator('[data-open-tool="merge"]').click();
+  await page.locator('#tool-grid [data-open-tool="merge"]').click();
   const dialog = page.getByRole('dialog', { name: 'Workspace' });
   await expect(dialog).toBeVisible();
   await expect.poll(() => blocked).toBeGreaterThan(0);
@@ -141,7 +141,7 @@ test('closing and reopening a tool starts from a clean preview state', async ({ 
   await dialog.locator('[data-legacy-header-close]').click();
   await expect(dialog).not.toBeVisible();
 
-  await page.locator('[data-open-tool="rotate"]').click();
+  await page.locator('#tool-grid [data-open-tool="rotate"]').click();
   await expect(dialog).toBeVisible();
   await dialog.locator('#workspace-file').setInputFiles({
     name: 'second-open.pdf', mimeType: 'application/pdf', buffer: await pdfFixture(1)
@@ -159,7 +159,7 @@ test('closing a tool while its lazy chunk is still loading does not mount stale 
     await route.continue();
   });
 
-  await page.locator('[data-open-tool="merge"]').click();
+  await page.locator('#tool-grid [data-open-tool="merge"]').click();
   const dialog = page.getByRole('dialog', { name: 'Workspace' });
   await expect(dialog).toBeVisible();
   await expect.poll(() => intercepted).toBeGreaterThan(0);
