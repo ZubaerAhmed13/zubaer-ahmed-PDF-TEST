@@ -42,6 +42,12 @@ test('lazy-load failure is recoverable and Retry really opens the editor', async
 test('closing during a delayed lazy load permanently invalidates that open session', async ({ page }) => {
   let release!: () => void;
   const gate = new Promise<void>((resolve) => { release = resolve; });
+  let released = false;
+  const releaseOnce = (): void => {
+    if (released) return;
+    released = true;
+    release();
+  };
   let delayed = false;
   await page.route(workspaceChunk, async (route) => {
     if (!delayed) {
@@ -52,18 +58,25 @@ test('closing during a delayed lazy load permanently invalidates that open sessi
   });
   await page.goto(appUrl);
 
-  await page.locator('[data-open-tool="merge"]').first().click();
   const dialog = page.getByRole('dialog', { name: 'Workspace' });
-  await expect(dialog.locator('.workspace-loading')).toBeVisible();
-  await page.keyboard.press('Escape');
-  await expect(dialog).toBeHidden();
+  try {
+    await page.locator('[data-open-tool="merge"]').first().click();
+    await expect(dialog.locator('.workspace-loading')).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(dialog).toBeHidden();
 
-  release();
-  await page.waitForTimeout(300);
-  await expect(dialog).toBeHidden();
-  await expect(page.locator('#workspace')).toBeEmpty();
-  await expect(page.locator('#workspace .workspace-grid')).toHaveCount(0);
-  await expect(page.locator('#workspace [data-pre-edit-preview]')).toHaveCount(0);
+    releaseOnce();
+    await page.waitForTimeout(300);
+    await expect(dialog).toBeHidden();
+    await expect(page.locator('#workspace')).toBeEmpty();
+    await expect(page.locator('#workspace .workspace-grid')).toHaveCount(0);
+    await expect(page.locator('#workspace [data-pre-edit-preview]')).toHaveCount(0);
+  } finally {
+    /* Never leave an intercepted module request blocked if an assertion above
+     * fails. An unresolved route handler can otherwise keep browser teardown
+     * alive indefinitely and hide the actual assertion failure from CI. */
+    releaseOnce();
+  }
 
   await page.unroute(workspaceChunk);
   await page.locator('[data-open-tool="merge"]').first().click();
