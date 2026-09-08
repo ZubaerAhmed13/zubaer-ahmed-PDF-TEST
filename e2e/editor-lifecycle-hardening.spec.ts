@@ -24,15 +24,19 @@ test('lazy-load failure is recoverable and Retry really opens the editor', async
   const dialog = page.getByRole('dialog', { name: 'Workspace' });
   await expect(dialog).toBeVisible();
   await expect(dialog.locator('.workspace-loading')).toHaveCount(0);
-  await expect(dialog.getByRole('heading', { name: 'Unable to open Merge PDF' })).toBeVisible();
+  await expect(dialog.getByRole('heading', { name: 'Unable to open Merge PDF', exact: true })).toBeVisible();
   await expect(dialog.getByRole('button', { name: 'Retry' })).toBeVisible();
   await expect(dialog.getByRole('button', { name: 'Close', exact: true })).toBeVisible();
   await expect(dialog.getByRole('button', { name: 'Reload application' })).toBeVisible();
 
+  /* Retry intentionally reloads the document because a rejected native module
+   * import can remain rejected in the current page's module map. The retry id
+   * survives only long enough to reopen the tool once on the fresh page. */
   await dialog.getByRole('button', { name: 'Retry' }).click();
-  await expect(dialog.getByRole('heading', { name: 'Merge PDF' })).toBeVisible();
+  await expect(dialog.getByRole('heading', { name: 'Merge PDF', exact: true })).toBeVisible();
   await expect(dialog.locator('.workspace-loading')).toHaveCount(0);
   await expect(dialog.locator('[data-load-error-for="merge"]')).toHaveCount(0);
+  expect(await page.evaluate(() => sessionStorage.getItem('docflow.retry-tool.v1'))).toBeNull();
 });
 
 test('closing during a delayed lazy load permanently invalidates that open session', async ({ page }) => {
@@ -64,5 +68,5 @@ test('closing during a delayed lazy load permanently invalidates that open sessi
   await page.unroute(workspaceChunk);
   await page.locator('[data-open-tool="merge"]').first().click();
   await expect(dialog).toBeVisible();
-  await expect(dialog.getByRole('heading', { name: 'Merge PDF' })).toBeVisible();
+  await expect(dialog.getByRole('heading', { name: 'Merge PDF', exact: true })).toBeVisible();
 });
