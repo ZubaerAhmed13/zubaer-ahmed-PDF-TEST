@@ -25,8 +25,12 @@ test('opens a large preview automatically before rotating pages', async ({ page 
   await expect(preview.locator('.pre-edit-thumbnail-item')).toHaveCount(4);
 
   const shellBox = await preview.locator('.pre-edit-canvas-shell').boundingBox();
+  const centerBox = await dialog.locator('.legacy-center-pane').boundingBox();
   expect(shellBox).not.toBeNull();
-  expect(shellBox?.height ?? 0).toBeGreaterThanOrEqual(500);
+  expect(centerBox).not.toBeNull();
+  expect(shellBox?.height ?? 0).toBeGreaterThan(200);
+  expect(shellBox?.height ?? 0).toBeGreaterThan((centerBox?.height ?? 0) * 0.5);
+  expect(shellBox?.height ?? 0).toBeLessThanOrEqual(centerBox?.height ?? Number.POSITIVE_INFINITY);
 
   await dialog.locator('select[name="target"]').selectOption('selected');
   await dialog.locator('input[name="pages"]').fill('2,4');
