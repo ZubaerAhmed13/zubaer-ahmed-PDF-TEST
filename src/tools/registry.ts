@@ -24,8 +24,25 @@ export const toolCategories = [
   { id: 'batch', label: 'Batch' }
 ] as const;
 
+function isRecoveryRetry(toolId: string): boolean {
+  try {
+    return new URL(location.href).searchParams.get('docflowRetry') === toolId;
+  } catch {
+    return false;
+  }
+}
+
 function tool(definition: Omit<ToolDefinition, 'load'>): ToolDefinition {
-  return { ...definition, load: () => import('./workspaceWithRecovery') };
+  return {
+    ...definition,
+    /* WebKit can retain a rejected dynamic-module URL across a full document
+     * reload. Retry therefore uses a second statically analyzable Vite module
+     * identity for the exact same source module. It produces a fresh asset URL
+     * without duplicating or changing any workspace/PDF-processing behavior. */
+    load: () => isRecoveryRetry(definition.id)
+      ? import('./workspaceWithRecovery?retry')
+      : import('./workspaceWithRecovery')
+  };
 }
 
 export const tools: ToolDefinition[] = [
