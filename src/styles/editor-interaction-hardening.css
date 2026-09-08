@@ -7,19 +7,24 @@
 .workspace,
 .workspace > .legacy-editor-shell,
 .legacy-editor-body,
+.legacy-files-pane,
+.legacy-settings-pane,
 .legacy-center-pane,
 .legacy-live-preview,
 .legacy-live-preview > .pre-edit-preview,
 .legacy-live-preview .pre-edit-preview-body,
-.legacy-live-preview .pre-edit-viewer-layout {
+.legacy-live-preview .pre-edit-viewer-layout,
+.legacy-live-preview .pre-edit-thumbnail-rail,
+.legacy-live-preview .pre-edit-canvas-shell {
   min-width: 0;
   min-height: 0;
 }
 
-/* The dialog has a definite viewport-relative block size, but percentage
- * heights on its descendants were resolving through an auto-sized chain in
- * Chromium/Firefox/WebKit. Give #workspace the same definite block size as the
- * dialog so the shell's minmax(0, 1fr) body row cannot grow to PDF/list content. */
+/* Keep one definite height chain from the viewport-sized dialog into the
+ * legacy shell. The previous size-containment experiment made nested editor
+ * controls and previews non-actionable in real workflows. Grid min-height:0
+ * plus a definite workspace height is sufficient to let minmax(0, 1fr) tracks
+ * shrink without changing the intrinsic sizing semantics of their contents. */
 .workspace {
   height: min(840px, calc(100dvh - 42px));
   max-height: min(840px, calc(100dvh - 42px));
@@ -32,9 +37,6 @@
   overflow: hidden;
 }
 
-/* Size containment is deliberately applied to the nested grid items, not the
- * document canvas. Oversized pages and long side panes therefore contribute to
- * their own scroll overflow instead of inflating ancestor grid tracks. */
 .legacy-editor-body,
 .legacy-files-pane,
 .legacy-settings-pane,
@@ -45,9 +47,7 @@
 .legacy-live-preview .pre-edit-viewer-layout,
 .legacy-live-preview .pre-edit-thumbnail-rail,
 .legacy-live-preview .pre-edit-canvas-shell {
-  min-height: 0;
   max-height: 100%;
-  contain: size;
 }
 
 .legacy-editor-body,
@@ -59,20 +59,16 @@
   overflow: hidden;
 }
 
-/* Grid items stretch into their assigned track. Avoid a percentage-height
- * chain for the intermediate preview grids; the actual scroll owners below do
- * get an explicit 100% block size once their containing track is definite. */
-.legacy-live-preview .pre-edit-preview-body,
-.legacy-live-preview .pre-edit-viewer-layout {
-  height: auto;
-  align-self: stretch;
-}
-
+/* Let grid items use normal stretch sizing. Do not force 100% heights on
+ * nested scroll owners: that can resolve against the wrong ancestor and can
+ * also cover footer controls in short viewports. */
 .legacy-files-pane,
 .legacy-settings-pane,
+.legacy-live-preview .pre-edit-preview-body,
+.legacy-live-preview .pre-edit-viewer-layout,
 .legacy-live-preview .pre-edit-thumbnail-rail,
 .legacy-live-preview .pre-edit-canvas-shell {
-  height: 100%;
+  height: auto;
   align-self: stretch;
 }
 
@@ -265,8 +261,8 @@
   }
 }
 
-/* When panes stack, the body owns the vertical document flow while the middle
- * editor keeps the minimum working height established by the legacy layout. */
+/* When panes stack, the body owns vertical document flow. The centre editor
+ * retains the legacy working height so the body itself has real scroll range. */
 @media (max-width: 820px) {
   .workspace {
     height: calc(100dvh - 12px);
@@ -279,7 +275,6 @@
     overflow: auto;
     overscroll-behavior: contain;
     -webkit-overflow-scrolling: touch;
-    contain: size;
   }
 
   .legacy-center-pane {
