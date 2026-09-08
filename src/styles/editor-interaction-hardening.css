@@ -59,6 +59,15 @@
   overflow: hidden;
 }
 
+/* Both desktop pane rows and the PDF viewer row must be explicit constrained
+ * tracks. Leaving either grid with an implicit auto row lets large file lists
+ * or zoomed canvases enlarge the row itself, which transfers scrolling to an
+ * ancestor instead of the pane/canvas that owns the interaction. */
+.legacy-editor-body,
+.legacy-live-preview .pre-edit-viewer-layout {
+  grid-template-rows: minmax(0, 1fr);
+}
+
 /* Let grid items use normal stretch sizing. Do not force 100% heights on
  * nested scroll owners: that can resolve against the wrong ancestor and can
  * also cover footer controls in short viewports. */
@@ -270,6 +279,7 @@
   }
 
   .legacy-editor-body {
+    grid-template-rows: max-content 520px max-content;
     max-height: 100%;
     min-height: 0;
     overflow: auto;
