@@ -236,6 +236,12 @@ test('closing during lazy load invalidates the stale open session', async ({ pag
   test.skip(browserName !== 'chromium', 'Deterministic delayed-chunk interception is additionally certified across engines by the dedicated lifecycle suite.');
   let release!: () => void;
   const gate = new Promise<void>((resolve) => { release = resolve; });
+  let released = false;
+  const releaseOnce = (): void => {
+    if (released) return;
+    released = true;
+    release();
+  };
   let delayed = false;
   await page.route('**/*.js', async (route) => {
     if (!delayed && route.request().url().includes('/assets/')) {
@@ -245,15 +251,19 @@ test('closing during lazy load invalidates the stale open session', async ({ pag
     await route.continue();
   });
 
-  await page.locator('[data-open-tool="merge"]').first().click();
   const dialog = page.getByRole('dialog', { name: 'Workspace' });
-  await expect(dialog.locator('.workspace-loading')).toBeVisible();
-  await page.keyboard.press('Escape');
-  await expect(dialog).toBeHidden();
-  release();
-  await page.waitForTimeout(250);
-  await expect(dialog).toBeHidden();
-  await expect(page.locator('#workspace')).toBeEmpty();
+  try {
+    await page.locator('[data-open-tool="merge"]').first().click();
+    await expect(dialog.locator('.workspace-loading')).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(dialog).toBeHidden();
+    releaseOnce();
+    await page.waitForTimeout(250);
+    await expect(dialog).toBeHidden();
+    await expect(page.locator('#workspace')).toBeEmpty();
+  } finally {
+    releaseOnce();
+  }
 
   await page.unroute('**/*.js');
   await page.locator('[data-open-tool="merge"]').first().click();
