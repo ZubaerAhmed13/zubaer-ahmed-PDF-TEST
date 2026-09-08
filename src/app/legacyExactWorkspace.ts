@@ -1,11 +1,17 @@
 import * as pdfjs from 'pdfjs-dist';
 import type { PDFDocumentProxy, RenderTask } from 'pdfjs-dist';
 import { toolCategories, tools, type ToolDefinition } from '../tools/registry';
+import { isFavorite, subscribeFavorites, toggleFavorite } from './favoriteStore';
 
 pdfjs.GlobalWorkerOptions.workerSrc = new URL('pdfjs-dist/build/pdf.worker.min.mjs', import.meta.url).toString();
 
-const FAVORITES_KEY = 'docflow.favorites.v1';
-const fileState = new WeakMap<HTMLElement, File[]>();
+interface TrackedSource {
+  id: string;
+  file: File;
+}
+
+const fileState = new WeakMap<HTMLElement, TrackedSource[]>();
+const fallbackSourceIds = new WeakMap<File, string>();
 const rootObservers = new WeakMap<HTMLElement, MutationObserver>();
 let installed = false;
 
@@ -33,18 +39,8 @@ function findTool(root: HTMLElement): ToolDefinition | null {
   return tools.find((tool) => tool.name === name) ?? null;
 }
 
-function readFavorites(): string[] {
-  try {
-    const value: unknown = JSON.parse(localStorage.getItem(FAVORITES_KEY) ?? '[]');
-    return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
-  } catch {
-    return [];
-  }
-}
-
 function setFavorite(button: HTMLButtonElement, tool: ToolDefinition): void {
-  const favorites = new Set(readFavorites());
-  const active = favorites.has(tool.id);
+  const active = isFavorite(tool.id);
   button.setAttribute('aria-pressed', String(active));
   button.setAttribute('aria-label', active ? `Remove ${tool.name} from favorites` : `Add ${tool.name} to favorites`);
   button.title = active ? 'Remove from favorites' : 'Add to favorites';
@@ -53,6 +49,38 @@ function setFavorite(button: HTMLButtonElement, tool: ToolDefinition): void {
 
 function isPdf(file: File): boolean {
   return file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+}
+
+function isImage(file: File): boolean {
+  return /image\/(png|jpeg)/.test(file.type) || /\.(png|jpe?g)$/i.test(file.name);
+}
+
+function sourceIdFor(file: File, rowId?: string): string {
+  if (rowId) {
+    fallbackSourceIds.set(file, rowId);
+    return rowId;
+  }
+  const existing = fallbackSourceIds.get(file);
+  if (existing) return existing;
+  const id = `legacy-${crypto.randomUUID()}`;
+  fallbackSourceIds.set(file, id);
+  return id;
+}
+
+function supportedFiles(root: HTMLElement, files: File[]): File[] {
+  const input = root.querySelector<HTMLInputElement>('#workspace-file');
+  const pdfInput = Boolean(input?.accept.toLowerCase().includes('pdf'));
+  return files.filter((file) => pdfInput ? isPdf(file) : isImage(file));
+}
+
+function sourcesFromWorkspace(root: HTMLElement, files: File[], append: boolean): TrackedSource[] {
+  const supported = supportedFiles(root, files);
+  if (!supported.length) return [];
+  const rowIds = [...root.querySelectorAll<HTMLElement>('#file-list [data-remove]')]
+    .map((button) => button.dataset.remove)
+    .filter((id): id is string => Boolean(id));
+  const start = append ? Math.max(0, rowIds.length - supported.length) : 0;
+  return supported.map((file, index) => ({ file, id: sourceIdFor(file, rowIds[start + index]) }));
 }
 
 function closeWorkspace(root: HTMLElement): void {
@@ -121,11 +149,9 @@ function createLegacyShell(root: HTMLElement, grid: HTMLElement, tool: ToolDefin
   favorite.className = 'legacy-favorite-button';
   setFavorite(favorite, tool);
   favorite.addEventListener('click', () => {
-    const values = new Set(readFavorites());
-    if (values.has(tool.id)) values.delete(tool.id); else values.add(tool.id);
-    localStorage.setItem(FAVORITES_KEY, JSON.stringify([...values]));
-    setFavorite(favorite, tool);
+    toggleFavorite(tool.id);
   });
+  const unsubscribeFavorite = subscribeFavorites(() => setFavorite(favorite, tool));
   headerActions.append(favorite);
   if (dialogBar) {
     dialogBar.classList.add('legacy-header-close-form');
@@ -202,6 +228,7 @@ function createLegacyShell(root: HTMLElement, grid: HTMLElement, tool: ToolDefin
   rootObservers.set(root, observer);
   root.addEventListener('docflow-cleanup', () => {
     observer.disconnect();
+    unsubscribeFavorite();
     rootObservers.delete(root);
     fileState.delete(root);
   }, { once: true });
@@ -234,7 +261,7 @@ function syncLegacyWorkspace(root: HTMLElement): void {
   if (empty) empty.hidden = Boolean(preEdit && !preEdit.hidden);
 
   const overview = shell.querySelector<HTMLButtonElement>('[data-legacy-overview]');
-  if (overview) overview.disabled = !(fileState.get(root) ?? []).some(isPdf);
+  if (overview) overview.disabled = !(fileState.get(root) ?? []).some((source) => isPdf(source.file));
 }
 
 function enhanceAvailableWorkspaces(): void {
@@ -250,9 +277,13 @@ function updateFilesFromInput(input: HTMLInputElement): void {
   const root = input.closest<HTMLElement>('.workspace');
   if (!root || !input.files?.length) return;
   const selected = [...input.files];
-  const current = fileState.get(root) ?? [];
-  fileState.set(root, input.multiple ? [...current, ...selected] : selected.slice(0, 1));
-  queueMicrotask(() => syncLegacyWorkspace(root));
+  const append = input.multiple;
+  queueMicrotask(() => {
+    const incoming = sourcesFromWorkspace(root, selected, append);
+    const current = fileState.get(root) ?? [];
+    fileState.set(root, append ? [...current, ...incoming] : incoming.slice(0, 1));
+    syncLegacyWorkspace(root);
+  });
 }
 
 function updateFilesFromDrop(dropZone: HTMLElement, files: FileList): void {
@@ -260,20 +291,23 @@ function updateFilesFromDrop(dropZone: HTMLElement, files: FileList): void {
   const input = dropZone.querySelector<HTMLInputElement>('#workspace-file');
   if (!root || !input || !files.length) return;
   const selected = [...files];
-  const current = fileState.get(root) ?? [];
-  fileState.set(root, input.multiple ? [...current, ...selected] : selected.slice(0, 1));
-  queueMicrotask(() => syncLegacyWorkspace(root));
+  const append = input.multiple;
+  queueMicrotask(() => {
+    const incoming = sourcesFromWorkspace(root, selected, append);
+    const current = fileState.get(root) ?? [];
+    fileState.set(root, append ? [...current, ...incoming] : incoming.slice(0, 1));
+    syncLegacyWorkspace(root);
+  });
 }
 
 function removeTrackedFile(button: HTMLElement): void {
   const root = button.closest<HTMLElement>('.workspace');
   if (!root) return;
   const current = [...(fileState.get(root) ?? [])];
-  const aria = button.getAttribute('aria-label') ?? '';
-  const name = aria.startsWith('Remove ') ? aria.slice('Remove '.length) : '';
-  const index = name ? current.findIndex((file) => file.name === name) : -1;
-  if (index >= 0) current.splice(index, 1);
-  else if (current.length === 1) current.length = 0;
+  const sourceId = button.dataset.remove;
+  const index = sourceId ? current.findIndex((source) => source.id === sourceId) : -1;
+  if (index < 0) return;
+  current.splice(index, 1);
   fileState.set(root, current);
   queueMicrotask(() => syncLegacyWorkspace(root));
 }
@@ -290,11 +324,15 @@ interface OverviewState {
 }
 
 async function openOverview(root: HTMLElement): Promise<void> {
-  const files = fileState.get(root) ?? [];
+  const sources = fileState.get(root) ?? [];
   const sourceButtons = [...root.querySelectorAll<HTMLButtonElement>('[data-pre-edit-source]')];
   const activeSource = sourceButtons.find((button) => button.getAttribute('aria-current') === 'true');
+  const sourceId = activeSource?.dataset.sourceId;
   const sourceIndex = activeSource ? Number(activeSource.dataset.preEditSource) : 0;
-  const file = files[sourceIndex] ?? files.find(isPdf);
+  const source = (sourceId ? sources.find((candidate) => candidate.id === sourceId) : undefined)
+    ?? sources[sourceIndex]
+    ?? sources.find((candidate) => isPdf(candidate.file));
+  const file = source?.file;
   if (!file || !isPdf(file)) return;
 
   const dialog = root.closest<HTMLDialogElement>('.workspace-dialog');
@@ -440,8 +478,8 @@ async function openOverview(root: HTMLElement): Promise<void> {
     const fit = async (mode: 'page' | 'width'): Promise<void> => {
       const page = await state.pdfDocument.getPage(state.currentPage);
       const base = page.getViewport({ scale: 1 });
-      const availableWidth = Math.max(280, canvasShell.clientWidth - 48);
-      const availableHeight = Math.max(360, canvasShell.clientHeight - 36);
+      const availableWidth = Math.max(1, canvasShell.clientWidth - 48);
+      const availableHeight = Math.max(1, canvasShell.clientHeight - 36);
       state.scale = mode === 'width' ? availableWidth / base.width : Math.min(availableWidth / base.width, availableHeight / base.height);
       page.cleanup();
       await renderPage(state.currentPage);
@@ -478,8 +516,11 @@ async function openOverview(root: HTMLElement): Promise<void> {
     canvasShell.addEventListener('keydown', (event) => {
       if (event.key === 'ArrowLeft' || event.key === 'PageUp') { event.preventDefault(); void renderPage(state.currentPage - 1); }
       else if (event.key === 'ArrowRight' || event.key === 'PageDown') { event.preventDefault(); void renderPage(state.currentPage + 1); }
+      else if (event.key === 'Home') { event.preventDefault(); void renderPage(1); }
+      else if (event.key === 'End') { event.preventDefault(); void renderPage(state.pdfDocument.numPages); }
       else if (event.key === '+' || event.key === '=') { event.preventDefault(); state.scale = Math.min(4, state.scale * 1.15); void renderPage(state.currentPage); }
       else if (event.key === '-') { event.preventDefault(); state.scale = Math.max(.3, state.scale / 1.15); void renderPage(state.currentPage); }
+      else if (event.key === '0') { event.preventDefault(); state.scale = 1; void renderPage(state.currentPage); }
     });
     root.addEventListener('docflow-cleanup', () => { void close(); }, { once: true });
 

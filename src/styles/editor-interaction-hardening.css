@@ -1,0 +1,334 @@
+/* Critical interaction hardening for the restored editor shell.
+ * Keep scroll ownership inside the three panes and the PDF viewport rather
+ * than turning the entire dialog into a competing scroll container.
+ */
+
+.workspace-dialog,
+.workspace,
+.workspace > .legacy-editor-shell,
+.legacy-editor-body,
+.legacy-files-pane,
+.legacy-settings-pane,
+.legacy-center-pane,
+.legacy-live-preview,
+.legacy-live-preview > .pre-edit-preview,
+.legacy-live-preview .pre-edit-preview-body,
+.legacy-live-preview .pre-edit-viewer-layout,
+.legacy-live-preview .pre-edit-thumbnail-rail,
+.legacy-live-preview .pre-edit-canvas-shell {
+  min-width: 0;
+  min-height: 0;
+}
+
+/* Keep one definite height chain from the viewport-sized dialog into the
+ * legacy shell. The previous size-containment experiment made nested editor
+ * controls and previews non-actionable in real workflows. Grid min-height:0
+ * plus a definite workspace height is sufficient to let minmax(0, 1fr) tracks
+ * shrink without changing the intrinsic sizing semantics of their contents. */
+.workspace {
+  height: min(840px, calc(100dvh - 42px));
+  max-height: min(840px, calc(100dvh - 42px));
+  overflow: hidden;
+}
+
+.workspace > .legacy-editor-shell {
+  height: 100%;
+  max-height: 100%;
+  overflow: hidden;
+}
+
+.legacy-editor-body,
+.legacy-files-pane,
+.legacy-settings-pane,
+.legacy-center-pane,
+.legacy-live-preview,
+.legacy-live-preview > .pre-edit-preview,
+.legacy-live-preview .pre-edit-preview-body,
+.legacy-live-preview .pre-edit-viewer-layout,
+.legacy-live-preview .pre-edit-thumbnail-rail,
+.legacy-live-preview .pre-edit-canvas-shell {
+  max-height: 100%;
+}
+
+.legacy-editor-body,
+.legacy-center-pane,
+.legacy-live-preview,
+.legacy-live-preview > .pre-edit-preview,
+.legacy-live-preview .pre-edit-preview-body,
+.legacy-live-preview .pre-edit-viewer-layout {
+  overflow: hidden;
+}
+
+/* Both desktop pane rows and the PDF viewer row must be explicit constrained
+ * tracks. Leaving either grid with an implicit auto row lets large file lists
+ * or zoomed canvases enlarge the row itself, which transfers scrolling to an
+ * ancestor instead of the pane/canvas that owns the interaction. */
+.legacy-editor-body,
+.legacy-live-preview .pre-edit-viewer-layout {
+  grid-template-rows: minmax(0, 1fr);
+}
+
+/* Let grid items use normal stretch sizing. Do not force 100% heights on
+ * nested scroll owners: that can resolve against the wrong ancestor and can
+ * also cover footer controls in short viewports. */
+.legacy-files-pane,
+.legacy-settings-pane,
+.legacy-live-preview .pre-edit-preview-body,
+.legacy-live-preview .pre-edit-viewer-layout,
+.legacy-live-preview .pre-edit-thumbnail-rail,
+.legacy-live-preview .pre-edit-canvas-shell {
+  height: auto;
+  align-self: stretch;
+}
+
+.legacy-files-pane,
+.legacy-settings-pane,
+.legacy-live-preview .pre-edit-thumbnail-rail,
+.legacy-live-preview .pre-edit-canvas-shell,
+.legacy-overview-canvas-shell {
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+.legacy-files-pane,
+.legacy-settings-pane,
+.legacy-live-preview .pre-edit-thumbnail-rail {
+  overflow: auto;
+}
+
+/* The viewer toolbar already exists in preEditPreview.ts. The legacy visual
+ * adapter previously hid every interactive control, making zoom impossible. */
+.legacy-live-preview .pre-edit-preview-body {
+  grid-template-rows: minmax(0, 1fr) auto;
+}
+
+.legacy-live-preview .pre-edit-viewer-toolbar {
+  min-height: 44px;
+  padding: 5px 10px;
+  flex-wrap: wrap;
+  row-gap: 4px;
+  overflow-x: auto;
+  scrollbar-gutter: auto;
+}
+
+.legacy-live-preview .pre-edit-viewer-toolbar button,
+.legacy-live-preview .pre-edit-viewer-toolbar .pre-edit-toolbar-divider,
+.legacy-live-preview .pre-edit-viewer-toolbar [data-pre-edit-zoom] {
+  display: initial;
+}
+
+.legacy-live-preview .pre-edit-viewer-toolbar button {
+  min-height: 30px;
+  padding: 0 9px;
+  border: 1px solid #d5dfe8;
+  border-radius: 6px;
+  background: #fff;
+  color: #405366;
+  font-size: 11px;
+  font-weight: 720;
+  cursor: pointer;
+}
+
+.legacy-live-preview .pre-edit-viewer-toolbar button:hover {
+  border-color: #bdcad5;
+  background: #f8fafc;
+}
+
+.legacy-live-preview .pre-edit-viewer-toolbar [data-pre-edit-status] {
+  min-width: 92px;
+  color: #4d6072;
+  font-weight: 760;
+  text-align: center;
+}
+
+.legacy-live-preview .pre-edit-viewer-toolbar [data-pre-edit-zoom] {
+  min-width: 42px;
+  color: #4d6072;
+  font-variant-numeric: tabular-nums;
+  font-weight: 760;
+  text-align: center;
+}
+
+.legacy-live-preview .pre-edit-toolbar-divider {
+  width: 1px;
+  height: 22px;
+  margin: 0 2px;
+  background: #dfe5ec;
+}
+
+/* This is the authoritative document scroll container. Using block layout is
+ * deliberate: an oversized centered grid/flex child can create unreachable
+ * negative overflow on the left. Auto block margins center only while the page
+ * fits and naturally collapse when it becomes wider than the viewport. */
+.legacy-live-preview .pre-edit-canvas-shell {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  min-height: 0;
+  padding: 18px 24px;
+  overflow: auto;
+  display: block;
+  scrollbar-gutter: auto;
+  touch-action: pan-x pan-y;
+  outline: none;
+}
+
+.legacy-live-preview .pre-edit-canvas-shell canvas {
+  display: block;
+  width: auto;
+  max-width: none;
+  margin: 0 auto;
+}
+
+/* Keep both preview surfaces WebKit/touch-friendly. */
+.pre-edit-canvas-shell,
+.legacy-overview-canvas-shell {
+  touch-action: pan-x pan-y;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Recoverable lazy-load failure state. This is intentionally simple and uses
+ * the existing button language rather than introducing another workspace UI. */
+.workspace-load-error {
+  width: min(620px, calc(100% - 32px));
+  min-height: 280px;
+  margin: 24px auto;
+  padding: 32px;
+  display: grid;
+  align-content: center;
+  justify-items: start;
+  gap: 12px;
+  border: 1px solid #dce4eb;
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 12px 30px rgba(34, 50, 67, .08);
+  color: #5e7082;
+}
+
+.workspace-load-error h3 {
+  margin: 0;
+  color: #26384a;
+  font-size: 20px;
+}
+
+.workspace-load-error p {
+  margin: 0;
+  line-height: 1.5;
+}
+
+.workspace-load-error-actions {
+  margin-top: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.workspace-load-error-actions button {
+  min-height: 40px;
+  padding: 0 14px;
+  border-radius: 7px;
+}
+
+/* The footer is a real grid row, never an overlay over the PDF viewport. */
+.legacy-editor-footer {
+  position: relative;
+  z-index: 2;
+}
+
+/* Short laptop windows need more of the viewport reserved for the document. */
+@media (min-width: 821px) and (max-height: 700px) {
+  .workspace > .legacy-editor-shell {
+    grid-template-rows: 82px 38px minmax(0, 1fr) 58px;
+  }
+
+  .legacy-editor-header {
+    padding-top: 10px;
+    padding-bottom: 10px;
+  }
+
+  .legacy-center-pane {
+    grid-template-rows: 52px minmax(0, 1fr);
+  }
+
+  .legacy-center-toolbar {
+    padding-top: 6px;
+    padding-bottom: 6px;
+  }
+
+  .legacy-center-toolbar button {
+    min-height: 34px;
+  }
+
+  .legacy-editor-footer {
+    padding-inline: 12px;
+  }
+
+  .legacy-footer-actions .primary,
+  .legacy-footer-actions .secondary,
+  .legacy-footer-close {
+    min-height: 38px;
+  }
+}
+
+/* When panes stack, the body owns vertical document flow. The centre editor
+ * retains the legacy working height so the body itself has real scroll range. */
+@media (max-width: 820px) {
+  .workspace {
+    height: calc(100dvh - 12px);
+    max-height: calc(100dvh - 12px);
+  }
+
+  .legacy-editor-body {
+    grid-template-rows: max-content 520px max-content;
+    max-height: 100%;
+    min-height: 0;
+    overflow: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* On the stacked editor, vertical wheel/touchpad movement belongs to the
+   * body once a nested preview reaches its boundary. Keep horizontal canvas
+   * panning local while allowing vertical chaining in Chromium and WebKit. */
+  .legacy-live-preview .pre-edit-canvas-shell,
+  .legacy-live-preview .pre-edit-thumbnail-rail {
+    overscroll-behavior-x: contain;
+    overscroll-behavior-y: auto;
+  }
+
+  .legacy-center-pane {
+    min-height: 520px;
+    height: 520px;
+    max-height: 520px;
+  }
+
+  .legacy-center-pane,
+  .legacy-live-preview,
+  .legacy-live-preview > .pre-edit-preview {
+    min-width: 0;
+  }
+
+  .legacy-live-preview .pre-edit-viewer-toolbar {
+    justify-content: flex-start;
+  }
+}
+
+@media (max-width: 520px) {
+  .legacy-live-preview .pre-edit-viewer-layout {
+    grid-template-columns: 118px minmax(0, 1fr);
+  }
+
+  .legacy-live-preview .pre-edit-canvas-shell {
+    padding: 10px;
+  }
+
+  .legacy-live-preview .pre-edit-viewer-toolbar {
+    max-height: 84px;
+  }
+
+  .workspace-load-error {
+    width: calc(100% - 20px);
+    margin: 10px auto;
+    padding: 20px;
+  }
+}

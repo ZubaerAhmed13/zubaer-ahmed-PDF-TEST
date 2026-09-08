@@ -1,7 +1,7 @@
 import { toolCategories, tools } from '../tools/registry';
+import { getFavorites, setFavorite, subscribeFavorites } from './favoriteStore';
 
 const RECENT_KEY = 'docflow.recent-tools.v1';
-const FAVORITES_KEY = 'docflow.favorites.v1';
 
 function readList(key: string): string[] {
   try {
@@ -12,11 +12,17 @@ function readList(key: string): string[] {
   }
 }
 
+function escapeHtml(value: string): string {
+  return value.replace(/[&<>"']/g, (character) => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+  }[character] ?? character));
+}
+
 export function createApp(root: HTMLDivElement | null): void {
   if (!root) throw new Error('APP_ROOT_MISSING');
 
   let recent = readList(RECENT_KEY);
-  const favorites = new Set(readList(FAVORITES_KEY));
+  let favorites = getFavorites();
   const migratedCount = tools.filter((tool) => tool.status === 'Migrated').length;
   const categoryCount = new Set(tools.map((tool) => tool.category)).size;
 
@@ -159,6 +165,8 @@ export function createApp(root: HTMLDivElement | null): void {
   if (!grid || !search || !workspaceDialog || !workspace || !infoDialog || !infoContent || !favoriteTools || !recentTools) return;
 
   let category = 'all';
+  let workspaceGeneration = 0;
+  let workspaceTrigger: HTMLElement | null = null;
 
   const toolButtons = (ids: string[], emptyMessage: string): string => {
     const available = ids.map((id) => tools.find((tool) => tool.id === id)).filter((tool): tool is NonNullable<typeof tool> => Boolean(tool));
@@ -192,18 +200,54 @@ export function createApp(root: HTMLDivElement | null): void {
     `).join('') || `<div class="empty-state"><strong>No tools found</strong><p>Try another search or category.</p></div>`;
   };
 
-  const saveFavorites = (): void => localStorage.setItem(FAVORITES_KEY, JSON.stringify([...favorites]));
+  subscribeFavorites((nextFavorites) => {
+    favorites = new Set(nextFavorites);
+    render();
+    renderQuickAccess();
+  });
 
-  const openTool = async (id: string): Promise<void> => {
+  const sessionIsActive = (generation: number): boolean => generation === workspaceGeneration && workspaceDialog.open;
+
+  const openTool = async (id: string, trigger: HTMLElement | null = null): Promise<void> => {
     const tool = tools.find((candidate) => candidate.id === id);
     if (!tool) return;
+    const generation = ++workspaceGeneration;
+    if (trigger) workspaceTrigger = trigger;
     recent = [id, ...recent.filter((item) => item !== id)].slice(0, 6);
     localStorage.setItem(RECENT_KEY, JSON.stringify(recent));
     renderQuickAccess();
-    workspace.innerHTML = `<div class="workspace-loading" role="status">Loading ${tool.name}…</div>`;
-    workspaceDialog.showModal();
-    const module = await tool.load();
-    module.mountWorkspace(workspace, tool);
+    workspace.innerHTML = `<div class="workspace-loading" role="status">Loading ${escapeHtml(tool.name)}…</div>`;
+    if (!workspaceDialog.open) workspaceDialog.showModal();
+
+    try {
+      const module = await tool.load();
+      if (!sessionIsActive(generation)) return;
+      module.mountWorkspace(workspace, tool);
+    } catch (error) {
+      if (!sessionIsActive(generation)) return;
+      console.error('DocFlow tool load failed', {
+        toolId: tool.id,
+        timestamp: new Date().toISOString(),
+        buildMode: import.meta.env.MODE,
+        error
+      });
+      workspace.innerHTML = `
+        <section class="workspace-load-error" role="alert" data-load-error-for="${escapeHtml(tool.id)}">
+          <h3>Unable to open ${escapeHtml(tool.name)}</h3>
+          <p>The editor files could not be loaded.</p>
+          <p>If the application was recently updated, reload the page to use the newest deployment.</p>
+          <div class="workspace-load-error-actions">
+            <button class="primary" type="button" data-load-retry>Retry</button>
+            <button class="secondary" type="button" data-load-close>Close</button>
+            <button class="secondary" type="button" data-load-reload>Reload application</button>
+          </div>
+        </section>
+      `;
+      workspace.querySelector<HTMLButtonElement>('[data-load-retry]')?.addEventListener('click', () => { void openTool(id, workspaceTrigger); });
+      workspace.querySelector<HTMLButtonElement>('[data-load-close]')?.addEventListener('click', () => workspaceDialog.close());
+      workspace.querySelector<HTMLButtonElement>('[data-load-reload]')?.addEventListener('click', () => location.reload());
+      workspace.querySelector<HTMLButtonElement>('[data-load-retry]')?.focus();
+    }
   };
 
   grid.addEventListener('click', (event) => {
@@ -212,20 +256,16 @@ export function createApp(root: HTMLDivElement | null): void {
     if (fav) {
       const id = fav.dataset.favorite;
       if (!id) return;
-      if (favorites.has(id)) favorites.delete(id);
-      else favorites.add(id);
-      saveFavorites();
-      render();
-      renderQuickAccess();
+      setFavorite(id, !favorites.has(id));
       return;
     }
     const open = target.closest<HTMLButtonElement>('[data-open-tool]');
-    if (open?.dataset.openTool) void openTool(open.dataset.openTool);
+    if (open?.dataset.openTool) void openTool(open.dataset.openTool, open);
   });
 
   root.querySelector('.quick-access')?.addEventListener('click', (event) => {
     const open = (event.target as HTMLElement).closest<HTMLButtonElement>('[data-open-tool]');
-    if (open?.dataset.openTool) void openTool(open.dataset.openTool);
+    if (open?.dataset.openTool) void openTool(open.dataset.openTool, open);
   });
 
   search.addEventListener('input', render);
@@ -238,12 +278,13 @@ export function createApp(root: HTMLDivElement | null): void {
   });
 
   root.addEventListener('click', (event) => {
-    const action = (event.target as HTMLElement).closest<HTMLElement>('[data-action]')?.dataset.action;
+    const actionTarget = (event.target as HTMLElement).closest<HTMLElement>('[data-action]');
+    const action = actionTarget?.dataset.action;
     if (action === 'focus-search') {
       search.focus();
       search.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
-    if (action === 'open') void openTool('preview');
+    if (action === 'open') void openTool('preview', actionTarget ?? null);
     if (action === 'privacy') {
       infoContent.innerHTML = '<h2>Privacy</h2><p>DocFlow performs the migrated PDF-processing core in your browser. No analytics, telemetry, crash reporting, trackers, or remote document-processing APIs are configured.</p><p>Favorites and recent-tool IDs are stored in localStorage. Lightweight project recovery stores the selected tool, settings, and file metadata (name, size, type, and last-modified time) in IndexedDB. PDF/image contents and encryption passwords are not stored in localStorage or the recovery database; original files must be reselected after recovery.</p>';
       infoDialog.showModal();
@@ -266,8 +307,12 @@ export function createApp(root: HTMLDivElement | null): void {
   });
 
   workspaceDialog.addEventListener('close', () => {
+    workspaceGeneration += 1;
     workspace.dispatchEvent(new CustomEvent('docflow-cleanup'));
     workspace.replaceChildren();
+    const trigger = workspaceTrigger;
+    workspaceTrigger = null;
+    if (trigger?.isConnected) queueMicrotask(() => trigger.focus());
   });
 
   render();

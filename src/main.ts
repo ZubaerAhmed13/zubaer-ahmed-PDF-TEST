@@ -8,7 +8,9 @@ import './styles/pre-edit-preview.css';
 import './styles/legacy-exact-workspace.css';
 import './styles/legacy-screenshot-parity.css';
 import './styles/state.css';
+import './styles/editor-interaction-hardening.css';
 import { createApp } from './app/createApp';
+import { installEditorLifecycleHardening } from './app/editorLifecycleHardening';
 import { installPreEditPreview } from './app/preEditPreview';
 import { installPreEditPreviewLabels } from './app/preEditPreviewLabels';
 import { installLegacyExactLoopGuard } from './app/legacyExactLoopGuard';
@@ -18,6 +20,7 @@ import { installLegacyScreenshotParity } from './app/legacyScreenshotParity';
 import { registerServiceWorker } from './pwa';
 
 createApp(document.querySelector<HTMLDivElement>('#app'));
+installEditorLifecycleHardening();
 installPreEditPreviewLabels();
 installPreEditPreview();
 // Install the integration guard before the legacy workspace observers so it can
