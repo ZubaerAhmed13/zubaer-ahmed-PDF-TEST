@@ -113,8 +113,8 @@ function resumeRetriedTool(): void {
 }
 
 function wheelDeltaPixels(event: WheelEvent, body: HTMLElement): number {
-  if (event.deltaMode === WheelEvent.DOM_DELTA_LINE) return event.deltaY * 16;
-  if (event.deltaMode === WheelEvent.DOM_DELTA_PAGE) return event.deltaY * Math.max(body.clientHeight, 1);
+  if (event.deltaMode === event.DOM_DELTA_LINE) return event.deltaY * 16;
+  if (event.deltaMode === event.DOM_DELTA_PAGE) return event.deltaY * Math.max(body.clientHeight, 1);
   return event.deltaY;
 }
 
