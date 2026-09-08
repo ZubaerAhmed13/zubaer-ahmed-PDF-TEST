@@ -59,6 +59,12 @@ test('pre-edit viewer exposes working zoom controls and owns vertical/horizontal
   await page.mouse.wheel(320, 0);
   await expect.poll(() => shell.evaluate((element) => element.scrollLeft)).toBeGreaterThan(beforeX);
 
+  const documentOverflow = await page.evaluate(() => ({
+    scrollWidth: document.documentElement.scrollWidth,
+    viewportWidth: window.innerWidth
+  }));
+  expect(documentOverflow.scrollWidth).toBeLessThanOrEqual(documentOverflow.viewportWidth + 1);
+
   await preview.getByRole('button', { name: 'Fit width' }).click();
   const fitWidth = await shell.evaluate((element) => {
     const canvas = element.querySelector('canvas');
@@ -76,6 +82,88 @@ test('pre-edit viewer exposes working zoom controls and owns vertical/horizontal
   });
   expect(fitPage.width).toBeLessThanOrEqual(fitPage.clientWidth);
   expect(fitPage.height).toBeLessThanOrEqual(fitPage.clientHeight);
+});
+
+test('Files and Settings panes independently consume wheel scrolling on a short laptop viewport', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 600 });
+  let dialog = await openTool(page, 'merge');
+  const inputs = await Promise.all(Array.from({ length: 10 }, async (_, index) => ({
+    name: `source-${index + 1}.pdf`,
+    mimeType: 'application/pdf',
+    buffer: await pdfFixture(1)
+  })));
+  await dialog.locator('#workspace-file').setInputFiles(inputs);
+
+  const filesPane = dialog.locator('.legacy-files-pane');
+  const filesMetrics = await filesPane.evaluate((element) => ({ clientHeight: element.clientHeight, scrollHeight: element.scrollHeight }));
+  expect(filesMetrics.scrollHeight).toBeGreaterThan(filesMetrics.clientHeight);
+  await filesPane.hover();
+  const filesBefore = await filesPane.evaluate((element) => element.scrollTop);
+  await page.mouse.wheel(0, 300);
+  await expect.poll(() => filesPane.evaluate((element) => element.scrollTop)).toBeGreaterThan(filesBefore);
+
+  await dialog.locator('.legacy-footer-close').click();
+  await expect(dialog).toBeHidden();
+  dialog = await openTool(page, 'forms');
+  await dialog.locator('#workspace-file').setInputFiles({
+    name: 'form-source.pdf',
+    mimeType: 'application/pdf',
+    buffer: await pdfFixture(1)
+  });
+
+  const settingsPane = dialog.locator('.legacy-settings-pane');
+  const settingsMetrics = await settingsPane.evaluate((element) => ({ clientHeight: element.clientHeight, scrollHeight: element.scrollHeight }));
+  expect(settingsMetrics.scrollHeight).toBeGreaterThan(settingsMetrics.clientHeight);
+  await settingsPane.hover();
+  const settingsBefore = await settingsPane.evaluate((element) => element.scrollTop);
+  await page.mouse.wheel(0, 300);
+  await expect.poll(() => settingsPane.evaluate((element) => element.scrollTop)).toBeGreaterThan(settingsBefore);
+});
+
+test('representative restored editors remain navigable at constrained desktop height', async ({ page }) => {
+  await page.setViewportSize({ width: 1366, height: 768 });
+  for (const toolId of ['merge', 'remove-pages', 'rotate', 'compress', 'forms']) {
+    const dialog = await openTool(page, toolId);
+    await dialog.locator('#workspace-file').setInputFiles({
+      name: `${toolId}.pdf`,
+      mimeType: 'application/pdf',
+      buffer: await pdfFixture(2)
+    });
+    const preview = dialog.locator('[data-pre-edit-preview]');
+    await expect(preview).toBeVisible();
+    await expect(preview).toHaveAttribute('data-preview-ready', 'true');
+    await expect(preview.locator('.pre-edit-canvas-shell')).toBeVisible();
+    await expect(dialog.locator('.legacy-footer-close')).toBeVisible();
+    await dialog.locator('.legacy-footer-close').click();
+    await expect(dialog).toBeHidden();
+  }
+});
+
+test('stacked mobile editor remains scrollable without browser-page horizontal overflow', async ({ page }) => {
+  await page.setViewportSize({ width: 430, height: 932 });
+  const dialog = await openTool(page, 'remove-pages');
+  await dialog.locator('#workspace-file').setInputFiles({
+    name: 'mobile-source.pdf',
+    mimeType: 'application/pdf',
+    buffer: await pdfFixture(2, 700, 1000)
+  });
+
+  const preview = dialog.locator('[data-pre-edit-preview]');
+  await expect(preview).toHaveAttribute('data-preview-ready', 'true');
+  await expect(preview.getByRole('button', { name: 'Zoom in' })).toBeVisible();
+  const body = dialog.locator('.legacy-editor-body');
+  const bodyMetrics = await body.evaluate((element) => ({ clientHeight: element.clientHeight, scrollHeight: element.scrollHeight }));
+  expect(bodyMetrics.scrollHeight).toBeGreaterThan(bodyMetrics.clientHeight);
+  await body.hover();
+  const bodyBefore = await body.evaluate((element) => element.scrollTop);
+  await page.mouse.wheel(0, 300);
+  await expect.poll(() => body.evaluate((element) => element.scrollTop)).toBeGreaterThan(bodyBefore);
+
+  const documentOverflow = await page.evaluate(() => ({
+    scrollWidth: document.documentElement.scrollWidth,
+    viewportWidth: window.innerWidth
+  }));
+  expect(documentOverflow.scrollWidth).toBeLessThanOrEqual(documentOverflow.viewportWidth + 1);
 });
 
 test('duplicate filenames keep the tool source and preview source synchronized', async ({ page }) => {
