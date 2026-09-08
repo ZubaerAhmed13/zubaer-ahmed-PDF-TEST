@@ -287,6 +287,15 @@
     -webkit-overflow-scrolling: touch;
   }
 
+  /* On the stacked editor, vertical wheel/touchpad movement belongs to the
+   * body once a nested preview reaches its boundary. Keep horizontal canvas
+   * panning local while allowing vertical chaining in Chromium and WebKit. */
+  .legacy-live-preview .pre-edit-canvas-shell,
+  .legacy-live-preview .pre-edit-thumbnail-rail {
+    overscroll-behavior-x: contain;
+    overscroll-behavior-y: auto;
+  }
+
   .legacy-center-pane {
     min-height: 520px;
     height: 520px;
