@@ -48,15 +48,39 @@ function retryFailedModule(errorPanel: HTMLElement, event: Event): void {
 }
 
 function resumeRetriedTool(): void {
-  const toolId = sessionStorage.getItem(RETRY_TOOL_KEY);
+  let toolId: string | null = null;
+  try {
+    toolId = sessionStorage.getItem(RETRY_TOOL_KEY);
+  } catch {
+    return;
+  }
   if (!toolId) return;
-  sessionStorage.removeItem(RETRY_TOOL_KEY);
 
-  queueMicrotask(() => {
-    const trigger = document.querySelector<HTMLElement>(`#tool-grid [data-open-tool="${CSS.escape(toolId)}"]`)
-      ?? document.querySelector<HTMLElement>(`[data-open-tool="${CSS.escape(toolId)}"]`);
-    trigger?.click();
-  });
+  /* WebKit may restore the document before the tool grid is fully connected.
+   * Keep the retry marker until a real trigger exists, then consume it exactly
+   * once. Bound the animation-frame retries so a stale/invalid id cannot leave
+   * a permanent loop or session marker behind. */
+  let attempts = 0;
+  const resume = (): void => {
+    const escapedToolId = CSS.escape(toolId!);
+    const trigger = document.querySelector<HTMLElement>(`#tool-grid [data-open-tool="${escapedToolId}"]`)
+      ?? document.querySelector<HTMLElement>(`[data-open-tool="${escapedToolId}"]`);
+
+    if (!trigger?.isConnected) {
+      attempts += 1;
+      if (attempts < 30) {
+        requestAnimationFrame(resume);
+      } else {
+        try { sessionStorage.removeItem(RETRY_TOOL_KEY); } catch { /* storage unavailable */ }
+      }
+      return;
+    }
+
+    try { sessionStorage.removeItem(RETRY_TOOL_KEY); } catch { /* storage unavailable */ }
+    trigger.click();
+  };
+
+  requestAnimationFrame(() => requestAnimationFrame(resume));
 }
 
 export function installEditorLifecycleHardening(): void {
