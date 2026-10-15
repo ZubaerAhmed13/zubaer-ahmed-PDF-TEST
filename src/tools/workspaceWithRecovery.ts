@@ -49,7 +49,7 @@ export function mountWorkspace(container: HTMLDivElement, tool: ToolDefinition):
   const optionsForm = container.querySelector<HTMLFormElement>('#tool-options');
   const memoryWarning = container.querySelector<HTMLDivElement>('#memory-warning');
   if (!fileInput || !fileList || !optionsForm || !memoryWarning) return;
-  if (tool.id === 'forms') optionsForm.dataset.docflowSensitiveForm = 'true';
+  if (['forms', 'annotate', 'sign-visual', 'metadata-edit', 'text-search'].includes(tool.id)) optionsForm.dataset.docflowSensitiveForm = 'true';
 
   const recoveryPanel = document.createElement('div');
   recoveryPanel.className = 'notice';

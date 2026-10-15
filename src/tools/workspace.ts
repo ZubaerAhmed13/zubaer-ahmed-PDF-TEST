@@ -3,13 +3,14 @@ import type { InputFile, OperationResult, WorkerOperation } from '../pdf/types';
 import { runWorkerOperation, type RunningOperation } from '../pdf/workerClient';
 import { createPreview, pdfToImages, type PreviewController } from '../pdf/render';
 import { mountVisualFormEditor, type InspectedFormField } from '../app/visualFormEditor';
+import { mountSignaturePad } from '../app/signaturePad';
 
 interface FileRecord {
   file: File;
   id: string;
 }
 
-const pdfOnly = new Set(['preview','merge','split','remove-pages','extract-pages','organize','rotate','page-numbers','watermark','pdf-to-images','forms','metadata','compress']);
+const pdfOnly = new Set(['preview','merge','split','remove-pages','extract-pages','organize','rotate','page-numbers','watermark','pdf-to-images','forms','metadata','compress','crop','annotate','sign-visual','metadata-edit','text-search']);
 const THUMBNAIL_ROW_HEIGHT = 154;
 const THUMBNAIL_OVERSCAN = 3;
 
@@ -33,12 +34,17 @@ function optionMarkup(id: string): string {
     case 'rotate': return `<label>Apply to<select name="target"><option value="all">All pages</option><option value="odd">Odd pages</option><option value="even">Even pages</option><option value="selected">Selected pages</option></select></label><label>Selected pages<input name="pages" placeholder="1,3,5-8"></label><label>Rotation<select name="degrees"><option value="90">90° clockwise</option><option value="180">180°</option><option value="270">270° clockwise</option></select></label>`;
     case 'page-numbers': return `<label>Pages<input name="pages" placeholder="Blank = all pages"></label><label>Starting number<input name="start" type="number" value="1"></label><label>Format<select name="format"><option value="page-total">Page 1 of 20</option><option value="fraction">1 / 20</option><option value="page">Page 1</option><option value="number">1</option></select></label><label>Font size<input name="fontSize" type="number" min="6" max="72" value="11"></label><label>Bottom margin (pt)<input name="margin" type="number" min="4" value="24"></label>`;
     case 'watermark': return `<label>Watermark text<input name="text" value="CONFIDENTIAL"></label><label>Opacity<input name="opacity" type="number" min=".05" max="1" step=".05" value=".18"></label><label>Rotation<input name="rotation" type="number" min="-180" max="180" value="-35"></label><label>Font size<input name="fontSize" type="number" min="12" max="120" value="42"></label>`;
-    case 'images-to-pdf': return `<label>Page margin (pt)<input name="margin" type="number" min="0" value="24"></label><p class="help">JPEG and PNG are embedded into A4 pages. Source pixels are not re-encoded by DocFlow before embedding.</p>`;
+    case 'images-to-pdf': return `<label>Page size<select name="pageSize"><option value="a4">A4</option><option value="letter">US Letter</option><option value="original">Fit to image dimensions</option></select></label><label>Orientation<select name="orientation"><option value="auto">Auto by image</option><option value="portrait">Portrait</option><option value="landscape">Landscape</option></select></label><label>Page margin (pt)<input name="margin" type="number" min="0" max="150" value="24"></label><label class="check"><input type="checkbox" name="upscale"> Upscale small images to fit the page</label><p class="help">Images stay embedded without re-encoding; original-size pages assume 96 pixels per inch. Change orientation and margin before export.</p>`;
     case 'pdf-to-images': return `<label>Format<select name="format"><option value="png">PNG</option><option value="jpeg">JPEG</option></select></label><label>Render scale<select name="scale"><option value="1">1×</option><option value="1.5" selected>1.5×</option><option value="2">2×</option></select></label><p class="warning-text">Image export rasterizes pages and is intentionally lossy with respect to selectable text/vector structure.</p>`;
     case 'forms': return `<div class="form-inspector"><button type="button" class="secondary" data-inspect-form>Inspect form fields</button><div id="form-field-summary" class="help" role="status" aria-live="polite">Add a PDF form to discover editable fields. XFA documents are reported as unsupported.</div></div><section id="visual-form-editor" class="visual-form-editor" aria-label="Visual PDF form editor"></section><label class="check"><input name="flatten" type="checkbox"> Flatten fields after filling (removes interactive fields)</label><details class="visual-form-advanced"><summary>Advanced JSON values (optional)</summary><label class="wide">Form values as JSON<textarea name="values" rows="7" placeholder='{"CustomerName":"Example","Accepted":true}'></textarea></label><p class="help">For advanced users and compatibility with existing form workflows. Visual fields above update these values automatically.</p></details>`;
     case 'compress': return `<div class="notice"><strong>Limited structural optimization</strong><p>This does not claim professional image compression. It rewrites PDF structure with object streams and reports the before/after size. Images are not intentionally recompressed.</p></div>`;
     case 'preview': return `<p class="help">The PDF.js viewer keeps one full active-page canvas and a virtualized thumbnail window, so large page counts do not create a canvas for every page at once.</p>`;
     case 'metadata': return `<p class="help">Reads standard metadata locally. Encrypted/password-protected files are detected and reported instead of being mislabeled as readable.</p>`;
+    case 'crop': return `<p class="warning-text">Cropping only hides visible content by adjusting the PDF CropBox. Hidden content is recoverable; this is NOT redaction.</p><label>Pages (blank = all)<input name="pages" placeholder="1,3-5"></label><label>Left margin (pt)<input name="left" type="number" min="0" max="5000" value="24"></label><label>Right margin (pt)<input name="right" type="number" min="0" max="5000" value="24"></label><label>Top margin (pt)<input name="top" type="number" min="0" max="5000" value="24"></label><label>Bottom margin (pt)<input name="bottom" type="number" min="0" max="5000" value="24"></label><p class="help">72 points = one inch. At least 18 points must remain in each dimension.</p>`;
+    case 'metadata-edit': return `<p class="help">Blank fields preserve existing values. Choose Clear standard properties to empty the standard Info fields. XMP, attachments and hidden content are not sanitised.</p><label>Action<select name="action"><option value="edit">Edit properties</option><option value="clear">Clear standard properties</option></select></label><label>Title<input name="title" maxlength="512"></label><label>Author<input name="author" maxlength="512"></label><label>Subject<input name="subject" maxlength="512"></label><label>Keywords (comma separated)<input name="keywords" maxlength="1000"></label><label>Creator<input name="creator" maxlength="512"></label>`;
+    case 'annotate': return `<p class="help">Adds visible marks to page content. These are NOT editable PDF comments, exact text highlights, or secure redactions.</p><label>Mark type<select name="kind"><option value="note">Text note</option><option value="highlight">Coloured highlight region</option><option value="rectangle">Outline rectangle</option></select></label><label>Text note<textarea name="text" maxlength="700" rows="3" placeholder="Review note"></textarea></label><label>Colour<input name="color" type="color" value="#efaa35"></label><label>Pages (blank = all)<input name="pages" placeholder="1,3-5"></label><label>X from left (%)<input name="posX" type="number" min="0" max="100" value="12"></label><label>Y from top (%)<input name="posY" type="number" min="0" max="100" value="12"></label><label>Width (%)<input name="markWidth" type="number" min="2" max="100" value="30"></label><label>Height (%)<input name="markHeight" type="number" min="1" max="100" value="12"></label><label>Note font (pt)<input name="fontSize" type="number" min="7" max="36" value="14"></label>`;
+    case 'sign-visual': return `<p class="warning-text">A visible signature is not a certificate-backed cryptographic signature.</p><div id="signature-pad-host"></div><label>Typed signature (used if no drawing)<input name="signatureText" maxlength="150" autocomplete="off" placeholder="Your name"></label><label>Pages (blank = all)<input name="pages" placeholder="1"></label><label>X from left (%)<input name="posX" type="number" min="0" max="100" value="58"></label><label>Y from top (%)<input name="posY" type="number" min="0" max="100" value="82"></label><label>Width (%)<input name="markWidth" type="number" min="2" max="100" value="32"></label><label>Height (%)<input name="markHeight" type="number" min="1" max="100" value="10"></label><label>Typed font size (pt)<input name="fontSize" type="number" min="10" max="42" value="24"></label>`;
+    case 'text-search': return `<label>Find text<input name="query" type="search" maxlength="150" placeholder="Enter a phrase (optional)"></label><p class="help">Reads selectable text using PDF.js. Empty search extracts everything. Scanned images require OCR; no OCR is performed.</p><section id="text-search-matches" aria-label="Search results" aria-live="polite"></section>`;
     default: return '';
   }
 }
@@ -114,6 +120,9 @@ export function mountWorkspace(container: HTMLDivElement, tool: ToolDefinition):
   let previewController: PreviewController | null = null;
   let previewUiCleanup: (() => void) | null = null;
   let objectUrls: string[] = [];
+  const signatureHost = container.querySelector<HTMLElement>('#signature-pad-host');
+  const signaturePad = signatureHost ? mountSignaturePad(signatureHost) : null;
+  const textResults = container.querySelector<HTMLElement>('#text-search-matches');
   let inspectionGeneration = 0;
   let inspectionTimer: number | null = null;
   let inspectionRun: RunningOperation | null = null;
@@ -334,6 +343,29 @@ export function mountWorkspace(container: HTMLDivElement, tool: ToolDefinition):
     cancel.disabled = false;
     setProgress('Preparing document', 4);
     try {
+      if (tool.id === 'text-search') {
+        const { extractAndSearchText } = await import('../pdf/textExtraction');
+        const query = String(formOptions(optionsForm).query ?? '');
+        const scan = await extractAndSearchText(await records[0]!.file.arrayBuffer(), query, (done, total) => setProgress('Reading page ' + done + ' of ' + total, (done / total) * 95), () => mainCancelled);
+        if (mainCancelled) throw new DOMException('Operation cancelled', 'AbortError');
+        renderOutputs(scan.result);
+        if (textResults) {
+          textResults.replaceChildren();
+          const heading = document.createElement('p');
+          heading.textContent = query.trim() ? scan.hits.length + ' page(s) with matches' : 'All selectable text ready for download.';
+          textResults.append(heading);
+          for (const hit of scan.hits.slice(0, 120)) {
+            const item = document.createElement('p');
+            item.className = 'docflow-text-hit';
+            item.textContent = 'Page ' + hit.page + ' (' + hit.count + '): ' + hit.sample;
+            textResults.append(item);
+          }
+          if (scan.hits.length > 120) textResults.append(document.createTextNode('Showing the first 120 matching pages.'));
+          if (scan.scannedPages) textResults.append(document.createTextNode(' ' + scan.scannedPages + ' page(s) had no selectable text. OCR may be needed.'));
+        }
+        setProgress('Complete', 100);
+        return;
+      }
       if (tool.id === 'preview') {
         await runPreview();
         setProgress('Preview ready', 100);
@@ -352,7 +384,9 @@ export function mountWorkspace(container: HTMLDivElement, tool: ToolDefinition):
       }
       const operation = (tool.id === 'forms' ? 'forms-fill' : tool.id === 'compress' ? 'optimize' : tool.id) as WorkerOperation;
       const workerFiles = await readInputs(records);
-      running = runWorkerOperation(operation, workerFiles, formOptions(optionsForm), (update) => setProgress(update.message, Math.min(96, update.percent)));
+      const selectedOptions = formOptions(optionsForm);
+      if (tool.id === 'sign-visual') selectedOptions.signaturePng = signaturePad?.getData() ?? '';
+      running = runWorkerOperation(operation, workerFiles, selectedOptions, (update) => setProgress(update.message, Math.min(96, update.percent)));
       const result = await running.result;
       renderOutputs(result);
       setProgress('Complete', 100);
@@ -419,6 +453,7 @@ export function mountWorkspace(container: HTMLDivElement, tool: ToolDefinition):
     if (inspectionTimer !== null) window.clearTimeout(inspectionTimer);
     inspectionRun?.cancel();
     visualEditor?.dispose();
+    signaturePad?.dispose();
     running?.cancel();
     clearUrls();
     previewUiCleanup?.();
