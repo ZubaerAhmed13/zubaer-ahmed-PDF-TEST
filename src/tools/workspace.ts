@@ -454,7 +454,6 @@ export function mountWorkspace(container: HTMLDivElement, tool: ToolDefinition):
     inspectionRun?.cancel();
     visualEditor?.dispose();
     signaturePad?.dispose();
-    activeTextScan = false;
     running?.cancel();
     clearUrls();
     previewUiCleanup?.();
