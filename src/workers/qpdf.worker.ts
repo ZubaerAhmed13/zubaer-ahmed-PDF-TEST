@@ -25,6 +25,7 @@ function ensurePdf(file: InputFile): void {
 }
 
 function validatePassword(password: string, operation: QpdfRequest['operation']): void {
+  if (operation === 'repair') return;
   if (!password) throw codedError(operation === 'unlock' ? 'PASSWORD_REQUIRED' : 'INVALID_PASSWORD_FORMAT', 'Enter a password.');
   const byteLength = passwordEncoder.encode(password).byteLength;
   if (operation === 'protect' && byteLength < 8) throw codedError('INVALID_PASSWORD_FORMAT', 'Use a password with at least 8 UTF-8 bytes.');
@@ -65,7 +66,7 @@ function classifyQpdfFailure(detail: string, operation: QpdfRequest['operation']
   if (/not a pdf|pdf header|damaged pdf|trailer dictionary|xref|cross-reference/.test(normalized)) {
     return codedError('INVALID_PDF', 'The PDF is malformed or cannot be processed safely.', detail);
   }
-  return codedError('QPDF_OPERATION_FAILED', operation === 'protect' ? 'The PDF could not be encrypted.' : 'The PDF could not be unlocked.', detail);
+  return codedError('QPDF_OPERATION_FAILED', operation === 'protect' ? 'The PDF could not be encrypted.' : operation === 'repair' ? 'The PDF structure could not be recovered with qpdf.' : 'The PDF could not be unlocked.', detail);
 }
 
 function isExitStatus(error: unknown): error is { status: number } {
@@ -77,7 +78,7 @@ function ownerPassword(): string {
   return [...bytes].map((byte) => byte.toString(16).padStart(2, '0')).join('');
 }
 
-function outputName(fileName: string, suffix: 'protected' | 'unlocked'): string {
+function outputName(fileName: string, suffix: 'protected' | 'unlocked' | 'repaired'): string {
   const stem = fileName.replace(/\.pdf$/i, '').replace(/[^a-z0-9._-]+/gi, '-').replace(/^-+|-+$/g, '').slice(0, 96) || 'document';
   return `${stem}-${suffix}.pdf`;
 }
@@ -139,12 +140,14 @@ async function run(request: QpdfRequest): Promise<OperationResult> {
   validatePassword(request.password, request.operation);
   progress(request.requestId, 'preparing', 8, 'Loading local qpdf 12.3.2 engine');
   const job = await createJob(request.file);
-  progress(request.requestId, 'processing', 28, request.operation === 'protect' ? 'Encrypting PDF with AES-256' : 'Validating password and decrypting PDF');
+  progress(request.requestId, 'processing', 28, request.operation === 'protect' ? 'Encrypting PDF with AES-256' : request.operation === 'repair' ? 'Checking and rewriting damaged PDF structure' : 'Validating password and decrypting PDF');
 
   const outputPath = '/job/output.pdf';
   const execResult = request.operation === 'protect'
     ? job.exec(['--encrypt', request.password, ownerPassword(), '256', '--', job.inputPath, outputPath])
-    : job.exec([`--password=${request.password}`, '--decrypt', job.inputPath, outputPath]);
+    : request.operation === 'repair'
+      ? job.exec(['--object-streams=generate', '--stream-data=preserve', job.inputPath, outputPath])
+      : job.exec([`--password=${request.password}`, '--decrypt', job.inputPath, outputPath]);
 
   const detail = [execResult.stderr, execResult.stdoutText].filter(Boolean).join('\n').trim();
   const outputExists = job.module.FS.analyzePath(outputPath).exists;
@@ -152,7 +155,7 @@ async function run(request: QpdfRequest): Promise<OperationResult> {
 
   progress(request.requestId, 'writing', 82, 'Reading encrypted PDF output from local memory');
   const bytes = job.module.FS.readFile(outputPath);
-  const suffix = request.operation === 'protect' ? 'protected' : 'unlocked';
+  const suffix = request.operation === 'protect' ? 'protected' : request.operation === 'repair' ? 'repaired' : 'unlocked';
   const output = outputFile(outputName(request.file.name, suffix), bytes);
   progress(request.requestId, 'finalizing', 100, 'Complete');
   return {
@@ -161,7 +164,8 @@ async function run(request: QpdfRequest): Promise<OperationResult> {
       engine: 'qpdf 12.3.2 WASM',
       localProcessing: true,
       passwordPersisted: false,
-      encryption: request.operation === 'protect' ? 'AES-256' : 'Removed',
+      encryption: request.operation === 'repair' ? 'Unchanged (encrypted input not supported)' : request.operation === 'protect' ? 'AES-256' : 'Removed',
+      ...(request.operation === 'repair' ? { recoveredWithWarnings: execResult.exitCode === 3, repairScope: 'qpdf structural rewrite and recovered cross-references; not content reconstruction' } : {}),
       ...(execResult.exitCode === 3 && detail ? { warning: detail.slice(0, 500) } : {})
     }
   };
