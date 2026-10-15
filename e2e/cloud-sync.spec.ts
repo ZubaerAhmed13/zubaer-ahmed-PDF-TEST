@@ -98,11 +98,20 @@ test('email-confirmation callback validates identity and removes URL tokens', as
   const requested: string[] = [];
   await page.route(backend + '/**', async (route) => {
     requested.push(route.request().url());
-    await route.fulfill({
-      status: 200,
-      headers: { 'content-type': 'application/json', 'access-control-allow-origin': '*' },
-      body: JSON.stringify({ id: userId, email: 'confirmed@example.com' })
-    });
+    const headers = {
+      'content-type': 'application/json',
+      'access-control-allow-origin': '*',
+      'access-control-allow-methods': 'GET, OPTIONS',
+      'access-control-allow-headers': 'authorization, apikey'
+    };
+    if (route.request().method() === 'OPTIONS') {
+      await route.fulfill({ status: 204, headers });
+    } else {
+      await route.fulfill({
+        status: 200, headers,
+        body: JSON.stringify({ id: userId, email: 'confirmed@example.com' })
+      });
+    }
   });
   await page.goto('/zubaer-ahmed-PDF-TEST/#access_token=temporary-test-token&refresh_token=temporary-refresh&expires_in=3600&type=signup');
   await expect.poll(() => page.evaluate(() => location.hash)).toBe('');
