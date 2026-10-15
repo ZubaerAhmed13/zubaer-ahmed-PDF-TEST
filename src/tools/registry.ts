@@ -63,7 +63,12 @@ export const tools: ToolDefinition[] = [
     load: () => import('./organizeWorkspace')
   },
   tool({ id: 'rotate', name: 'Rotate pages', category: 'organize', description: 'Rotate all, odd, even, or selected pages structurally.', keywords: ['orientation'], icon: '↻', quality: 'Lossless', status: 'Migrated', multipleFiles: false }),
-  tool({ id: 'page-numbers', name: 'Add page numbers', category: 'edit', description: 'Add configurable numbering to selected page ranges.', keywords: ['number','footer'], icon: '#', quality: 'Lossless', status: 'Migrated', multipleFiles: false }),
+  tool({ id: 'crop', name: 'Crop PDF', category: 'organize', description: 'Adjust visible page crop boxes without rasterization. Cropping hides content; it does not securely remove it.', keywords: ['crop','trim','margin','page'], icon: '◩', quality: 'Lossless', status: 'Migrated', multipleFiles: false }),
+  tool({ id: 'annotate', name: 'Annotate PDF', category: 'edit', description: 'Apply baked-in visible note, highlight region or rectangle marks on chosen pages.', keywords: ['annotate','mark','highlight','note','rectangle'], icon: '✎', quality: 'Lossless', status: 'Migrated', multipleFiles: false }),
+  tool({ id: 'sign-visual', name: 'Visual signature', category: 'edit', description: 'Draw or type a visible signature locally. This is not a cryptographic or certificate-backed signature.', keywords: ['signature','sign','draw','handwritten'], icon: '✍', quality: 'Lossless', status: 'Migrated', multipleFiles: false }),
+  tool({ id: 'metadata-edit', name: 'Edit document properties', category: 'edit', description: 'Edit or clear standard PDF Info properties only; does not guarantee XMP/hidden-data sanitisation.', keywords: ['metadata','edit','title','author','properties','remove'], icon: 'ⓘ', quality: 'Lossless', status: 'Migrated', multipleFiles: false }),
+  tool({ id: 'text-search', name: 'Search & extract text', category: 'review', description: 'Find words across selectable PDF text and export extracted text. Scanned images need separate OCR.', keywords: ['search','find','extract','text','copy','selectable'], icon: '⌕', quality: 'Inspection', status: 'Migrated', multipleFiles: false }),
+    tool({ id: 'page-numbers', name: 'Add page numbers', category: 'edit', description: 'Add configurable numbering to selected page ranges.', keywords: ['number','footer'], icon: '#', quality: 'Lossless', status: 'Migrated', multipleFiles: false }),
   {
     id: 'watermark', name: 'Add watermark', category: 'edit',
     description: 'Add text or PNG/JPEG image watermarks while preserving existing page content.',
