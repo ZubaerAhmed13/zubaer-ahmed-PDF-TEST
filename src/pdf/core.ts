@@ -218,21 +218,33 @@ export async function addWatermark(files: InputFile[], options: Record<string, u
 export async function imagesToPdf(files: InputFile[], options: Record<string, unknown>, emit: Progress): Promise<OperationResult> {
   if (!files.length) throw new PdfOperationError('INPUT_REQUIRED', 'Choose at least one JPEG or PNG image.');
   const doc = await PDFDocument.create();
-  const margin = Math.max(0, asNumber(options.margin, 24));
+  const margin = Math.max(0, Math.min(150, asNumber(options.margin, 24)));
+  const pageSize = asString(options.pageSize, 'a4');
+  const orientation = asString(options.orientation, 'auto');
+  const upscale = asBoolean(options.upscale, false);
+  if (!['a4', 'letter', 'original'].includes(pageSize)) throw new PdfOperationError('INVALID_OPTION', 'Choose a supported page size.');
+  if (!['auto', 'portrait', 'landscape'].includes(orientation)) throw new PdfOperationError('INVALID_OPTION', 'Choose a supported orientation.');
   for (let index = 0; index < files.length; index += 1) {
     const file = files[index]!;
     let image;
     if (file.type === 'image/png' || file.name.toLowerCase().endsWith('.png')) image = await doc.embedPng(file.buffer);
     else if (/image\/(jpeg|jpg)/.test(file.type) || /\.jpe?g$/i.test(file.name)) image = await doc.embedJpg(file.buffer);
-    else throw new PdfOperationError('UNSUPPORTED_IMAGE', `${file.name} is not a supported JPEG or PNG image.`);
-    const maxW = 595.28 - margin * 2;
-    const maxH = 841.89 - margin * 2;
-    const scale = Math.min(maxW / image.width, maxH / image.height, 1);
+    else throw new PdfOperationError('UNSUPPORTED_IMAGE', file.name + ' is not a supported JPEG or PNG image.');
+    const naturalW = Math.max(36, Math.min(14400, image.width * .75));
+    const naturalH = Math.max(36, Math.min(14400, image.height * .75));
+    let paperW = pageSize === 'letter' ? 612 : pageSize === 'original' ? naturalW + margin * 2 : 595.28;
+    let paperH = pageSize === 'letter' ? 792 : pageSize === 'original' ? naturalH + margin * 2 : 841.89;
+    const landscape = orientation === 'auto' ? image.width > image.height : orientation === 'landscape';
+    if (landscape !== (paperW > paperH)) [paperW, paperH] = [paperH, paperW];
+    const maxW = paperW - margin * 2;
+    const maxH = paperH - margin * 2;
+    if (maxW <= 10 || maxH <= 10) throw new PdfOperationError('INVALID_MARGIN', 'Page margin is too large for the selected page size.');
+    const scale = Math.min(maxW / image.width, maxH / image.height, upscale ? Infinity : 1);
     const width = image.width * scale;
     const height = image.height * scale;
-    const page = doc.addPage([595.28, 841.89]);
-    page.drawImage(image, { x: (page.getWidth() - width) / 2, y: (page.getHeight() - height) / 2, width, height });
-    progress(emit, 'processing', index + 1, files.length, `Added image ${index + 1} of ${files.length}`);
+    const page = doc.addPage([paperW, paperH]);
+    page.drawImage(image, { x: (paperW - width) / 2, y: (paperH - height) / 2, width, height });
+    progress(emit, 'processing', index + 1, files.length, 'Added image ' + (index + 1) + ' of ' + files.length);
   }
   return { outputs: [pdfOutput('images.pdf', await savePdf(doc))] };
 }
