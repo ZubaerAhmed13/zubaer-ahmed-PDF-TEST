@@ -1,17 +1,12 @@
 import '../styles/professional-tools.css';
 import type { ToolDefinition } from './registry';
-import { rectangleFromDrag, validateRedactions, redactPdf, renderPageImage, loadRedactionDocument, type RedactionRect, REDACTION_MAX_PAGES, REDACTION_MAX_BYTES } from '../pdf/secureRasterRedaction';
+import { rectangleFromDrag, validateRedactions, redactPdf, renderPageImage, loadRedactionDocument, type RedactionRect, REDACTION_MAX_BYTES } from '../pdf/secureRasterRedaction';
 import { runQpdfOperation, type RunningQpdfOperation } from '../pdf/qpdfWorkerClient';
 import type { OperationResult } from '../pdf/types';
 import type { PDFDocumentProxy } from 'pdfjs-dist';
 
 function cleanName(value: string): string {
   return value.replace(/[^a-z0-9_.-]+/gi,'-').slice(0,95) || 'document';
-}
-function makeButton(name: string, id: string, type: 'button' | 'submit' = 'button'): HTMLButtonElement {
-  const button = document.createElement('button');
-  button.id = id; button.type = type; button.textContent = name; button.className = 'secondary';
-  return button;
 }
 export function mountWorkspace(container: HTMLDivElement, tool: ToolDefinition): void {
   const redact = tool.id === 'redact-secure';
@@ -148,7 +143,7 @@ export function mountWorkspace(container: HTMLDivElement, tool: ToolDefinition):
       drawOverlay();
       progressText('Ready to mark areas', 0);
     } finally {
-      rendered && (rendered.width = 1, rendered.height = 1);
+      if (rendered) { rendered.width = 1; rendered.height = 1; }
       proxy.cleanup();
     }
   };
@@ -212,7 +207,7 @@ export function mountWorkspace(container: HTMLDivElement, tool: ToolDefinition):
     abort?.abort(); qpdf?.cancel(); qpdf = null;
     resetDownload();
     marks = []; page = 1; file = input.files?.[0] ?? null;
-    confirm && (confirm.checked = false);
+    if (confirm) confirm.checked = false;
     const old = pdf; pdf = null;
     if (old) await old.destroy();
     if (disposed || epoch !== generation) return;
