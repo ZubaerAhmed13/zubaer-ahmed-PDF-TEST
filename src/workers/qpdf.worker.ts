@@ -164,7 +164,8 @@ async function run(request: QpdfRequest): Promise<OperationResult> {
       engine: 'qpdf 12.3.2 WASM',
       localProcessing: true,
       passwordPersisted: false,
-      encryption: request.operation === 'protect' ? 'AES-256' : 'Removed',
+      encryption: request.operation === 'repair' ? 'Unchanged (encrypted input not supported)' : request.operation === 'protect' ? 'AES-256' : 'Removed',
+      ...(request.operation === 'repair' ? { recoveredWithWarnings: execResult.exitCode === 3, repairScope: 'qpdf structural rewrite and recovered cross-references; not content reconstruction' } : {}),
       ...(execResult.exitCode === 3 && detail ? { warning: detail.slice(0, 500) } : {})
     }
   };
