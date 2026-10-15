@@ -1,4 +1,5 @@
 import * as pdfjs from 'pdfjs-dist';
+import type { PDFPageProxy } from 'pdfjs-dist';
 import { PDFDocument, StandardFonts, type PDFFont } from 'pdf-lib';
 import type { OperationResult } from './types';
 import { createWorker } from 'tesseract.js';
