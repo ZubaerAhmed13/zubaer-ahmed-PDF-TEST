@@ -123,6 +123,36 @@ async function activeSession(): Promise<CloudSession> {
   return session;
 }
 
+/**
+ * Supabase email confirmation can redirect back with a one-time session in
+ * the URL fragment. Scrub it immediately, validate it with Supabase Auth, then
+ * store it only in sessionStorage. Never persist the token in browser history.
+ */
+export async function finishEmailConfirmation(): Promise<void> {
+  const fragment = location.hash.startsWith('#') ? location.hash.slice(1) : '';
+  const params = new URLSearchParams(fragment);
+  const accessToken = params.get('access_token');
+  const refreshToken = params.get('refresh_token');
+  if (!accessToken || !refreshToken) return;
+  history.replaceState(history.state, '', location.pathname + location.search);
+  const expiresIn = Number(params.get('expires_in') ?? '3600');
+  if (!endpoint.startsWith('https://') || !publishableKey || !Number.isFinite(expiresIn) || expiresIn <= 0) return;
+  try {
+    const user = await api('/auth/v1/user', 'GET', undefined, accessToken);
+    if (!user || typeof user !== 'object') return;
+    const profile = user as Record<string, unknown>;
+    if (typeof profile.id !== 'string') return;
+    saveSession({
+      access_token: accessToken,
+      refresh_token: refreshToken,
+      expires_at: Date.now() + expiresIn * 1000,
+      user: { id: profile.id, ...(typeof profile.email === 'string' ? { email: profile.email } : {}) }
+    });
+  } catch {
+    // Failed verification leaves the application in its normal local-only mode.
+  }
+}
+
 export function mountCloudPanel(host: HTMLElement, options: CloudPanelOptions): void {
   host.replaceChildren();
   const heading = document.createElement('h2');
