@@ -1,6 +1,6 @@
 import type { InputFile, OperationProgress, OperationResult } from './types';
 
-export type QpdfOperation = 'protect' | 'unlock';
+export type QpdfOperation = 'protect' | 'unlock' | 'repair';
 
 export interface QpdfRequest {
   requestId: string;
