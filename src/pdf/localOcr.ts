@@ -25,7 +25,7 @@ export function parseOcrTsv(value: string): RecognizedWord[] {
   return result;
 }
 function fitWinAnsi(word: string, font: PDFFont): string {
-  const candidate = word.replace(/[\u0000-\u001f]/g, '').slice(0, 100);
+  const candidate = word.replace(/\p{Cc}/gu, '').slice(0, 100);
   try { font.encodeText(candidate); return candidate; } catch { /* unsupported font glyph */ }
   const reduced = candidate.normalize('NFKD').replace(/[\u0300-\u036f]/g, '').replace(/[^\x20-\x7e]/g, '');
   try { font.encodeText(reduced); return reduced; } catch { return ''; }
