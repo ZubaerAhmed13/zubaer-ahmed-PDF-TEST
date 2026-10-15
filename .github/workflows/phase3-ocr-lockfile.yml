@@ -1,0 +1,36 @@
+name: Stage Phase 3 OCR dependency lockfile
+on:
+  push:
+    branches: [feat/docflow-phase3-local-ocr-pdf-comparison]
+permissions:
+  contents: write
+jobs:
+  dependencies:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install pinned local OCR model packages
+        run: |
+          npm install --save-exact tesseract.js@7.0.0 tesseract.js-core@6.1.2 @tesseract.js-data/eng@1.0.0 @tesseract.js-data/deu@1.0.0
+          npm audit --audit-level=high
+          find node_modules/tesseract.js/dist -maxdepth 1 -name '*worker*' -type f
+          find node_modules/tesseract.js-core -maxdepth 2 -name 'tesseract-core*' -type f
+          find node_modules/@tesseract.js-data/eng -name '*traineddata*' -type f
+          find node_modules/@tesseract.js-data/deu -name '*traineddata*' -type f
+      - name: Validate source and bundled OCR static assets
+        run: |
+          npm run build
+          npm run lint
+          npm test
+      - name: Commit reproducible manifests
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add package.json package-lock.json
+          if ! git diff --cached --quiet; then
+            git commit -m "Pin audit-checked local Tesseract OCR engine and language assets"
+            git push origin HEAD:feat/docflow-phase3-local-ocr-pdf-comparison
+          fi
