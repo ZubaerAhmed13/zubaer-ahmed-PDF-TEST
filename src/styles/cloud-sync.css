@@ -1,4 +1,6 @@
-.docflow-cloud-form { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: .75rem; margin: 1rem 0; }
+.info-dialog .docflow-cloud-form { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: .75rem; margin: 1rem 0; }
 .docflow-cloud-form input { min-width: 0; width: 100%; min-height: 42px; border: 1px solid #cad5df; border-radius: .7rem; padding: .65rem .75rem; background: #fff; color: #16232e; font: inherit; }
 .docflow-cloud-actions { display: flex; flex-wrap: wrap; gap: .75rem; margin: 1rem 0; }
 .docflow-cloud-form[hidden], .docflow-cloud-actions[hidden] { display: none !important; }
+
+@media (max-width: 620px) { .topbar-actions [data-action="cloud"] { display: inline-flex; padding: 0 7px; white-space: nowrap; } .topbar-actions [data-action="diagnostics"] { display: none; } .info-dialog .docflow-cloud-form { grid-template-columns: 1fr; } }
