@@ -1,5 +1,10 @@
 import { expect, test } from '@playwright/test';
 
+// Playwright cannot reliably intercept fetches handled by a service worker.
+// Mocked Auth/API tests isolate the network from the PWA; offline caching is
+// certified separately by the dedicated release tests.
+test.use({ serviceWorkers: 'block' });
+
 const backend = 'https://ruefkvkavvycposzahit.supabase.co';
 const userId = '11111111-1111-4111-8111-111111111111';
 
