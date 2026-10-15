@@ -33,6 +33,9 @@ describe('essential PDF utilities', () => {
     let pdf = await reopen(output.outputs[0]!.buffer);
     expect(pdf.getTitle()).toBe('Updated');
     expect(pdf.getAuthor()).toBe('New author');
+    output = await editMetadata(await fixture(), { action: 'edit', title: 'Only title changed' }, emit);
+    pdf = await reopen(output.outputs[0]!.buffer);
+    expect(pdf.getAuthor()).toBe('Original author');
     output = await editMetadata(await fixture(), { action: 'clear' }, emit);
     pdf = await reopen(output.outputs[0]!.buffer);
     expect(pdf.getTitle()).toBe('');
