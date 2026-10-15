@@ -19,7 +19,7 @@ async function walk(directory) {
 const allFiles = await walk(DIST);
 const cacheable = allFiles
   .map((absolute) => relative(DIST, absolute).split(sep).join('/'))
-  .filter((path) => path !== 'sw.js' && !path.endsWith('.map'))
+  .filter((path) => path !== 'sw.js' && !path.endsWith('.map') && !path.startsWith('ocr/'))
   .sort();
 
 const hash = createHash('sha256');
