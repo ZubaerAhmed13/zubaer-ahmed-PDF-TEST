@@ -21,7 +21,7 @@
     "pdf-lib": "1.17.1",
     "pdfjs-dist": "4.10.38",
     "tesseract.js": "7.0.0",
-    "tesseract.js-core": "6.1.2"
+    "tesseract.js-core": "7.0.0"
   },
   "devDependencies": {
     "@axe-core/playwright": "4.13.0",
