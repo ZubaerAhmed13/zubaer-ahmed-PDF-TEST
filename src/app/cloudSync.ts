@@ -91,7 +91,8 @@ async function api(path: string, method: string, payload?: unknown, accessToken?
     headers: {
       apikey: publishableKey,
       ...(accessToken ? { Authorization: 'Bearer ' + accessToken } : {}),
-      ...(payload !== undefined ? { 'Content-Type': 'application/json' } : {})
+      ...(payload !== undefined ? { 'Content-Type': 'application/json' } : {}),
+      ...(path.startsWith('/rest/v1/') && method === 'POST' ? { Prefer: 'resolution=merge-duplicates,return=minimal' } : {})
     },
     ...(payload === undefined ? {} : { body: JSON.stringify(payload) })
   });
