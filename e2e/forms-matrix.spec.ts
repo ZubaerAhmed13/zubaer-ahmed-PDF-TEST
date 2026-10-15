@@ -70,6 +70,7 @@ test('certifies all currently supported AcroForm field types through inspect, fi
   await dialog.getByRole('button', { name: 'Inspect form fields' }).click();
   await expect(dialog.locator('#form-field-summary')).toContainText('5 supported field(s)');
 
+  await dialog.locator('.visual-form-advanced summary').click();
   await dialog.locator('textarea[name="values"]').fill(JSON.stringify({
     CustomerName: 'Zubaer',
     Accepted: true,
@@ -97,6 +98,7 @@ test('flattening applies values and removes interactive AcroForm fields from the
     mimeType: 'application/pdf',
     buffer: await supportedFormsFixture()
   });
+  await dialog.locator('.visual-form-advanced summary').click();
   await dialog.locator('textarea[name="values"]').fill(JSON.stringify({ CustomerName: 'Flattened', Plan: 'Pro', Country: 'NL' }));
   await dialog.locator('input[name="flatten"]').check();
   await dialog.getByRole('button', { name: 'Run Fill PDF forms' }).click();
