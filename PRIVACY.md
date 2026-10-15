@@ -5,8 +5,10 @@ DocFlow Professional is designed for on-device browser processing.
 The migrated core:
 
 - does not upload PDF contents to a DocFlow server;
+- optionally connects to the separate DocFlow Supabase project for email/password authentication and explicit Save/Restore of favorite/recent tool IDs; no PDF files, file metadata, forms, passwords used in PDFs, or recovery settings are sent;
+- stores a cloud-login access and refresh session for the current tab in sessionStorage (sign out clears it); email/password credentials are submitted over HTTPS directly to Supabase Auth and are not stored by DocFlow;
 - does not configure analytics, telemetry, crash reporting or third-party trackers;
-- stores favorites and recent-tool IDs in `localStorage`;
+- stores favorites and recent-tool IDs in `localStorage` by default; optional cloud sync requires sign-in and an explicit Save or Restore action;
 - stores lightweight recovery state in IndexedDB: selected tool ID, tool settings, and file metadata (`name`, `size`, `type`, `lastModified`) only;
 - does **not** store PDF/image file contents in `localStorage` or the project-recovery IndexedDB store;
 - requires the user to reselect original files after restoring recovery state;

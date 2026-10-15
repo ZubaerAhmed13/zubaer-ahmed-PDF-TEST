@@ -1,5 +1,11 @@
 # Security
 
+## Optional account sync boundary
+
+Cloud sync is opt-in and contacts only the dedicated DocFlow Supabase project. Email/password authentication is performed by Supabase Auth over HTTPS. The browser uses the Supabase publishable key, never a service_role or other secret key. Auth sessions are retained in per-tab sessionStorage. Preference Save/Restore transmits only allow-listed favorite/recent tool IDs; the database has user-scoped RLS. No PDF document bytes, filenames, form fields or local recovery state are transmitted.
+
+The CSP connect-src allows only the dedicated Supabase project in addition to same-origin assets. The DocFlow processing engine itself remains local/offline. Live Auth redirect configuration and real-user roundtrip tests must be completed before production rollout.
+
 ## Local processing boundary
 
 The migrated application does not configure remote PDF-processing APIs, telemetry, analytics or trackers. Core libraries are bundled locally. Migrated PDF and image operations execute in the browser, using dedicated workers where applicable.

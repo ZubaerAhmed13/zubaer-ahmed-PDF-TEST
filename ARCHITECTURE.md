@@ -7,6 +7,7 @@ DocFlow Professional separates product UI, tool metadata, document operations, r
 ## Modules
 
 - `src/app/` — application shell, discovery, dialogs and safe product state.
+- `src/app/cloudSync.ts` — explicit optional Supabase Auth and manual Save/Restore of allow-listed favorite/recent tool IDs; no document processing leaves the browser.
 - `src/app/projectStore.ts` — IndexedDB persistence for lightweight recovery metadata/options only; document bytes are never persisted.
 - `src/tools/registry.ts` — canonical tool-definition source for homepage/search/favorites/recent/routing.
 - `src/tools/workspace.ts` — unified workspace and generic operation orchestration.

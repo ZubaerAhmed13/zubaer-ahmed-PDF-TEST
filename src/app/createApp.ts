@@ -1,5 +1,6 @@
 import { toolCategories, tools } from '../tools/registry';
-import { getFavorites, setFavorite, subscribeFavorites } from './favoriteStore';
+import { getFavorites, setFavorite, subscribeFavorites, replaceFavorites } from './favoriteStore';
+import { mountCloudPanel } from './cloudSync';
 
 const RECENT_KEY = 'docflow.recent-tools.v1';
 
@@ -40,6 +41,7 @@ export function createApp(root: HTMLDivElement | null): void {
         </nav>
         <div class="topbar-actions">
           <button class="secondary" type="button" data-action="diagnostics">Diagnostics</button>
+          <button class="secondary" type="button" data-action="cloud">Cloud sync</button>
           <button class="primary" type="button" data-action="open">Open PDF</button>
         </div>
       </header>
@@ -149,7 +151,7 @@ export function createApp(root: HTMLDivElement | null): void {
 
       <footer>
         <span class="footer-brand"><span class="mini-mark" aria-hidden="true">D</span> docflow · PDF workspace</span>
-        <span class="footer-links"><button type="button" data-action="privacy">Privacy</button><button type="button" data-action="diagnostics">Diagnostics</button><span>Local-first · no analytics</span></span>
+        <span class="footer-links"><button type="button" data-action="privacy">Privacy</button><button type="button" data-action="diagnostics">Diagnostics</button><button type="button" data-action="cloud">Cloud sync</button><span>Local-first · no analytics</span></span>
       </footer>
     </div>
   `;
@@ -214,7 +216,7 @@ export function createApp(root: HTMLDivElement | null): void {
     const generation = ++workspaceGeneration;
     if (trigger) workspaceTrigger = trigger;
     recent = [id, ...recent.filter((item) => item !== id)].slice(0, 6);
-    localStorage.setItem(RECENT_KEY, JSON.stringify(recent));
+    try { localStorage.setItem(RECENT_KEY, JSON.stringify(recent)); } catch { /* Local storage can be disabled; PDF tools must still open. */ }
     renderQuickAccess();
     workspace.innerHTML = `<div class="workspace-loading" role="status">Loading ${escapeHtml(tool.name)}…</div>`;
     if (!workspaceDialog.open) workspaceDialog.showModal();
@@ -285,8 +287,21 @@ export function createApp(root: HTMLDivElement | null): void {
       search.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
     if (action === 'open') void openTool('preview', actionTarget ?? null);
+    if (action === 'cloud') {
+      mountCloudPanel(infoContent, {
+        allowedToolIds: new Set(tools.map((tool) => tool.id)),
+        capture: () => ({ favorite_tools: [...getFavorites()], recent_tools: recent }),
+        apply: (state) => {
+          replaceFavorites(state.favorite_tools);
+          recent = state.recent_tools;
+          try { localStorage.setItem(RECENT_KEY, JSON.stringify(recent)); } catch { /* Local tools remain usable. */ }
+          renderQuickAccess();
+        }
+      });
+      infoDialog.showModal();
+    }
     if (action === 'privacy') {
-      infoContent.innerHTML = '<h2>Privacy</h2><p>DocFlow performs the migrated PDF-processing core in your browser. No analytics, telemetry, crash reporting, trackers, or remote document-processing APIs are configured.</p><p>Favorites and recent-tool IDs are stored in localStorage. Lightweight project recovery stores the selected tool, settings, and file metadata (name, size, type, and last-modified time) in IndexedDB. PDF/image contents and encryption passwords are not stored in localStorage or the recovery database; original files must be reselected after recovery.</p>';
+      infoContent.innerHTML = '<h2>Privacy</h2><p>DocFlow performs the migrated PDF-processing core in your browser. No analytics, telemetry, crash reporting, trackers, or remote document-processing APIs are configured.</p><p>Favorites and recent-tool IDs are stored in localStorage. Optional account-linked Cloud Sync sends only those tool IDs to the dedicated DocFlow Supabase project when Save is selected; no PDF content is uploaded. Lightweight project recovery stores the selected tool, settings, and file metadata (name, size, type, and last-modified time) in IndexedDB. PDF/image contents and encryption passwords are not stored in localStorage or the recovery database; original files must be reselected after recovery.</p>';
       infoDialog.showModal();
     }
     if (action === 'diagnostics') {
