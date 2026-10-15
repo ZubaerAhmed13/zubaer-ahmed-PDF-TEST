@@ -93,3 +93,21 @@ test('cloud preferences remain discoverable on mobile without requiring sign-in'
   await page.locator('[data-open-tool="rotate"]').first().click();
   await expect(page.getByRole('dialog', { name: 'Workspace' })).toBeVisible();
 });
+
+test('email-confirmation callback validates identity and removes URL tokens', async ({ page }) => {
+  const requested: string[] = [];
+  await page.route(backend + '/**', async (route) => {
+    requested.push(route.request().url());
+    await route.fulfill({
+      status: 200,
+      headers: { 'content-type': 'application/json', 'access-control-allow-origin': '*' },
+      body: JSON.stringify({ id: userId, email: 'confirmed@example.com' })
+    });
+  });
+  await page.goto('/zubaer-ahmed-PDF-TEST/#access_token=temporary-test-token&refresh_token=temporary-refresh&expires_in=3600&type=signup');
+  await expect.poll(() => page.evaluate(() => location.hash)).toBe('');
+  await expect.poll(() => page.evaluate(() => sessionStorage.getItem('docflow.cloud-session.v1'))).toContain('confirmed@example.com');
+  expect(requested.some((url) => url.includes('/auth/v1/user'))).toBe(true);
+  await page.locator('.topbar-actions [data-action="cloud"]').click();
+  await expect(page.locator('#info-dialog').getByText('Signed in as confirmed@example.com')).toBeVisible();
+});
