@@ -21,6 +21,10 @@ const handlers = {
   metadata,
   'forms-inspect': inspectForms,
   'forms-fill': fillForms,
+  crop: cropPdf,
+  'metadata-edit': editMetadata,
+  annotate: annotatePdf,
+  'sign-visual': signPdfVisually,
   optimize: recompressPdfImages
 } as const;
 
