@@ -78,7 +78,7 @@ function ownerPassword(): string {
   return [...bytes].map((byte) => byte.toString(16).padStart(2, '0')).join('');
 }
 
-function outputName(fileName: string, suffix: 'protected' | 'unlocked'): string {
+function outputName(fileName: string, suffix: 'protected' | 'unlocked' | 'repaired'): string {
   const stem = fileName.replace(/\.pdf$/i, '').replace(/[^a-z0-9._-]+/gi, '-').replace(/^-+|-+$/g, '').slice(0, 96) || 'document';
   return `${stem}-${suffix}.pdf`;
 }
