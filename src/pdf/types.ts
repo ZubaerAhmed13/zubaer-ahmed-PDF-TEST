@@ -39,6 +39,10 @@ export type WorkerOperation =
   | 'metadata'
   | 'forms-inspect'
   | 'forms-fill'
+  | 'crop'
+  | 'metadata-edit'
+  | 'annotate'
+  | 'sign-visual'
   | 'optimize';
 
 export interface WorkerRequest {
