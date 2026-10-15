@@ -6,7 +6,9 @@ import {
 
 describe('permanent raster redaction input security', () => {
   it('normalises reverse-direction drags in rotated PDF.js viewport coordinates', () => {
-    expect(rectangleFromDrag(2, .8, .6, .1, .25)).toEqual({ page: 2, x: .1, y: .25, width: .7, height: .35 });
+    expect(rectangleFromDrag(2, .8, .6, .1, .25)).toMatchObject({ page: 2, x: .1, y: .25 });
+    expect(rectangleFromDrag(2, .8, .6, .1, .25).width).toBeCloseTo(.7, 12);
+    expect(rectangleFromDrag(2, .8, .6, .1, .25).height).toBeCloseTo(.35, 12);
     expect(rectangleFromDrag(1, -5, 2, .5, .2)).toEqual({ page: 1, x: 0, y: .2, width: .5, height: .8 });
   });
   it('refuses empty, off-page, tiny, nonfinite and overlong mask lists', () => {
