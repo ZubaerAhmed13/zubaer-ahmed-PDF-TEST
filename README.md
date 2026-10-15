@@ -58,11 +58,12 @@ The `main` release workflow repeats quality and all three Playwright browser pro
 - cancellation through worker termination or cooperative cancellation
 - bounded batch processing with one active PDF worker at a time
 - safe local preferences for favorites/recent tools
+- optional manual account sync of favorite/recent tool IDs to a separate DocFlow Supabase project; PDFs and recovery state remain local
 - lightweight IndexedDB recovery without PDF/image byte persistence
 - versioned PWA/runtime cache under `/zubaer-ahmed-PDF-TEST/`
 - no remote PDF-processing API or analytics dependency
 
-See `ARCHITECTURE.md`, `SECURITY.md`, `PRIVACY.md`, `TESTING.md`, `docs/LEGACY_PARITY_MATRIX.md`, `docs/COMPLETION_REPORT.md` and `RELEASE_CHECKLIST.md`.
+See `ARCHITECTURE.md`, `SECURITY.md`, `PRIVACY.md`, `TESTING.md`, `docs/LEGACY_PARITY_MATRIX.md`, `docs/COMPLETION_REPORT.md`, `docs/SUPABASE_CLOUD_SYNC.md` and `RELEASE_CHECKLIST.md`.
 
 ## Security engine provenance
 
