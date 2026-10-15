@@ -17,6 +17,11 @@ test('keyboard-only dialog flows keep focus contained and return it to the exact
 
   const privacy = page.locator('.topbar-nav').getByRole('button', { name: 'Privacy' });
   await privacy.focus();
+  // Reproduce a late-arriving close event after the user has moved focus.
+  // Restoration must not steal keyboard focus back to the previous tool.
+  await page.locator('#workspace-dialog').dispatchEvent('close');
+  await expect(privacy).toBeFocused();
+  await page.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
   await expect(privacy).toBeFocused();
   await page.keyboard.press('Enter');
   const info = page.locator('#info-dialog');
