@@ -33,6 +33,13 @@ function rememberOpenTrigger(target: Element): void {
 }
 
 function focusOpeningControl(): void {
+  const active = document.activeElement;
+  const dialog = workspaceDialog();
+  // An asynchronously delivered native close event must not override a
+  // subsequent keyboard focus change (for example from Merge to Privacy).
+  if (active instanceof HTMLElement && active !== document.body &&
+      active !== document.documentElement && !dialog?.contains(active) &&
+      active !== lastWorkspaceTrigger) return;
   if (lastWorkspaceTrigger?.isConnected) {
     lastWorkspaceTrigger.focus({ preventScroll: true });
     return;
