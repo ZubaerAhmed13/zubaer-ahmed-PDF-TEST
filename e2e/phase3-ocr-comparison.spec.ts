@@ -65,10 +65,11 @@ test('text-only comparison reports missing pages and transparent page limits', a
 
 test('OCR keeps already selectable PDF pages without loading any external model', async ({ page }) => {
   const external: string[] = [];
-  page.on('request', (request) => {
-    if (new URL(request.url()).origin !== new URL(page.url()).origin) external.push(request.url());
-  });
   const dialog = await opened(page, 'ocr', 'OCR scanned PDF');
+  const origin = new URL(page.url()).origin;
+  page.on('request', (request) => {
+    if (new URL(request.url()).origin !== origin) external.push(request.url());
+  });
   await dialog.locator('#workspace-file').setInputFiles({ name: 'selectable.pdf', mimeType: 'application/pdf', buffer: await documentWithText('Already searchable') });
   await dialog.getByRole('button', { name: 'Run OCR scanned PDF' }).click();
   await expect(dialog.locator('#stage')).toContainText('OCR complete', { timeout: 45_000 });
