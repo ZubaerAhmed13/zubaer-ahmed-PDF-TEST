@@ -4,8 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "tsc -b && vite build && node scripts/generate-sw.mjs",
+    "dev": "node scripts/stage-ocr-assets.mjs && vite",
+    "build": "node scripts/stage-ocr-assets.mjs && tsc -b && vite build && node scripts/generate-sw.mjs",
     "typecheck": "tsc -b --pretty false",
     "lint": "eslint .",
     "test": "vitest run",
@@ -15,9 +15,13 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@tesseract.js-data/deu": "1.0.0",
+    "@tesseract.js-data/eng": "1.0.0",
     "jszip": "3.10.1",
     "pdf-lib": "1.17.1",
-    "pdfjs-dist": "4.10.38"
+    "pdfjs-dist": "4.10.38",
+    "tesseract.js": "7.0.0",
+    "tesseract.js-core": "7.0.0"
   },
   "devDependencies": {
     "@axe-core/playwright": "4.13.0",

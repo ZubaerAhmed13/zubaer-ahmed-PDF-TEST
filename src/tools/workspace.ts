@@ -10,7 +10,7 @@ interface FileRecord {
   id: string;
 }
 
-const pdfOnly = new Set(['preview','merge','split','remove-pages','extract-pages','organize','rotate','page-numbers','watermark','pdf-to-images','forms','metadata','compress','crop','annotate','sign-visual','metadata-edit','text-search']);
+const pdfOnly = new Set(['preview','merge','split','remove-pages','extract-pages','organize','rotate','page-numbers','watermark','pdf-to-images','forms','metadata','compress','crop','annotate','sign-visual','metadata-edit','text-search','ocr','compare']);
 const THUMBNAIL_ROW_HEIGHT = 154;
 const THUMBNAIL_OVERSCAN = 3;
 
@@ -44,6 +44,8 @@ function optionMarkup(id: string): string {
     case 'metadata-edit': return `<p class="help">Blank fields preserve existing values. Choose Clear standard properties to empty the standard Info fields. XMP, attachments and hidden content are not sanitised.</p><label>Action<select name="action"><option value="edit">Edit properties</option><option value="clear">Clear standard properties</option></select></label><label>Title<input name="title" maxlength="512"></label><label>Author<input name="author" maxlength="512"></label><label>Subject<input name="subject" maxlength="512"></label><label>Keywords (comma separated)<input name="keywords" maxlength="1000"></label><label>Creator<input name="creator" maxlength="512"></label>`;
     case 'annotate': return `<p class="help">Adds visible marks to page content. These are NOT editable PDF comments, exact text highlights, or secure redactions.</p><label>Mark type<select name="kind"><option value="note">Text note</option><option value="highlight">Coloured highlight region</option><option value="rectangle">Outline rectangle</option></select></label><label>Text note<textarea name="text" maxlength="700" rows="3" placeholder="Review note"></textarea></label><label>Colour<input name="color" type="color" value="#efaa35"></label><label>Pages (blank = all)<input name="pages" placeholder="1,3-5"></label><label>X from left (%)<input name="posX" type="number" min="0" max="100" value="12"></label><label>Y from top (%)<input name="posY" type="number" min="0" max="100" value="12"></label><label>Width (%)<input name="markWidth" type="number" min="2" max="100" value="30"></label><label>Height (%)<input name="markHeight" type="number" min="1" max="100" value="12"></label><label>Note font (pt)<input name="fontSize" type="number" min="7" max="36" value="14"></label>`;
     case 'sign-visual': return `<p class="warning-text">A visible signature is not a certificate-backed cryptographic signature.</p><div id="signature-pad-host"></div><label>Typed signature (used if no drawing)<input name="signatureText" maxlength="150" autocomplete="off" placeholder="Your name"></label><label>Pages (blank = all)<input name="pages" placeholder="1"></label><label>X from left (%)<input name="posX" type="number" min="0" max="100" value="58"></label><label>Y from top (%)<input name="posY" type="number" min="0" max="100" value="82"></label><label>Width (%)<input name="markWidth" type="number" min="2" max="100" value="32"></label><label>Height (%)<input name="markHeight" type="number" min="1" max="100" value="10"></label><label>Typed font size (pt)<input name="fontSize" type="number" min="10" max="42" value="24"></label>`;
+    case 'ocr': return '<div class="notice"><strong>Private, same-origin OCR</strong><p>English and German recognition run on your device. The local WebAssembly engine and selected language model are cached after first use (first run requires internet). OCR can make mistakes; review important information.</p></div><label>Recognition language<select name="language"><option value="eng">English</option><option value="deu">German (Deutsch)</option></select></label><label>Maximum pages (1–30)<input name="maxPages" type="number" min="1" max="30" value="10"></label><label class="check"><input name="skipExistingText" type="checkbox" checked> Skip pages with existing selectable text</label><p class="warning-text">OCR adds an invisible, approximate-position text layer; the original scan remains visible. Rotated pages are skipped rather than misaligned. Searchability is not guaranteed for low-quality scans. No cloud OCR.</p>';
+    case 'compare': return '<div class="notice"><strong>Private PDF comparison</strong><p>Add exactly two PDFs: first is A (original), second is B (revised). Comparison is page-position based: moved pages are reported as differences, not automatically aligned.</p></div><label>Comparison mode<select name="mode"><option value="both">Text + visual (recommended)</option><option value="text">Selectable text only</option><option value="visual">Visual pixels only</option></select></label><label>Maximum page positions (1–50)<input name="maxPages" type="number" min="1" max="50" value="20"></label><p class="help">Visual results use a downscaled page rendering with a pixel-change threshold; antialiasing and different font renderings can cause false positives. Scan-only PDFs cannot be text-compared until OCR is applied.</p><section id="pdf-comparison-results" class="docflow-diff-results" aria-live="polite" aria-label="PDF comparison results"></section>';
     case 'text-search': return `<label>Find text<input name="query" type="search" maxlength="150" placeholder="Enter a phrase (optional)"></label><p class="help">Reads selectable text using PDF.js. Empty search extracts everything. Scanned images require OCR; no OCR is performed.</p><section id="text-search-matches" aria-label="Search results" aria-live="polite"></section>`;
     default: return '';
   }
@@ -120,6 +122,8 @@ export function mountWorkspace(container: HTMLDivElement, tool: ToolDefinition):
   let previewController: PreviewController | null = null;
   let previewUiCleanup: (() => void) | null = null;
   let objectUrls: string[] = [];
+  let activeAbort: AbortController | null = null;
+  const compareResults = container.querySelector<HTMLElement>('#pdf-comparison-results');
   const signatureHost = container.querySelector<HTMLElement>('#signature-pad-host');
   const signaturePad = signatureHost ? mountSignaturePad(signatureHost) : null;
   const textResults = container.querySelector<HTMLElement>('#text-search-matches');
@@ -335,6 +339,7 @@ export function mountWorkspace(container: HTMLDivElement, tool: ToolDefinition):
     if (inspectionTimer !== null) window.clearTimeout(inspectionTimer);
     inspectionRun?.cancel();
     if (!records.length) { setError(`Choose ${tool.multipleFiles ? 'files' : 'a file'} first.`); return; }
+    if (tool.id === 'compare' && records.length !== 2) { setError('Choose exactly two PDFs to compare.'); return; }
     setError();
     clearUrls();
     resultArea.replaceChildren();
@@ -343,6 +348,108 @@ export function mountWorkspace(container: HTMLDivElement, tool: ToolDefinition):
     cancel.disabled = false;
     setProgress('Preparing document', 4);
     try {
+      if (tool.id === 'ocr') {
+        const { ocrPdf } = await import('../pdf/localOcr');
+        const cfg = formOptions(optionsForm);
+        activeAbort = new AbortController();
+        if (mainCancelled) activeAbort.abort();
+        const report = await ocrPdf(await records[0]!.file.arrayBuffer(), {
+          language: cfg.language === 'deu' ? 'deu' : 'eng',
+          maxPages: Number(cfg.maxPages ?? 10),
+          skipExistingText: cfg.skipExistingText !== false
+        }, (done, total, note) => {
+          if (!mainCancelled) setProgress(note, Math.min(96, 4 + (done / total) * 91));
+        }, activeAbort.signal);
+        if (mainCancelled) throw new DOMException('OCR cancelled', 'AbortError');
+        renderOutputs(report.output);
+        setProgress('OCR complete: ' + report.recognizedPages + ' page(s) processed', 100);
+        return;
+      }
+      if (tool.id === 'compare') {
+        const { comparePdfs } = await import('../pdf/pdfComparison');
+        const cfg = formOptions(optionsForm);
+        const mode = cfg.mode === 'visual' ? 'visual' : cfg.mode === 'text' ? 'text' : 'both';
+        const summary = await comparePdfs(
+          await records[0]!.file.arrayBuffer(), await records[1]!.file.arrayBuffer(),
+          { mode, maxPages: Number(cfg.maxPages ?? 20) },
+          (done, total) => { if (!mainCancelled) setProgress('Comparing page ' + done + ' of ' + total, Math.min(96, 4 + done / total * 91)); },
+          () => mainCancelled
+        );
+        if (mainCancelled) throw new DOMException('Comparison cancelled', 'AbortError');
+        if (compareResults) {
+          compareResults.replaceChildren();
+          const headline = document.createElement('p');
+          headline.className = 'docflow-diff-headline';
+          headline.textContent = summary.changedPages + ' changed page position(s) of ' + summary.pagesCompared +
+            ' compared · A: ' + summary.leftPages + ' pages · B: ' + summary.rightPages + ' pages';
+          compareResults.append(headline);
+          if (summary.limited) {
+            const warning = document.createElement('p');
+            warning.className = 'warning-text';
+            warning.textContent = 'Incomplete comparison: increase the page limit to check the remaining pages.';
+            compareResults.append(warning);
+          }
+          if (summary.preview) {
+            const preview = document.createElement('figure');
+            preview.className = 'docflow-diff-preview';
+            const caption = document.createElement('figcaption');
+            caption.textContent = 'Visual comparison — page ' + summary.preview.page;
+            const leftImg = document.createElement('img');
+            const rightImg = document.createElement('img');
+            const maskImg = document.createElement('img');
+            leftImg.alt = 'Document A page ' + summary.preview.page;
+            rightImg.alt = 'Document B page ' + summary.preview.page;
+            maskImg.alt = 'Differences highlighted in red';
+            for (const [img, blob] of [[leftImg, summary.preview.left], [rightImg, summary.preview.right], [maskImg, summary.preview.overlay]] as const) {
+              const url = URL.createObjectURL(blob);
+              objectUrls.push(url);
+              img.src = url;
+            }
+            const sides = document.createElement('div');
+            sides.className = 'docflow-diff-side-by-side';
+            sides.append(leftImg, rightImg);
+            const reveal = document.createElement('div');
+            reveal.className = 'docflow-diff-overlay';
+            const bottomImg = leftImg.cloneNode() as HTMLImageElement;
+            bottomImg.alt = '';
+            bottomImg.setAttribute('aria-hidden', 'true');
+            reveal.append(bottomImg, maskImg);
+            const label = document.createElement('label');
+            label.textContent = 'Difference overlay opacity';
+            const slider = document.createElement('input');
+            slider.type = 'range';
+            slider.min = '0';
+            slider.max = '100';
+            slider.value = '85';
+            slider.setAttribute('aria-label', 'Difference overlay opacity');
+            maskImg.style.opacity = '.85';
+            slider.addEventListener('input', () => { maskImg.style.opacity = String(Number(slider.value) / 100); });
+            label.append(slider);
+            preview.append(caption, sides, reveal, label);
+            compareResults.append(preview);
+          }
+          const table = document.createElement('div');
+          table.className = 'docflow-diff-pages';
+          for (const page of summary.rows) {
+            const line = document.createElement('p');
+            line.textContent = 'Page ' + page.page + ': ' + page.status +
+              (page.pixelDifferencePercent === null ? '' : ' · pixels changed: ' + page.pixelDifferencePercent + '%') +
+              (page.textChanged ? ' · text changed' : '');
+            table.append(line);
+          }
+          compareResults.append(table);
+        }
+        const reportUrl = URL.createObjectURL(summary.report);
+        objectUrls.push(reportUrl);
+        const link = document.createElement('a');
+        link.className = 'download';
+        link.href = reportUrl;
+        link.download = 'pdf-comparison-report.txt';
+        link.textContent = 'Download comparison report';
+        resultArea.replaceChildren(link);
+        setProgress('Comparison complete', 100);
+        return;
+      }
       if (tool.id === 'text-search') {
         const { extractAndSearchText } = await import('../pdf/textExtraction');
         const query = String(formOptions(optionsForm).query ?? '');
@@ -396,12 +503,13 @@ export function mountWorkspace(container: HTMLDivElement, tool: ToolDefinition):
       else { setError('The operation failed.'); setProgress('Failed', 0); }
     } finally {
       running = null;
+      activeAbort = null;
       run.disabled = false;
       cancel.disabled = true;
     }
   };
 
-  cancel.addEventListener('click', () => { mainCancelled = true; running?.cancel(); });
+  cancel.addEventListener('click', () => { mainCancelled = true; activeAbort?.abort(); running?.cancel(); });
   run.addEventListener('click', () => { void execute(); });
 
   async function inspectFormFields(): Promise<void> {
@@ -449,6 +557,7 @@ export function mountWorkspace(container: HTMLDivElement, tool: ToolDefinition):
 
   container.addEventListener('docflow-cleanup', () => {
     mainCancelled = true;
+    activeAbort?.abort();
     inspectionGeneration += 1;
     if (inspectionTimer !== null) window.clearTimeout(inspectionTimer);
     inspectionRun?.cancel();
