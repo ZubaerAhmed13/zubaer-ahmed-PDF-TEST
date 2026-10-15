@@ -1,0 +1,30 @@
+name: Correct OCR core dependency to v7
+on:
+  push:
+    branches: [feat/docflow-phase3-local-ocr-pdf-comparison]
+permissions:
+  contents: write
+jobs:
+  correct:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Pin required relaxed-SIMD capable OCR WebAssembly core
+        run: |
+          npm install --save-exact tesseract.js-core@7.0.0
+          npm audit --audit-level=high
+          test -f node_modules/tesseract.js-core/tesseract-core-relaxedsimd-lstm.wasm.js
+          npm run build
+          npm test
+      - name: Commit audited lockfile
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add package.json package-lock.json
+          if ! git diff --cached --quiet; then
+            git commit -m "Pin Tesseract core 7 to match OCR worker relaxed SIMD imports"
+            git push origin HEAD:feat/docflow-phase3-local-ocr-pdf-comparison
+          fi
