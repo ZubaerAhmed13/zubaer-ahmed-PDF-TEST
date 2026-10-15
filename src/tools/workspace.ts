@@ -2,6 +2,7 @@ import type { ToolDefinition } from './registry';
 import type { InputFile, OperationResult, WorkerOperation } from '../pdf/types';
 import { runWorkerOperation, type RunningOperation } from '../pdf/workerClient';
 import { createPreview, pdfToImages, type PreviewController } from '../pdf/render';
+import { mountVisualFormEditor, type InspectedFormField } from '../app/visualFormEditor';
 
 interface FileRecord {
   file: File;
@@ -34,7 +35,7 @@ function optionMarkup(id: string): string {
     case 'watermark': return `<label>Watermark text<input name="text" value="CONFIDENTIAL"></label><label>Opacity<input name="opacity" type="number" min=".05" max="1" step=".05" value=".18"></label><label>Rotation<input name="rotation" type="number" min="-180" max="180" value="-35"></label><label>Font size<input name="fontSize" type="number" min="12" max="120" value="42"></label>`;
     case 'images-to-pdf': return `<label>Page margin (pt)<input name="margin" type="number" min="0" value="24"></label><p class="help">JPEG and PNG are embedded into A4 pages. Source pixels are not re-encoded by DocFlow before embedding.</p>`;
     case 'pdf-to-images': return `<label>Format<select name="format"><option value="png">PNG</option><option value="jpeg">JPEG</option></select></label><label>Render scale<select name="scale"><option value="1">1×</option><option value="1.5" selected>1.5×</option><option value="2">2×</option></select></label><p class="warning-text">Image export rasterizes pages and is intentionally lossy with respect to selectable text/vector structure.</p>`;
-    case 'forms': return `<div class="form-inspector"><button type="button" class="secondary" data-inspect-form>Inspect form fields</button><div id="form-field-summary" class="help">Inspect first to distinguish supported AcroForm fields from XFA or documents without fields.</div></div><label class="wide">Field values (JSON)<textarea name="values" rows="7" placeholder='{"CustomerName":"Example","Accepted":true}'></textarea></label><label class="check"><input name="flatten" type="checkbox"> Flatten fields after filling (destructive)</label>`;
+    case 'forms': return `<div class="form-inspector"><button type="button" class="secondary" data-inspect-form>Inspect form fields</button><div id="form-field-summary" class="help" role="status" aria-live="polite">Add a PDF form to discover editable fields. XFA documents are reported as unsupported.</div></div><section id="visual-form-editor" class="visual-form-editor" aria-label="Visual PDF form editor"></section><label class="check"><input name="flatten" type="checkbox"> Flatten fields after filling (removes interactive fields)</label><details class="visual-form-advanced"><summary>Advanced JSON values (optional)</summary><label class="wide">Form values as JSON<textarea name="values" rows="7" placeholder='{"CustomerName":"Example","Accepted":true}'></textarea></label><p class="help">For advanced users and compatibility with existing form workflows. Visual fields above update these values automatically.</p></details>`;
     case 'compress': return `<div class="notice"><strong>Limited structural optimization</strong><p>This does not claim professional image compression. It rewrites PDF structure with object streams and reports the before/after size. Images are not intentionally recompressed.</p></div>`;
     case 'preview': return `<p class="help">The PDF.js viewer keeps one full active-page canvas and a virtualized thumbnail window, so large page counts do not create a canvas for every page at once.</p>`;
     case 'metadata': return `<p class="help">Reads standard metadata locally. Encrypted/password-protected files are detected and reported instead of being mislabeled as readable.</p>`;
@@ -113,6 +114,14 @@ export function mountWorkspace(container: HTMLDivElement, tool: ToolDefinition):
   let previewController: PreviewController | null = null;
   let previewUiCleanup: (() => void) | null = null;
   let objectUrls: string[] = [];
+  let inspectionGeneration = 0;
+  let inspectionTimer: number | null = null;
+  let inspectionRun: RunningOperation | null = null;
+  let visualEditor: ReturnType<typeof mountVisualFormEditor> | null = null;
+  const formSummary = container.querySelector<HTMLElement>('#form-field-summary');
+  const formInspector = container.querySelector<HTMLButtonElement>('[data-inspect-form]');
+  const visualHost = container.querySelector<HTMLElement>('#visual-form-editor');
+  const advancedFormValues = optionsForm.querySelector<HTMLTextAreaElement>('textarea[name=values]');
 
   const beforeUnload = (event: BeforeUnloadEvent): void => {
     if (!records.length && !running) return;
@@ -147,6 +156,19 @@ export function mountWorkspace(container: HTMLDivElement, tool: ToolDefinition):
     if (!tool.multipleFiles) records = valid.slice(0, 1).map((file) => ({file,id:crypto.randomUUID()}));
     else records.push(...valid.map((file) => ({file,id:crypto.randomUUID()})));
     renderFiles();
+    if (tool.id === 'forms') {
+      inspectionGeneration += 1;
+      inspectionRun?.cancel();
+      if (inspectionTimer !== null) window.clearTimeout(inspectionTimer);
+      visualEditor?.dispose();
+      visualEditor = null;
+      if (advancedFormValues) advancedFormValues.value = '{}';
+      if (formSummary) formSummary.textContent = records.length ? 'Discovering form fields locally…' : 'Add a PDF form to discover editable fields.';
+      if (records.length) inspectionTimer = window.setTimeout(() => {
+        inspectionTimer = null;
+        void inspectFormFields();
+      }, 250);
+    }
   };
 
   input.addEventListener('change', () => { if (input.files) addFiles(input.files); input.value = ''; });
@@ -160,6 +182,13 @@ export function mountWorkspace(container: HTMLDivElement, tool: ToolDefinition):
     if (!id) return;
     records = records.filter((record) => record.id !== id);
     renderFiles();
+    if (tool.id === 'forms') {
+      inspectionGeneration += 1;
+      inspectionRun?.cancel();
+      visualEditor?.dispose();
+      visualEditor = null;
+      if (formSummary) formSummary.textContent = 'Select a form to discover its editable fields.';
+    }
   });
 
   const renderOutputs = (result: OperationResult): void => {
@@ -293,6 +322,9 @@ export function mountWorkspace(container: HTMLDivElement, tool: ToolDefinition):
   };
 
   const execute = async (): Promise<void> => {
+    inspectionGeneration += 1;
+    if (inspectionTimer !== null) window.clearTimeout(inspectionTimer);
+    inspectionRun?.cancel();
     if (!records.length) { setError(`Choose ${tool.multipleFiles ? 'files' : 'a file'} first.`); return; }
     setError();
     clearUrls();
@@ -338,37 +370,55 @@ export function mountWorkspace(container: HTMLDivElement, tool: ToolDefinition):
   cancel.addEventListener('click', () => { mainCancelled = true; running?.cancel(); });
   run.addEventListener('click', () => { void execute(); });
 
-  container.querySelector('[data-inspect-form]')?.addEventListener('click', () => {
+  async function inspectFormFields(): Promise<void> {
+    const generation = ++inspectionGeneration;
+    inspectionRun?.cancel();
     if (!records.length) { setError('Choose a PDF form first.'); return; }
     setError();
-    void (async () => {
-      try {
+    if (formInspector) formInspector.disabled = true;
+    if (formSummary) formSummary.textContent = 'Analysing form fields locally…';
+    try {
         const workerFiles = await readInputs(records);
-        const inspect = runWorkerOperation('forms-inspect', workerFiles, {}, (update) => setProgress(update.message, update.percent));
-        running = inspect;
+        const inspect = runWorkerOperation('forms-inspect', workerFiles, {}, (update) => { if (generation === inspectionGeneration) setProgress(update.message, update.percent); });
+        inspectionRun = inspect;
         const result = await inspect.result;
+        if (generation !== inspectionGeneration) return;
         const summary = container.querySelector<HTMLElement>('#form-field-summary');
-        const textarea = optionsForm.querySelector<HTMLTextAreaElement>('textarea[name=values]');
+        const textarea = advancedFormValues;
         if (summary && result.info) {
           const fieldsText = typeof result.info.fields === 'string' ? result.info.fields : '[]';
-          const fields = JSON.parse(fieldsText) as Array<{name:string;type:string;value:string}>;
-          summary.innerHTML = `<strong>${fields.length} supported field(s)</strong><ul>${fields.map((field) => `<li>${escapeHtml(field.name)} — ${escapeHtml(field.type)}</li>`).join('')}</ul>`;
-          if (textarea) {
-            const initial: Record<string, string | boolean> = {};
-            fields.forEach((field) => { initial[field.name] = field.type === 'checkbox' ? field.value === 'true' : field.value; });
-            textarea.value = JSON.stringify(initial, null, 2);
-          }
+          const fields = JSON.parse(fieldsText) as InspectedFormField[];
+          summary.textContent = `${fields.length} supported field(s) · edit visually or use Advanced JSON`;
+          visualEditor?.dispose();
+          visualEditor = null;
+          if (visualHost && textarea) visualEditor = mountVisualFormEditor(visualHost, textarea, fields);
         }
         setProgress('Form inspection complete', 100);
       } catch (error) {
-        setError(error instanceof Error ? `${error.name !== 'Error' ? `${error.name}: ` : ''}${error.message}` : 'Form inspection failed.');
+        if (generation !== inspectionGeneration) return;
+        const message = error instanceof Error ? `${error.name !== 'Error' ? `${error.name}: ` : ''}${error.message}` : 'Form inspection failed.';
+        if (formSummary) formSummary.textContent = message;
+        setError(message);
         setProgress('Failed', 0);
-      } finally { running = null; }
-    })();
+      } finally {
+        if (generation === inspectionGeneration) {
+          inspectionRun = null;
+          if (formInspector) formInspector.disabled = false;
+        }
+      }
+  }
+  formInspector?.addEventListener('click', () => {
+    if (inspectionTimer !== null) window.clearTimeout(inspectionTimer);
+    inspectionTimer = null;
+    void inspectFormFields();
   });
 
   container.addEventListener('docflow-cleanup', () => {
     mainCancelled = true;
+    inspectionGeneration += 1;
+    if (inspectionTimer !== null) window.clearTimeout(inspectionTimer);
+    inspectionRun?.cancel();
+    visualEditor?.dispose();
     running?.cancel();
     clearUrls();
     previewUiCleanup?.();

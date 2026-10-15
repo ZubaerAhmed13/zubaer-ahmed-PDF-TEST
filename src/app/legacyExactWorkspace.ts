@@ -164,6 +164,18 @@ function createLegacyShell(root: HTMLElement, grid: HTMLElement, tool: ToolDefin
   info.innerHTML = `<span>${escapeHtml(description?.textContent?.trim() || tool.description)}</span><span class="legacy-editor-warning"><b aria-hidden="true">ⓘ</b>${escapeHtml(structuralWarning(tool))}</span>`;
   description?.remove();
 
+  // Every migrated operation shares one recognisable three-step editing flow.
+  // These are in-dialog navigation controls, not independent PDF operations.
+  const journey = document.createElement('nav');
+  journey.className = 'docflow-editor-journey';
+  journey.setAttribute('aria-label', 'Document workflow');
+  journey.innerHTML = `
+    <button type="button" data-editor-jump="files" data-editor-step="files"><span aria-hidden="true">1</span> Add files</button>
+    <button type="button" data-editor-jump="preview" data-editor-step="preview"><span aria-hidden="true">2</span> Review &amp; edit</button>
+    <button type="button" data-editor-jump="export" data-editor-step="export"><span aria-hidden="true">3</span> Export</button>
+  `;
+  info.append(journey);
+
   const body = document.createElement('div');
   body.className = 'legacy-editor-body';
 
@@ -202,6 +214,22 @@ function createLegacyShell(root: HTMLElement, grid: HTMLElement, tool: ToolDefin
   settings.append(status, result);
 
   body.append(filesPane, center, settings);
+  journey.addEventListener('click', (event) => {
+    const target = (event.target as HTMLElement).closest<HTMLButtonElement>('[data-editor-jump]');
+    const destination = target?.dataset.editorJump;
+    const pane = destination === 'files' ? filesPane : destination === 'preview' ? center : destination === 'export' ? settings : null;
+    if (!pane) return;
+    pane.scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'nearest' });
+    if (destination === 'export') {
+      const action = root.querySelector<HTMLButtonElement>('#run-operation');
+      action?.focus({ preventScroll: true });
+    } else if (destination === 'files') {
+      root.querySelector<HTMLInputElement>('#workspace-file')?.focus({ preventScroll: true });
+    } else {
+      center.focus({ preventScroll: true });
+    }
+  });
+  center.tabIndex = -1;
 
   const footer = document.createElement('footer');
   footer.className = 'legacy-editor-footer';
@@ -256,6 +284,16 @@ function syncLegacyWorkspace(root: HTMLElement): void {
   const footer = shell.querySelector<HTMLElement>('[data-legacy-footer-state]');
   if (countNode) countNode.textContent = String(count);
   if (footer) footer.textContent = `${count} file${count === 1 ? '' : 's'} ready · review before running`;
+  const stage = root.querySelector<HTMLElement>('#stage')?.textContent?.trim().toLowerCase() ?? '';
+  const hasExport = Boolean(root.querySelector('#result .download'));
+  const phase = hasExport || stage === 'complete' ? 'export' : count ? 'preview' : 'files';
+  shell.querySelectorAll<HTMLButtonElement>('[data-editor-step]').forEach((button) => {
+    const active = button.dataset.editorStep === phase;
+    if (button.getAttribute('aria-current') !== (active ? 'step' : null)) {
+      if (active) button.setAttribute('aria-current', 'step');
+      else button.removeAttribute('aria-current');
+    }
+  });
 
   const empty = shell.querySelector<HTMLElement>('.legacy-preview-empty');
   if (empty) empty.hidden = Boolean(preEdit && !preEdit.hidden);

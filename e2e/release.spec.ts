@@ -150,6 +150,7 @@ test('AcroForm inspect, fill, export, and reopen works through the UI', async ({
   await dialog.locator('#workspace-file').setInputFiles({ name: 'form.pdf', mimeType: 'application/pdf', buffer: await formFixture() });
   await dialog.getByRole('button', { name: 'Inspect form fields' }).click();
   await expect(dialog.locator('#form-field-summary')).toContainText('2 supported field(s)');
+  await dialog.locator('.visual-form-advanced summary').click();
   await dialog.locator('textarea[name="values"]').fill(JSON.stringify({ CustomerName: 'Zubaer', Accepted: true }));
   await dialog.getByRole('button', { name: 'Run Fill PDF forms' }).click();
   await expect(dialog.locator('#stage')).toHaveText('Complete');

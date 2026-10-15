@@ -23,6 +23,8 @@ function collectOptions(form: HTMLFormElement): Record<string, ProjectOptionValu
   const values: Record<string, ProjectOptionValue> = {};
   form.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>('input[name],select[name],textarea[name]').forEach((control) => {
     if (!control.name || (control instanceof HTMLInputElement && control.type === 'file')) return;
+    // Form values may contain personal information: never persist them in recovery.
+    if (form.dataset.docflowSensitiveForm === 'true' && control.name !== 'flatten') return;
     if (control instanceof HTMLInputElement && control.type === 'checkbox') values[control.name] = control.checked;
     else values[control.name] = control.value;
   });
@@ -31,6 +33,7 @@ function collectOptions(form: HTMLFormElement): Record<string, ProjectOptionValu
 
 function applyOptions(form: HTMLFormElement, options: Record<string, ProjectOptionValue>): void {
   for (const [name, value] of Object.entries(options)) {
+    if (form.dataset.docflowSensitiveForm === 'true' && name !== 'flatten') continue;
     const control = form.elements.namedItem(name);
     if (!(control instanceof HTMLInputElement || control instanceof HTMLSelectElement || control instanceof HTMLTextAreaElement)) continue;
     if (control instanceof HTMLInputElement && control.type === 'checkbox') control.checked = value === true;
@@ -46,6 +49,7 @@ export function mountWorkspace(container: HTMLDivElement, tool: ToolDefinition):
   const optionsForm = container.querySelector<HTMLFormElement>('#tool-options');
   const memoryWarning = container.querySelector<HTMLDivElement>('#memory-warning');
   if (!fileInput || !fileList || !optionsForm || !memoryWarning) return;
+  if (tool.id === 'forms') optionsForm.dataset.docflowSensitiveForm = 'true';
 
   const recoveryPanel = document.createElement('div');
   recoveryPanel.className = 'notice';
