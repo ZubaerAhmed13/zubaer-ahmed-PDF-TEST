@@ -1,6 +1,7 @@
 /// <reference lib="webworker" />
 import { addPageNumbers, addWatermark, extractPages, fillForms, imagesToPdf, inspectForms, mergePdf, organizePdf, removePages, rotatePdf, splitPdf } from '../pdf/core';
 import { recompressPdfImages } from '../pdf/imageRecompression';
+import { cropPdf, editMetadata, annotatePdf, signPdfVisually } from '../pdf/essentialEdits';
 import { addImageWatermark } from '../pdf/imageWatermark';
 import { metadata } from '../pdf/metadata';
 import { normalizePdfError } from '../pdf/errors';
