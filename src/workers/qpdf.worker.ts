@@ -155,7 +155,7 @@ async function run(request: QpdfRequest): Promise<OperationResult> {
 
   progress(request.requestId, 'writing', 82, 'Reading encrypted PDF output from local memory');
   const bytes = job.module.FS.readFile(outputPath);
-  const suffix = request.operation === 'protect' ? 'protected' : 'unlocked';
+  const suffix = request.operation === 'protect' ? 'protected' : request.operation === 'repair' ? 'repaired' : 'unlocked';
   const output = outputFile(outputName(request.file.name, suffix), bytes);
   progress(request.requestId, 'finalizing', 100, 'Complete');
   return {
