@@ -106,6 +106,13 @@ export const tools: ToolDefinition[] = [
     load: () => import('./compressionWorkspace')
   },
   {
+    id: 'workflow', name: 'Workflow builder', category: 'batch',
+    description: 'Chain up to eight local PDF operations, save reusable presets, batch process with progress, retry failures, and export individual files or ZIP.',
+    keywords: ['workflow','automation','sequence','chain','recipe','preset','batch','repeat','multi-step','zip'],
+    icon: '⇉', quality: 'Potentially lossy', status: 'Migrated', multipleFiles: true,
+    load: () => import('./workflowWorkspace')
+  },
+  {
     id: 'batch', name: 'Batch process PDFs', category: 'batch',
     description: 'Process multiple PDFs sequentially with a bounded one-worker queue, per-file status, cancellation and optional ZIP packaging. Quality depends on the selected batch operation.',
     keywords: ['batch','queue','multiple','bulk','rotate','number','watermark','optimize','zip'], icon: '≣', quality: 'Potentially lossy', status: 'Migrated', multipleFiles: true,
