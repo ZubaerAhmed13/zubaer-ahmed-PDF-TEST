@@ -76,13 +76,23 @@ export async function cropPdf(files: InputFile[], options: Options, emit: Progre
 export async function editMetadata(files: InputFile[], options: Options, emit: Progress): Promise<OperationResult> {
   const doc = await source(files);
   const remove = options.action === 'clear';
-  doc.setTitle(remove ? '' : text(options, 'title').slice(0, 512));
-  doc.setAuthor(remove ? '' : text(options, 'author').slice(0, 512));
-  doc.setSubject(remove ? '' : text(options, 'subject').slice(0, 512));
-  doc.setKeywords(remove ? [] : text(options, 'keywords').split(',').map((word) => word.trim()).filter(Boolean).slice(0, 50));
-  doc.setCreator(remove ? '' : text(options, 'creator').slice(0, 512));
+  if (remove) {
+    doc.setTitle('');
+    doc.setAuthor('');
+    doc.setSubject('');
+    doc.setKeywords([]);
+    doc.setCreator('');
+    doc.setProducer('');
+  } else {
+    // Blank inputs mean unchanged. Clearing every standard property requires the
+    // explicit Clear action, preventing accidental loss of unrelated information.
+    if (text(options, 'title').trim()) doc.setTitle(text(options, 'title').slice(0, 512));
+    if (text(options, 'author').trim()) doc.setAuthor(text(options, 'author').slice(0, 512));
+    if (text(options, 'subject').trim()) doc.setSubject(text(options, 'subject').slice(0, 512));
+    if (text(options, 'keywords').trim()) doc.setKeywords(text(options, 'keywords').split(',').map((word) => word.trim()).filter(Boolean).slice(0, 50));
+    if (text(options, 'creator').trim()) doc.setCreator(text(options, 'creator').slice(0, 512));
+  }
   // Basic Info dictionary only; not a guarantee of XMP or hidden-metadata removal.
-  if (remove) doc.setProducer('');
   progress(emit, 1, 1, remove ? 'Cleared standard properties' : 'Updated standard properties');
   return destination(remove ? 'properties-cleared.pdf' : 'properties-edited.pdf', await save(doc));
 }
