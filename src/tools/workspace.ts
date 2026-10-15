@@ -122,7 +122,6 @@ export function mountWorkspace(container: HTMLDivElement, tool: ToolDefinition):
   let objectUrls: string[] = [];
   const signatureHost = container.querySelector<HTMLElement>('#signature-pad-host');
   const signaturePad = signatureHost ? mountSignaturePad(signatureHost) : null;
-  let activeTextScan = false;
   const textResults = container.querySelector<HTMLElement>('#text-search-matches');
   let inspectionGeneration = 0;
   let inspectionTimer: number | null = null;
