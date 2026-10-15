@@ -145,7 +145,9 @@ async function run(request: QpdfRequest): Promise<OperationResult> {
   const outputPath = '/job/output.pdf';
   const execResult = request.operation === 'protect'
     ? job.exec(['--encrypt', request.password, ownerPassword(), '256', '--', job.inputPath, outputPath])
-    : job.exec([`--password=${request.password}`, '--decrypt', job.inputPath, outputPath]);
+    : request.operation === 'repair'
+      ? job.exec(['--check', '--object-streams=generate', '--stream-data=preserve', job.inputPath, outputPath])
+      : job.exec([`--password=${request.password}`, '--decrypt', job.inputPath, outputPath]);
 
   const detail = [execResult.stderr, execResult.stdoutText].filter(Boolean).join('\n').trim();
   const outputExists = job.module.FS.analyzePath(outputPath).exists;
