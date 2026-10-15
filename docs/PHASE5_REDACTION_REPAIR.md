@@ -19,7 +19,7 @@ Security invariant: **a new, clean PDFDocument is built exclusively from PNG ima
 
 ## Repair: structural reconstruction, not recovery from arbitrary corruption
 
-**Operation:** Repair PDF. Uses the existing **qpdf 12.3.2 WASM** engine locally. Runs a qpdf `--check` pass with structural rewrite and preservation of compressed stream data. Exit code 3 (warnings) is treated as a cautiously recoverable case only when an output is written. Errors or no output fail closed. Runs a post-export PDF.js load/getPage verification on the new file before download. Delivers warnings where qpdf reported them.
+**Operation:** Repair PDF. Uses the existing **qpdf 12.3.2 WASM** engine locally. Runs qpdf's ordinary structural rewrite with preservation of compressed stream data (qpdf automatically recovers supported malformed cross-reference structures). Exit code 3 (warnings) is treated as a cautiously recoverable case only when an output is written. Errors or no output fail closed. Runs a post-export PDF.js load/getPage verification on the new file before download. Delivers warnings where qpdf reported them.
 
 - Attempts reconstruction of corrupted xref, trailer and related references qpdf supports.
 - Does **not** reconstruct missing content, repair all damaged images, guarantee document integrity, remove passwords, or undo malicious modifications.
