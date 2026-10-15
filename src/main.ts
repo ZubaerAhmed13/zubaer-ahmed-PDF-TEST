@@ -11,6 +11,7 @@ import './styles/state.css';
 import './styles/editor-interaction-hardening.css';
 import './styles/cloud-sync.css';
 import { createApp } from './app/createApp';
+import { finishEmailConfirmation } from './app/cloudSync';
 import { installEditorLifecycleHardening } from './app/editorLifecycleHardening';
 import { installPreEditPreview } from './app/preEditPreview';
 import { installPreEditPreviewLabels } from './app/preEditPreviewLabels';
@@ -21,6 +22,7 @@ import { installLegacyScreenshotParity } from './app/legacyScreenshotParity';
 import { registerServiceWorker } from './pwa';
 
 createApp(document.querySelector<HTMLDivElement>('#app'));
+void finishEmailConfirmation();
 installEditorLifecycleHardening();
 installPreEditPreviewLabels();
 installPreEditPreview();
