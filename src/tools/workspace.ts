@@ -396,7 +396,6 @@ export function mountWorkspace(container: HTMLDivElement, tool: ToolDefinition):
       else { setError('The operation failed.'); setProgress('Failed', 0); }
     } finally {
       running = null;
-      activeTextScan = false;
       run.disabled = false;
       cancel.disabled = true;
     }
