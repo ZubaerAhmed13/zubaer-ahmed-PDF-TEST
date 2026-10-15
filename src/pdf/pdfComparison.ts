@@ -51,7 +51,7 @@ function makeCanvas(): HTMLCanvasElement {
   canvas.height = RENDER_H;
   return canvas;
 }
-async function rasterize(page: Awaited<ReturnType<Awaited<ReturnType<typeof pdfjs.getDocument>['promise']>['getPage']>> | null): Promise<HTMLCanvasElement> {
+async function rasterize(page: PDFPageProxy | null): Promise<HTMLCanvasElement> {
   const canvas = makeCanvas();
   const ctx = canvas.getContext('2d', { willReadFrequently: true, alpha: false });
   if (!ctx) throw Error('Canvas rendering is unavailable.');
