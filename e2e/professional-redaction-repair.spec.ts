@@ -78,7 +78,11 @@ test('structural repair exports a reopenable PDF without rasterizing text',async
   const dialog=await open(page,'repair PDF','repair-pdf');
   await dialog.locator('#pro-pdf').setInputFiles({name:'source.pdf',mimeType:'application/pdf',buffer:await fixture()});
   await dialog.getByRole('button',{name:'Attempt structural repair'}).click();
-  await expect(dialog.locator('#pro-stage')).toHaveText('Complete',{timeout:90000});
+  await expect.poll(async () => {
+    const stage = await dialog.locator('#pro-stage').innerText();
+    if (stage === 'Failed') throw Error('Repair failed: ' + await dialog.locator('#pro-error').innerText());
+    return stage;
+  }, { timeout: 90000 }).toBe('Complete');
   const output=await downloaded(page,dialog.locator('#pro-results a.download'));
   const pdf=await PDFDocument.load(output);
   expect(pdf.getPageCount()).toBe(2);
