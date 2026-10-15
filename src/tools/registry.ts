@@ -63,6 +63,20 @@ export const tools: ToolDefinition[] = [
     load: () => import('./organizeWorkspace')
   },
   tool({ id: 'rotate', name: 'Rotate pages', category: 'organize', description: 'Rotate all, odd, even, or selected pages structurally.', keywords: ['orientation'], icon: '↻', quality: 'Lossless', status: 'Migrated', multipleFiles: false }),
+  {
+    id: 'redact-secure', name: 'Permanent redaction', category: 'security',
+    description: 'Remove selected visible regions by converting every page to a new image-only PDF. Discards original selectable text, metadata and embedded content; 15-page limit.',
+    keywords: ['redact','redaction','private','remove confidential','blackout','permanent','sanitize','sensitive'],
+    icon: '▩', quality: 'Potentially lossy', status: 'Migrated', multipleFiles: false,
+    load: () => import('./professionalWorkspace')
+  },
+  {
+    id: 'repair-pdf', name: 'Repair PDF', category: 'optimize',
+    description: 'Attempt local qpdf structural recovery and rebuild cross-references. Damaged/missing content may remain unrecoverable.',
+    keywords: ['repair','damaged','recover','fix','broken','xref','structure','normalize'],
+    icon: '⚒', quality: 'Potentially lossy', status: 'Migrated', multipleFiles: false,
+    load: () => import('./professionalWorkspace')
+  },
   tool({ id: 'crop', name: 'Crop PDF', category: 'organize', description: 'Adjust visible page crop boxes without rasterization. Cropping hides content; it does not securely remove it.', keywords: ['crop','trim','margin','page'], icon: '◩', quality: 'Lossless', status: 'Migrated', multipleFiles: false }),
   tool({ id: 'annotate', name: 'Annotate PDF', category: 'edit', description: 'Apply baked-in visible note, highlight region or rectangle marks on chosen pages.', keywords: ['annotate','mark','highlight','note','rectangle'], icon: '✎', quality: 'Lossless', status: 'Migrated', multipleFiles: false }),
   tool({ id: 'sign-visual', name: 'Visual signature', category: 'edit', description: 'Draw or type a visible signature locally. This is not a cryptographic or certificate-backed signature.', keywords: ['signature','sign','draw','handwritten'], icon: '✍', quality: 'Lossless', status: 'Migrated', multipleFiles: false }),
