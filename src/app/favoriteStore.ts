@@ -21,7 +21,7 @@ function emit(): void {
 }
 
 function persist(): void {
-  localStorage.setItem(FAVORITES_KEY, JSON.stringify([...favorites]));
+  try { localStorage.setItem(FAVORITES_KEY, JSON.stringify([...favorites])); } catch { /* Storage denied: in-memory favorites remain usable. */ }
 }
 
 export function getFavorites(): Set<string> {
@@ -37,6 +37,12 @@ export function setFavorite(toolId: string, enabled: boolean): void {
   if (!changed) return;
   if (enabled) favorites.add(toolId);
   else favorites.delete(toolId);
+  persist();
+  emit();
+}
+
+export function replaceFavorites(toolIds: string[]): void {
+  favorites = new Set(toolIds);
   persist();
   emit();
 }
