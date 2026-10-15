@@ -30,7 +30,7 @@ function fitWinAnsi(word: string, font: PDFFont): string {
   const reduced = candidate.normalize('NFKD').replace(/[\u0300-\u036f]/g, '').replace(/[^\x20-\x7e]/g, '');
   try { font.encodeText(reduced); return reduced; } catch { return ''; }
 }
-async function render(page: Awaited<ReturnType<Awaited<ReturnType<typeof pdfjs.getDocument>['promise']>['getPage']>>): Promise<HTMLCanvasElement> {
+async function render(page: PDFPageProxy): Promise<HTMLCanvasElement> {
   const viewport = page.getViewport({ scale: 1 });
   const scale = Math.min(2, 2000 / Math.max(viewport.width, viewport.height), 2_000_000 / (viewport.width * viewport.height));
   const view = page.getViewport({ scale });
