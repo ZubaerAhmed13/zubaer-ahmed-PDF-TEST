@@ -66,7 +66,7 @@ function classifyQpdfFailure(detail: string, operation: QpdfRequest['operation']
   if (/not a pdf|pdf header|damaged pdf|trailer dictionary|xref|cross-reference/.test(normalized)) {
     return codedError('INVALID_PDF', 'The PDF is malformed or cannot be processed safely.', detail);
   }
-  return codedError('QPDF_OPERATION_FAILED', operation === 'protect' ? 'The PDF could not be encrypted.' : 'The PDF could not be unlocked.', detail);
+  return codedError('QPDF_OPERATION_FAILED', operation === 'protect' ? 'The PDF could not be encrypted.' : operation === 'repair' ? 'The PDF structure could not be recovered with qpdf.' : 'The PDF could not be unlocked.', detail);
 }
 
 function isExitStatus(error: unknown): error is { status: number } {
