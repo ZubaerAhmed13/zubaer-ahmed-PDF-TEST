@@ -1,0 +1,61 @@
+/* Essential utilities use the same responsive local-first editor shell. */
+.legacy-settings-pane #signature-pad-host {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+.legacy-settings-pane .signature-drawing {
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  height: auto;
+  max-height: 142px;
+  min-height: 92px;
+  border: 1px solid #bfcbd7;
+  border-radius: 9px;
+  background: #fff;
+  touch-action: none;
+  cursor: crosshair;
+}
+.legacy-settings-pane #signature-pad-host button {
+  justify-self: start;
+  padding: 7px 11px;
+  min-height: 34px;
+  border-radius: 8px;
+  font-size: 12px;
+}
+.legacy-settings-pane #text-search-matches {
+  display: grid;
+  gap: 8px;
+  max-height: 320px;
+  overflow-y: auto;
+}
+.legacy-settings-pane #text-search-matches p { margin: 0; line-height: 1.45; }
+.legacy-settings-pane .docflow-text-hit {
+  padding: 9px;
+  border: 1px solid #dae3eb;
+  border-radius: 8px;
+  background: #fff;
+  color: #354b60;
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+.legacy-settings-pane .tool-options label.check {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 9px;
+  line-height: 1.4;
+}
+.legacy-settings-pane .tool-options label.check input[type=checkbox] {
+  min-height: 18px;
+  height: 18px;
+  width: 18px;
+  margin: 0;
+  padding: 0;
+  flex: 0 0 18px;
+  accent-color: #c95c46;
+}
+@media (prefers-reduced-motion: reduce) {
+  .signature-drawing { scroll-behavior: auto; }
+}
