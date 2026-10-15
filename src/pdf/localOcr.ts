@@ -99,6 +99,7 @@ export async function ocrPdf(
             cacheMethod: 'write'
           });
           tesseract = await loading;
+          if (signal.aborted) throw new DOMException('OCR cancelled', 'AbortError');
         }
         const canvas = await render(page);
         try {
