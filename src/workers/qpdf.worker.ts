@@ -25,6 +25,7 @@ function ensurePdf(file: InputFile): void {
 }
 
 function validatePassword(password: string, operation: QpdfRequest['operation']): void {
+  if (operation === 'repair') return;
   if (!password) throw codedError(operation === 'unlock' ? 'PASSWORD_REQUIRED' : 'INVALID_PASSWORD_FORMAT', 'Enter a password.');
   const byteLength = passwordEncoder.encode(password).byteLength;
   if (operation === 'protect' && byteLength < 8) throw codedError('INVALID_PASSWORD_FORMAT', 'Use a password with at least 8 UTF-8 bytes.');
