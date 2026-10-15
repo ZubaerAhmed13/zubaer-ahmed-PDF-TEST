@@ -259,12 +259,15 @@ export async function inspectForms(files: InputFile[], _options: Record<string, 
   const fieldInfo = fields.map((field) => {
     let type = 'unknown';
     let value = '';
-    if (field instanceof PDFTextField) { type = 'text'; value = field.getText() ?? ''; }
+    let choices: string[] = [];
+    let selected: string[] = [];
+    let multiline = false;
+    if (field instanceof PDFTextField) { type = 'text'; value = field.getText() ?? ''; multiline = field.isMultiline(); }
     else if (field instanceof PDFCheckBox) { type = 'checkbox'; value = String(field.isChecked()); }
-    else if (field instanceof PDFRadioGroup) { type = 'radio'; value = field.getSelected() ?? ''; }
-    else if (field instanceof PDFDropdown) { type = 'dropdown'; value = field.getSelected().join(', '); }
-    else if (field instanceof PDFOptionList) { type = 'option-list'; value = field.getSelected().join(', '); }
-    return { name: field.getName(), type, value };
+    else if (field instanceof PDFRadioGroup) { type = 'radio'; value = field.getSelected() ?? ''; choices = field.getOptions(); }
+    else if (field instanceof PDFDropdown) { type = 'dropdown'; selected = field.getSelected(); value = selected[0] ?? ''; choices = field.getOptions(); }
+    else if (field instanceof PDFOptionList) { type = 'option-list'; selected = field.getSelected(); value = selected.join(', '); choices = field.getOptions(); }
+    return { name: field.getName(), type, value, choices, selected, multiline };
   });
   progress(emit, 'finalizing', 1, 1, 'Form inspection complete');
   if (!fieldInfo.length) throw new PdfOperationError('NO_FORM_FIELDS', 'No supported AcroForm fields were detected.');
