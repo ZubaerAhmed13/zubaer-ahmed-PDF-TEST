@@ -31,7 +31,7 @@ export interface ComparisonResult {
 const RENDER_W = 440;
 const RENDER_H = 600;
 
-function textOf(items: Awaited<ReturnType<Awaited<ReturnType<typeof pdfjs.getDocument>['promise']>['getPage']>['getTextContent']>>['items']): string {
+function textOf(items: TextContent['items']): string {
   const tokens: string[] = [];
   for (const item of items) if ('str' in item) tokens.push(item.str + (item.hasEOL ? '\n' : ' '));
   return tokens.join('').replace(/[ \t]+/g, ' ').trim();
