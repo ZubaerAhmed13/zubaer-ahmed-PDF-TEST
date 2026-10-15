@@ -327,7 +327,15 @@ export function createApp(root: HTMLDivElement | null): void {
     workspace.replaceChildren();
     const trigger = workspaceTrigger;
     workspaceTrigger = null;
-    if (trigger?.isConnected) queueMicrotask(() => trigger.focus());
+    if (trigger?.isConnected) queueMicrotask(() => {
+      // The close event can arrive after native focus restoration. Never steal
+      // focus back if the user has already moved to another control.
+      const active = document.activeElement;
+      if (!active || active === document.body || active === document.documentElement ||
+          workspaceDialog.contains(active) || active === trigger) {
+        trigger.focus({ preventScroll: true });
+      }
+    });
   });
 
   render();
