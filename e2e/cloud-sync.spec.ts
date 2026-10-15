@@ -59,7 +59,7 @@ test('manual account sync restores only favourites and recent tools without PDF 
 
   await dialog.getByRole('button', { name: 'Save preferences to cloud' }).click();
   await expect(dialog.getByText('Preferences saved to your private DocFlow project.')).toBeVisible();
-  expect(stored?.favorite_tools).toContain('merge');
+  expect(stored).toEqual(expect.objectContaining({ favorite_tools: expect.arrayContaining(['merge']) }));
 
   await dialog.getByRole('button', { name: 'Close' }).click();
   await page.locator('[data-favorite="merge"]').click();
