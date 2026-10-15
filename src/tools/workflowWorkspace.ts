@@ -69,9 +69,6 @@ const SPEC: Record<WorkflowOperation, EditField[]> = {
 const initialStep = (operation: WorkflowOperation = 'rotate'): WorkflowStep => ({
   id: crypto.randomUUID(), operation, options: defaultOptions(operation)
 });
-function escapeHtml(value: string): string {
-  return value.replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char] ?? char));
-}
 function bytes(value: number): string {
   if (value < 1024) return value + ' B';
   return (value / 1048576).toFixed(1) + ' MB';
@@ -195,11 +192,12 @@ export function mountWorkspace(root: HTMLDivElement, _tool: ToolDefinition): voi
       add.disabled = steps.length >= MAX_STEPS;
     }
     renderQueue();
+    renderSteps();
   };
 
   const updateStep = (index: number, key: string, raw: string, control: HTMLInputElement | HTMLSelectElement): void => {
     if (locked || !steps[index]) return;
-    const value = control instanceof HTMLInputElement && control.type === 'number' ? Number(raw) : raw;
+    const value = (control instanceof HTMLInputElement && control.type === 'number') || key === 'degrees' ? Number(raw) : raw;
     steps[index]!.options[key] = value;
     resetOutputs();
   };
