@@ -151,7 +151,7 @@ export function createApp(root: HTMLDivElement | null): void {
 
       <footer>
         <span class="footer-brand"><span class="mini-mark" aria-hidden="true">D</span> docflow · PDF workspace</span>
-        <span class="footer-links"><button type="button" data-action="privacy">Privacy</button><button type="button" data-action="diagnostics">Diagnostics</button><span>Local-first · no analytics</span></span>
+        <span class="footer-links"><button type="button" data-action="privacy">Privacy</button><button type="button" data-action="diagnostics">Diagnostics</button><button type="button" data-action="cloud">Cloud sync</button><span>Local-first · no analytics</span></span>
       </footer>
     </div>
   `;
