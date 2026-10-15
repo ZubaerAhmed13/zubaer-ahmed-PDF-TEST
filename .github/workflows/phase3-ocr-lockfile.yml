@@ -20,11 +20,6 @@ jobs:
           find node_modules/tesseract.js-core -maxdepth 2 -name 'tesseract-core*' -type f
           find node_modules/@tesseract.js-data/eng -name '*traineddata*' -type f
           find node_modules/@tesseract.js-data/deu -name '*traineddata*' -type f
-      - name: Validate source and bundled OCR static assets
-        run: |
-          npm run build
-          npm run lint
-          npm test
       - name: Commit reproducible manifests
         run: |
           git config user.name "github-actions[bot]"
@@ -34,3 +29,9 @@ jobs:
             git commit -m "Pin audit-checked local Tesseract OCR engine and language assets"
             git push origin HEAD:feat/docflow-phase3-local-ocr-pdf-comparison
           fi
+
+      - name: Validate source and bundled OCR static assets
+        run: |
+          npm run build
+          npm run lint
+          npm test
