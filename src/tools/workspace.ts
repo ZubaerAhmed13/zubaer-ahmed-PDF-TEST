@@ -384,7 +384,7 @@ export function mountWorkspace(container: HTMLDivElement, tool: ToolDefinition):
         const result = await inspect.result;
         if (generation !== inspectionGeneration) return;
         const summary = container.querySelector<HTMLElement>('#form-field-summary');
-        const textarea = optionsForm.querySelector<HTMLTextAreaElement>('textarea[name=values]');
+        const textarea = advancedFormValues;
         if (summary && result.info) {
           const fieldsText = typeof result.info.fields === 'string' ? result.info.fields : '[]';
           const fields = JSON.parse(fieldsText) as InspectedFormField[];
