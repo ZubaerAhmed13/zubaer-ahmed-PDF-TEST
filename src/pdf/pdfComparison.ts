@@ -1,5 +1,5 @@
 import * as pdfjs from 'pdfjs-dist';
-import type { PDFPageProxy, TextContent } from 'pdfjs-dist';
+import type { PDFPageProxy } from 'pdfjs-dist';
 
 pdfjs.GlobalWorkerOptions.workerSrc = new URL('pdfjs-dist/build/pdf.worker.min.mjs', import.meta.url).toString();
 
@@ -31,9 +31,13 @@ export interface ComparisonResult {
 const RENDER_W = 440;
 const RENDER_H = 600;
 
-function textOf(items: TextContent['items']): string {
+function textOf(items: readonly unknown[]): string {
   const tokens: string[] = [];
-  for (const item of items) if ('str' in item) tokens.push(item.str + (item.hasEOL ? '\n' : ' '));
+  for (const item of items) {
+    if (item && typeof item === 'object' && 'str' in item && typeof item.str === 'string') {
+      tokens.push(item.str + ('hasEOL' in item && item.hasEOL ? '\n' : ' '));
+    }
+  }
   return tokens.join('').replace(/[ \t]+/g, ' ').trim();
 }
 export function normalizedComparisonText(value: string): string {
