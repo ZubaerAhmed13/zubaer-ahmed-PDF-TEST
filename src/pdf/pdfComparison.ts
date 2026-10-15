@@ -1,4 +1,5 @@
 import * as pdfjs from 'pdfjs-dist';
+import type { PDFPageProxy, TextContent } from 'pdfjs-dist';
 
 pdfjs.GlobalWorkerOptions.workerSrc = new URL('pdfjs-dist/build/pdf.worker.min.mjs', import.meta.url).toString();
 
