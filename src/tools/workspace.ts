@@ -378,7 +378,6 @@ export function mountWorkspace(container: HTMLDivElement, tool: ToolDefinition):
     if (formInspector) formInspector.disabled = true;
     if (formSummary) formSummary.textContent = 'Analysing form fields locally…';
     try {
-      try {
         const workerFiles = await readInputs(records);
         const inspect = runWorkerOperation('forms-inspect', workerFiles, {}, (update) => { if (generation === inspectionGeneration) setProgress(update.message, update.percent); });
         inspectionRun = inspect;
