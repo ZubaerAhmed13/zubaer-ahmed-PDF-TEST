@@ -140,7 +140,7 @@ async function run(request: QpdfRequest): Promise<OperationResult> {
   validatePassword(request.password, request.operation);
   progress(request.requestId, 'preparing', 8, 'Loading local qpdf 12.3.2 engine');
   const job = await createJob(request.file);
-  progress(request.requestId, 'processing', 28, request.operation === 'protect' ? 'Encrypting PDF with AES-256' : 'Validating password and decrypting PDF');
+  progress(request.requestId, 'processing', 28, request.operation === 'protect' ? 'Encrypting PDF with AES-256' : request.operation === 'repair' ? 'Checking and rewriting damaged PDF structure' : 'Validating password and decrypting PDF');
 
   const outputPath = '/job/output.pdf';
   const execResult = request.operation === 'protect'
