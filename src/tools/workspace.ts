@@ -345,7 +345,6 @@ export function mountWorkspace(container: HTMLDivElement, tool: ToolDefinition):
     try {
       if (tool.id === 'text-search') {
         const { extractAndSearchText } = await import('../pdf/textExtraction');
-        activeTextScan = true;
         const query = String(formOptions(optionsForm).query ?? '');
         const scan = await extractAndSearchText(await records[0]!.file.arrayBuffer(), query, (done, total) => setProgress('Reading page ' + done + ' of ' + total, (done / total) * 95), () => mainCancelled);
         if (mainCancelled) throw new DOMException('Operation cancelled', 'AbortError');
