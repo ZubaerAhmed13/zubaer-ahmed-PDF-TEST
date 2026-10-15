@@ -9,6 +9,7 @@ import './styles/legacy-exact-workspace.css';
 import './styles/legacy-screenshot-parity.css';
 import './styles/state.css';
 import './styles/editor-interaction-hardening.css';
+import './styles/cloud-sync.css';
 import { createApp } from './app/createApp';
 import { installEditorLifecycleHardening } from './app/editorLifecycleHardening';
 import { installPreEditPreview } from './app/preEditPreview';
