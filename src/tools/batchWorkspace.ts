@@ -164,6 +164,7 @@ export function mountWorkspace(container: HTMLDivElement, tool: ToolDefinition):
   };
 
   const renderQueue = (): void => {
+    runtime.inputs(items.map(item => item.file));
     queue.innerHTML = items.map((item, index) => `
       <div class="batch-row" data-batch-id="${item.id}" data-state="${item.state}">
         <span><strong>${escapeHtml(item.file.name)}</strong><small>${humanBytes(item.file.size)} · Queue #${index + 1}</small><span class="batch-state">${escapeHtml(item.status)}</span></span>

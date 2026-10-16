@@ -62,3 +62,8 @@
   .session-result > button,.session-result > a { flex:1 1 auto; }
 }
 @media(prefers-reduced-motion:reduce) { .document-toolbar *,.session-confirm * { transition:none; animation:none; scroll-behavior:auto; } }
+
+/* Existing editor surfaces share the verified foreground/action tokens. */
+.workspace .legacy-settings-note,.workspace [data-legacy-footer-state-ui] { color:var(--df-muted); }
+.workspace .legacy-editor-footer #run-operation { background:var(--df-accent); border-color:var(--df-accent); }
+.document-invitation { width:100%; min-height:40px; margin-top:12px; white-space:normal; font-size:11px; }

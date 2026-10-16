@@ -26,6 +26,23 @@ async function updateCheck(states: ('safe' | 'work' | 'unresponsive')[]): Promis
 }
 
 describe('actual generated service-worker update protocol', () => {
+  it('uses the current application shell offline while retaining older hashed assets', async () => {
+    const generator = readFileSync('scripts/generate-sw.mjs', 'utf8');
+    const template = generator.slice(generator.indexOf('const source = `') + 16, generator.lastIndexOf('`;'));
+    const source = template.replace('${version}', 'test').replace('${JSON.stringify(precache)}', '[]');
+    const listeners = new Map<string, (event: unknown) => void>();
+    let oldCacheReads = 0;
+    runInNewContext(source, {
+      self: { registration: { scope: 'https://example.test/docflow/' }, location: { origin: 'https://example.test' }, addEventListener: (name: string, callback: (event: unknown) => void) => listeners.set(name, callback) },
+      URL, MessageChannel, setTimeout, clearTimeout,
+      fetch: async () => { throw Error('offline'); },
+      caches: { open: async () => ({ match: async () => 'current-app-shell' }), match: async () => { oldCacheReads++; return 'previous-app-shell'; } }
+    });
+    let response: Promise<string> | undefined;
+    listeners.get('fetch')!({ request: { method: 'GET', mode: 'navigate', url: 'https://example.test/docflow/' }, respondWith: (promise: Promise<string>) => { response = promise; } });
+    expect(await response).toBe('current-app-shell'); expect(oldCacheReads).toBe(0);
+  });
+
   it('activates only when every open DocFlow tab confirms safety', async () => {
     expect(await updateCheck(['safe', 'safe'])).toEqual({ skipped: true, messages: ['DOCFLOW_UPDATE_ACCEPTED'] });
   });

@@ -59,6 +59,8 @@ export class DocumentSession {
     return id;
   }
 
+  aliasSource(file: File, known: File): void { this.ids.set(file, this.sourceId(known)); }
+
   subscribe(listener: () => void): () => void {
     this.listeners.add(listener);
     return () => this.listeners.delete(listener);
@@ -111,7 +113,7 @@ export class DocumentSession {
       throw Error('The document changed while the result was being checked.');
     }
     const revision: DocumentRevision = Object.freeze({ id: crypto.randomUUID(), file, label: pending.label,
-      sourceIds: [...pending.sourceIds], pages });
+      sourceIds: pending.barrier ? [crypto.randomUUID()] : [...pending.sourceIds], pages });
     this.pending = null;
     this.selection = [];
     if (pending.barrier) {
@@ -121,10 +123,13 @@ export class DocumentSession {
       this.index = 0;
       this.exportedIds.clear();
       this.ids = new WeakMap();
-      this.sourceId(file);
+      this.ids.set(file, revision.sourceIds[0]!);
+      this.limited = false;
     } else {
       this.history = this.history.slice(0, this.index + 1);
       this.history.push(revision);
+      const retained = new Set(this.history.map(item => item.id));
+      this.exportedIds.forEach(id => { if (!retained.has(id)) this.exportedIds.delete(id); });
       this.index = this.history.length - 1;
       while (this.history.length > MAX_HISTORY || (this.snapshot().retainedBytes > MEMORY_BUDGET && this.history.length > 1)) {
         const removed = this.history.shift();

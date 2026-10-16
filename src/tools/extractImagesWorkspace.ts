@@ -307,6 +307,7 @@ export function mountWorkspace(container: HTMLDivElement, tool: ToolDefinition):
     result.replaceChildren();
   };
   const renderFile = (): void => {
+    runtime.inputs(file ? [file] : []);
     list.innerHTML = file ? `<div class="file-row"><span><strong>${escapeHtml(file.name)}</strong><small>${humanBytes(file.size)}</small></span><button type="button" data-remove aria-label="Remove ${escapeHtml(file.name)}">Remove</button></div>` : '';
     warning.hidden = !file || file.size <= 250 * 1024 * 1024;
     if (!warning.hidden && file) warning.textContent = `Large input (${humanBytes(file.size)}). PDF.js avoids whole-page rasterization here, but decoded image objects and the ZIP still consume browser memory.`;

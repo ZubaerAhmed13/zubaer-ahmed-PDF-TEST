@@ -189,7 +189,10 @@ export function createApp(root: HTMLDivElement | null): void {
     if (!target?.closest('[data-legacy-header-close],.legacy-footer-close,.dialog-bar button,[data-load-close]')) return;
     event.preventDefault(); event.stopImmediatePropagation(); void closeWorkspace();
   }, true);
-  workspaceDialog.addEventListener('cancel', event => { event.preventDefault(); void closeWorkspace(); });
+  workspaceDialog.addEventListener('cancel', event => {
+    if (event.target !== workspaceDialog) return; // A file picker also emits a bubbling cancel event.
+    event.preventDefault(); void closeWorkspace();
+  });
 
   const toolButtons = (ids: string[], emptyMessage: string): string => {
     const available = ids.map((id) => tools.find((tool) => tool.id === id)).filter((tool): tool is NonNullable<typeof tool> => Boolean(tool));

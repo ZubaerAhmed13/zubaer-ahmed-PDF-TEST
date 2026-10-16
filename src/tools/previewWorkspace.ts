@@ -94,6 +94,7 @@ export function mountWorkspace(container: HTMLDivElement, tool: ToolDefinition):
     percent.textContent = `${Math.round(value)}%`;
   };
   const renderFile = (): void => {
+    runtime.inputs(file ? [file] : []);
     list.innerHTML = file ? `<div class="file-row"><span><strong>${escapeHtml(file.name)}</strong><small>${humanBytes(file.size)}</small></span><button type="button" data-remove aria-label="Remove ${escapeHtml(file.name)}">Remove</button></div>` : '';
     const memory = navigator as Navigator & { deviceMemory?: number };
     const risky = Boolean(file && (file.size > 250 * 1024 * 1024 || ((memory.deviceMemory ?? 8) <= 4 && file.size > 100 * 1024 * 1024)));
@@ -186,7 +187,7 @@ export function mountWorkspace(container: HTMLDivElement, tool: ToolDefinition):
       </div>
       <div class="viewer-layout">
         <aside class="thumbnail-rail" aria-label="Page thumbnails"><div class="thumbnail-track"></div></aside>
-        <div class="canvas-shell" tabindex="0" aria-label="PDF page viewer. Use left and right arrows for pages and plus or minus to zoom."><canvas id="pdf-canvas"></canvas></div>
+        <div class="canvas-shell" role="region" tabindex="0" aria-label="PDF page viewer. Use left and right arrows for pages and plus or minus to zoom."><canvas id="pdf-canvas"></canvas></div>
       </div>
     `;
 

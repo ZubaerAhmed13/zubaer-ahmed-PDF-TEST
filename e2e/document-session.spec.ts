@@ -23,7 +23,7 @@ async function begin(page: Page, bytes = fixture()): Promise<void> {
 }
 async function next(page: Page, id: string): Promise<void> {
   await page.getByRole('combobox', { name: 'Next tool', exact: true }).selectOption(id);
-  await expect(page.getByRole('heading', { name: tools.find(tool => tool.id === id)!.name, exact: true })).toBeVisible();
+  await expect(page.getByRole('dialog', { name: 'Workspace', exact: true }).getByRole('heading', { name: tools.find(tool => tool.id === id)!.name, exact: true })).toBeVisible();
 }
 async function apply(page: Page): Promise<void> {
   await expect(page.getByRole('button', { name: 'Use result', exact: true })).toBeEnabled();
@@ -100,7 +100,7 @@ test('same-named sources merge once each and the selected split result becomes t
   expect((await PDFDocument.load(selected)).getPageCount()).toBe(2); expect(await text(selected)).toContain('BETA');
 });
 
-test('unapplied edits require an explicit leave choice and the narrow session shell is accessible', async ({ page }) => {
+test('unapplied edits require an explicit leave choice and the narrow session shell is accessible', async ({ page }, testInfo) => {
   test.setTimeout(120_000);
   await page.setViewportSize({ width: 390, height: 844 });
   await begin(page);
@@ -110,15 +110,16 @@ test('unapplied edits require an explicit leave choice and the narrow session sh
   const confirmation = page.getByRole('dialog', { name: 'Leave unapplied tool changes?', exact: true });
   await expect(confirmation).toBeVisible();
   await confirmation.getByRole('button', { name: 'Keep working', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'Annotate PDF', exact: true })).toBeVisible();
+  await expect(page.getByRole('dialog', { name: 'Workspace', exact: true }).getByRole('heading', { name: 'Annotate PDF', exact: true })).toBeVisible();
   await expect(page.getByRole('combobox', { name: 'Next tool', exact: true })).toHaveValue('annotate');
   await expect(page.locator('textarea[name="text"]')).toHaveValue('UNAPPLIED PRIVATE NOTE');
   const issues = await new AxeBuilder({ page }).analyze();
+  await testInfo.attach('workspace-accessibility', { body: JSON.stringify(issues.violations, null, 2), contentType: 'application/json' });
   expect(issues.violations.filter(item => ['serious', 'critical'].includes(item.impact ?? '')).map(item => item.id)).toEqual([]);
   expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(1);
   await page.getByRole('combobox', { name: 'Next tool', exact: true }).selectOption('rotate');
   await confirmation.getByRole('button', { name: 'Leave tool', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'Rotate pages', exact: true })).toBeVisible();
+  await expect(page.getByRole('dialog', { name: 'Workspace', exact: true }).getByRole('heading', { name: 'Rotate pages', exact: true })).toBeVisible();
   const saved = await page.evaluate(() => JSON.stringify(localStorage));
   expect(saved).not.toContain('UNAPPLIED PRIVATE NOTE');
 });

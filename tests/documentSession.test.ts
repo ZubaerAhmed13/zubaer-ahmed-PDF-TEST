@@ -115,9 +115,9 @@ describe('in-memory document revisions', () => {
 
   it('invalidates callbacks from disposed workspaces before mounting the next one', () => {
     const root = {} as HTMLElement; const calls: string[] = [];
-    const disconnect = connectWorkspace(root, { busy: () => calls.push('old'), result: () => calls.push('old'), selection: () => calls.push('old') });
+    const disconnect = connectWorkspace(root, { inputs: () => {}, busy: () => calls.push('old'), result: () => calls.push('old'), selection: () => calls.push('old') });
     const oldRuntime = workspaceRuntime(root); disconnect();
-    connectWorkspace(root, { busy: () => calls.push('new'), result: () => calls.push('new'), selection: () => calls.push('new') });
+    connectWorkspace(root, { inputs: () => {}, busy: () => calls.push('new'), result: () => calls.push('new'), selection: () => calls.push('new') });
     oldRuntime.busy(false); oldRuntime.result({ outputs: [] });
     workspaceRuntime(root).busy(true); expect(calls).toEqual(['new']);
   });

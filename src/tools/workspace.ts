@@ -157,6 +157,7 @@ export function mountWorkspace(container: HTMLDivElement, tool: ToolDefinition):
     percent.textContent = `${Math.round(value)}%`;
   };
   const renderFiles = (): void => {
+    runtime.inputs(records.map(record => record.file));
     list.innerHTML = records.map(({file,id}, index) => `<div class="file-row"><span><strong>${escapeHtml(file.name)}</strong><small>${humanBytes(file.size)}</small></span><button type="button" data-remove="${id}" aria-label="Remove ${escapeHtml(file.name)}">Remove</button>${tool.multipleFiles ? `<span class="order">#${index + 1}</span>` : ''}</div>`).join('');
     const totalBytes = records.reduce((sum, record) => sum + record.file.size, 0);
     const memory = navigator as Navigator & { deviceMemory?: number };

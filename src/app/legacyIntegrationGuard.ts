@@ -210,6 +210,7 @@ export function installLegacyIntegrationGuard(): void {
     if (workspace) trackedFiles.delete(workspace);
   });
 
+  document.addEventListener('docflow-workspace-mounted', enhance);
   document.addEventListener('docflow-workspace-presented', () => {
     enhance();
     const root = document.querySelector<HTMLElement>('#workspace');

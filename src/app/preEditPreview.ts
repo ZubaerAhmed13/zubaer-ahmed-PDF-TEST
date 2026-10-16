@@ -245,7 +245,7 @@ async function renderPdfPreview(session: PreviewSession, file: File): Promise<vo
     </div>
     <div class="pre-edit-viewer-layout">
       <aside class="pre-edit-thumbnail-rail" aria-label="Page thumbnails"><div class="pre-edit-thumbnail-track"></div></aside>
-      <div class="pre-edit-canvas-shell" tabindex="0" aria-label="Large PDF preview. Use arrow keys to change pages and plus or minus to zoom."><canvas></canvas></div>
+      <div class="pre-edit-canvas-shell" role="region" tabindex="0" aria-label="Large PDF preview. Use arrow keys to change pages and plus or minus to zoom."><canvas></canvas></div>
     </div>
   `;
 

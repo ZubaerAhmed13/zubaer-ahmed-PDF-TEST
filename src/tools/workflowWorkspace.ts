@@ -278,6 +278,7 @@ export function mountWorkspace(root: HTMLDivElement, _tool: ToolDefinition): voi
     }
   };
   const renderQueue = (): void => {
+    runtime.inputs(files.map(item => item.file));
     queue.replaceChildren();
     if (!files.length) {
       const empty = document.createElement('p');

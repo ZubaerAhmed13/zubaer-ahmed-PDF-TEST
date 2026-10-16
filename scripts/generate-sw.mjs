@@ -81,7 +81,8 @@ self.addEventListener('message', event => {
 });
 
 async function matchStatic(request) {
-  return caches.match(request, { ignoreVary: true });
+  const current = await caches.open(CACHE_NAME);
+  return (await current.match(request, { ignoreVary: true })) || caches.match(request, { ignoreVary: true });
 }
 
 self.addEventListener('fetch', (event) => {
