@@ -74,3 +74,7 @@
   .workspace-side.legacy-title-block h2 { font-size:18px; overflow-wrap:anywhere; }
   .workspace-side.legacy-title-block .legacy-title-meta { display:none; }
 }
+
+.workspace .legacy-files-pane .drop-zone > span,
+.workspace .legacy-files-pane .file-row small,
+.workspace .legacy-files-pane .order { color:var(--df-muted); }
