@@ -1,0 +1,80 @@
+/* Shared semantic tokens for the session shell and future explicit editors. */
+:root {
+  --df-ink: #253548;
+  --df-muted: #596c7d;
+  --df-accent: #b84432;
+  --df-line: #d7e1e9;
+  --df-surface: #fff;
+  --df-soft: #f6f8fa;
+  --df-radius: 8px;
+  --df-space: 8px;
+  --df-focus: #244ec6;
+}
+.document-toolbar[hidden],.document-resume[hidden] { display: none; }
+.document-resume { display:flex; align-items:center; justify-content:space-between; gap:20px; margin:0 0 24px; padding:22px; border:1px solid var(--df-line); border-radius:12px; background:var(--df-surface); color:var(--df-ink); }
+.document-resume p { margin:5px 0; color:var(--df-muted); font-size:13px; }
+.workspace-dialog.has-document-session[open] { display:flex; flex-direction:column; }
+.workspace-dialog.has-document-session > .workspace { flex:1 1 0; height:auto; max-height:none; min-height:0; }
+.document-toolbar { flex:0 0 auto; max-height:44%; padding:12px 16px; overflow:auto; overscroll-behavior:contain; color:var(--df-ink); border-bottom:1px solid var(--df-line); background:var(--df-soft); font-size:12px; }
+.document-toolbar button,.document-toolbar select,.document-toolbar input,.session-confirm button { min-height:40px; border:1px solid var(--df-line); border-radius:var(--df-radius); font-size:12px; }
+.document-toolbar button,.document-toolbar a { display:inline-flex; align-items:center; justify-content:center; gap:6px; padding:8px 11px; white-space:nowrap; font-weight:700; text-decoration:none; }
+.document-toolbar button:disabled { opacity:.5; cursor:not-allowed; }
+.document-toolbar .primary,.session-confirm .primary { background:var(--df-accent); border-color:var(--df-accent); color:#fff; }
+.document-toolbar .secondary,.session-confirm .secondary { color:var(--df-ink); background:var(--df-surface); }
+.document-toolbar svg { width:17px; height:17px; flex-shrink:0; }
+.document-toolbar label { display:grid; gap:3px; font-size:11px; color:var(--df-muted); font-weight:650; }
+.document-toolbar select,.document-toolbar input { width:100%; max-width:100%; min-width:0; padding:7px 9px; background:#fff; color:var(--df-ink); }
+.session-main,.session-export,.session-intro { display:flex; align-items:center; flex-wrap:wrap; gap:10px; }
+.session-main { justify-content:space-between; }
+.session-identity,.session-intro > div { flex:1 1 220px; display:grid; gap:4px; min-width:0; }
+.session-identity strong { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.session-identity span,.session-intro span,.session-result span { color:var(--df-muted); font-size:11px; line-height:1.45; }
+.session-tool { flex:1 1 200px; max-width:240px; }
+.session-actions,.session-previews { display:flex; flex-wrap:wrap; gap:6px; }
+.session-export { margin-top:10px; }
+.session-export > label { flex:1 1 160px; max-width:300px; }
+.session-export > a { align-self:end; }
+.session-result { display:flex; align-items:center; flex-wrap:wrap; gap:8px; padding:10px; margin-top:10px; border:1px solid #c8ddce; border-radius:var(--df-radius); background:#f1f8f3; }
+.session-result > div { flex:1 1 260px; display:grid; gap:4px; }
+.session-result > label { max-width:220px; }
+.session-history { margin-top:10px; }
+.session-history summary { padding:4px 0; cursor:pointer; font-weight:700; }
+.session-history ol { display:flex; flex-wrap:wrap; gap:8px 24px; padding-left:20px; }
+.session-history li[aria-current] { color:var(--df-accent); font-weight:750; }
+.session-history p { color:var(--df-muted); max-width:100ch; line-height:1.5; }
+.session-notice { margin:6px 0 0; color:var(--df-muted); line-height:1.4; }
+.session-notice:empty { display:none; }
+.session-confirm { width:min(500px,calc(100vw - 28px)); padding:24px; border:1px solid var(--df-line); border-radius:12px; color:var(--df-ink); background:var(--df-surface); box-shadow:0 20px 80px #182b4066; }
+.session-confirm::backdrop { background:#182b4077; }
+.session-confirm h2 { margin:0 0 12px; font-size:21px; }
+.session-confirm p { line-height:1.6; color:var(--df-muted); }
+.session-confirm > div { display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end; margin-top:20px; }
+.document-toolbar :focus-visible,.document-resume :focus-visible,.session-confirm :focus-visible { outline:3px solid var(--df-focus); outline-offset:2px; }
+@media(max-width:600px) {
+  .document-resume { align-items:stretch; flex-direction:column; }
+  .document-toolbar { padding:10px; max-height:42dvh; }
+  .session-identity { flex-basis:100%; }
+  .session-tool { max-width:none; }
+  .session-actions { flex:1 1 100%; }
+  .session-actions > button { flex:1; }
+  .session-export > label { max-width:none; }
+  .session-export > a { flex:1 1 auto; }
+  .session-result > button,.session-result > a { flex:1 1 auto; }
+}
+@media(prefers-reduced-motion:reduce) { .document-toolbar *,.session-confirm * { transition:none; animation:none; scroll-behavior:auto; } }
+
+/* Existing editor surfaces share the verified foreground/action tokens. */
+.workspace .legacy-settings-note,.workspace [data-legacy-footer-state-ui] { color:var(--df-muted); }
+.workspace .legacy-editor-footer #run-operation { background:var(--df-accent); border-color:var(--df-accent); }
+.document-invitation { width:100%; min-height:40px; margin-top:12px; white-space:normal; font-size:11px; }
+
+/* The title now lives in the header, rather than the former optional sidebar. */
+.workspace-side.legacy-title-block { display:block; }
+@media(max-width:600px) {
+  .workspace-side.legacy-title-block h2 { font-size:18px; overflow-wrap:anywhere; }
+  .workspace-side.legacy-title-block .legacy-title-meta { display:none; }
+}
+
+.workspace .legacy-files-pane .drop-zone > span,
+.workspace .legacy-files-pane .file-row small,
+.workspace .legacy-files-pane .order { color:var(--df-muted); }

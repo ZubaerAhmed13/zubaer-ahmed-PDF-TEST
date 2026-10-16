@@ -68,3 +68,18 @@ AES-256 Protect/Unlock uses a pinned local qpdf 12.3.2 WASM runtime in its own w
 The generated service-worker precache includes application assets and lazy runtime chunks under the GitHub Pages base `/zubaer-ahmed-PDF-TEST/`. Chromium and Firefox execute real worker-backed operations after a forced-offline reload. Playwright WebKit blocks creation of new workers after its forced-offline shim is enabled, so automated WebKit evidence combines genuine offline cache inspection for the exact lazy/qpdf assets with separately executed normal WebKit worker workflows. This is accurately reported and is not presented as real Safari forced-offline worker certification.
 
 The final `main` release workflow builds `dist/`, repeats quality and Chromium/Firefox/WebKit local suites before deployment, uploads only `dist/`, deploys to Pages and then runs a separate Chromium suite against the real deployed URL.
+
+
+## R1: explicit document and workspace lifecycle
+
+`DocumentSession` owns immutable browser File revisions, source IDs, page selection, pending outputs, bounded history and export state. `DocumentWorkspace` owns the persistent toolbar, tool switching, preview choice, close guards and the session-to-input bridge. The reader/home entry starts a session; independent tool entry can opt into it with Keep working. Existing workers and PDF engines remain the operation boundary.
+
+Mount sequence: release old runtime → dispatch docflow-cleanup → load/mount tool → dispatch docflow-workspace-mounted → present existing shell → dispatch docflow-workspace-presented → seed current File. Structural discovery no longer uses whole-body observers. Remaining root-scoped observers reconcile asynchronous file rows/preview/status within one mounted tool and disconnect on cleanup.
+
+Tools capture `workspaceRuntime(root)` exactly once at mount. Its busy/result/selection callbacks are invalidated before cleanup; a late completion cannot publish into the next tool. A result is staged against a revision ID and its captured source IDs, then validated before explicit Use result. Split/batch/workflow results require choosing a PDF; image/text/report exports retain their existing download flow. Encrypted outputs are download-only. Secure redaction clears earlier revisions and starting previews when applied.
+
+History retains up to eight revisions plus the starting File, pruning older states to a 128 MB reference budget. Required starting/current copies can exceed that budget for large documents; pending PDF results have a separate 128 MB cap. Engine buffers, canvases and tool-owned download objects are additional memory. This is not a browser heap or arbitrary-file-size guarantee.
+
+Closing keeps the applied document in the tab. Active processing and unapplied edits require a keep/leave decision. Whole-tab navigation has beforeunload protection. Reload/retry/update asks before releasing in-memory work. A waiting service worker queries every same-scope window through MessageChannel; only a boolean safety response is sent. An unresponsive/older tab blocks activation. The triggering tab is modal-locked while agreement is checked. Activation retains two recent static asset caches for old module URLs; document bytes never enter those caches.
+
+Shared semantic tokens and SVG action icons live in document-session.css. The established tool layouts remain the incremental migration boundary, with an explicit mount contract for later R2 components.

@@ -10,7 +10,7 @@ export interface ToolDefinition {
   quality: 'Lossless' | 'Potentially lossy' | 'Inspection';
   status: 'Migrated' | 'Limited' | 'Preview';
   multipleFiles: boolean;
-  load: () => Promise<{ mountWorkspace: typeof import('./workspace').mountWorkspace }>;
+  load: (recoveryRetry?: boolean) => Promise<{ mountWorkspace: typeof import('./workspace').mountWorkspace }>;
 }
 
 export const toolCategories = [
@@ -39,7 +39,7 @@ function tool(definition: Omit<ToolDefinition, 'load'>): ToolDefinition {
      * reload. Retry therefore uses a second statically analyzable Vite module
      * identity for the exact same source module. It produces a fresh asset URL
      * without duplicating or changing any workspace/PDF-processing behavior. */
-    load: () => isRecoveryRetry(definition.id)
+    load: (recoveryRetry = isRecoveryRetry(definition.id)) => recoveryRetry
       ? import('./workspaceWithRecovery?retry')
       : import('./workspaceWithRecovery')
   };

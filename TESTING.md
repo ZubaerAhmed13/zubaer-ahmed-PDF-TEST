@@ -43,3 +43,10 @@ Never remove the rollback. Live email/login/two-browser sync remains an explicit
 OCR is implemented; certificate signing/original-page text replacement are not. No arbitrary file-size, print-proof colour or PDF/UA claim. WebKit cache evidence is separate from real Safari/iOS offline workers. Pixel/structure fixtures establish supported cases, not all PDFs.
 
 [Capability matrix](docs/CAPABILITIES.md) · [Preservation](docs/R0_PRESERVATION_MATRIX.md) · [R0 evidence](docs/R0_RELEASE.md).
+
+
+## R1 session acceptance
+
+`tests/documentSession.test.ts` chains real organize/annotate/number PDF operations and verifies exact-byte history, duplicate identities, history pruning, redaction barriers, invalid/stale results, multi-output selection and disposed-runtime callbacks. `tests/serviceWorkerUpdate.test.ts` executes the actual generated worker message handler for safe, busy/retained-work and unresponsive tabs.
+
+`e2e/document-session.spec.ts` verifies one-import chaining and export/reopen, original/current separation, session resume, same-named merge and selected split output, narrow/axe/leave protection, active redaction cancellation and applied-redaction history clearing. Chromium additionally verifies the actual two-tab service-worker handshake. These cases run in the production configuration as well as the full browser matrix. The other two browsers skip only the live handshake case; its decision logic is covered in runtime tests. Physical device and manual screen-reader acceptance remain independent.

@@ -7,7 +7,9 @@ Production: https://zubaerahmed13.github.io/zubaer-ahmed-PDF-TEST/
 ## Current release
 Package version and diagnostics share one build-time source; diagnostics also shows the exact Git commit supplied by the release runner.
 
-R0 (0.2.0) adds current capability documentation, synthetic preservation/repair/redaction fixtures, all-page repair verification, broader production tests and least-privilege preferences. [R0 evidence](docs/R0_RELEASE.md) separates executed checks from pending acceptance.
+R1 (0.3.0) adds an optional in-memory document session: open once, switch tools, review/apply results, undo/redo revisions and export. Use **Open a PDF**, or **Keep working with this PDF** inside a tool. [R1 scope and evidence](docs/R1_RELEASE.md).
+
+R0 (0.2.0) established current capability documentation, synthetic preservation/repair/redaction fixtures, all-page repair verification, broader production tests and least-privilege preferences. [R0 evidence](docs/R0_RELEASE.md) separates executed checks from pending acceptance.
 
 ## Tools
 - View, merge, split, remove/extract/organise/rotate and crop pages.

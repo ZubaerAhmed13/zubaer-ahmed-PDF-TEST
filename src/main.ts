@@ -13,6 +13,7 @@ import './styles/cloud-sync.css';
 import './styles/editor-foundation.css';
 import './styles/essential-utilities.css';
 import './styles/phase3-documents.css';
+import './styles/document-session.css';
 import { createApp } from './app/createApp';
 import { finishEmailConfirmation } from './app/cloudSync';
 import { installEditorLifecycleHardening } from './app/editorLifecycleHardening';

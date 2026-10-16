@@ -28,5 +28,10 @@ export function installPreEditPreviewLabels(): void {
       }
     }
   });
-  observer.observe(document.documentElement, { childList: true, subtree: true });
+  document.addEventListener('docflow-workspace-mounted', () => {
+    const root = document.querySelector<HTMLElement>('#workspace');
+    if (!root) return;
+    observer.observe(root, { childList: true, subtree: true });
+    root.addEventListener('docflow-cleanup', () => observer.disconnect(), { once: true });
+  });
 }

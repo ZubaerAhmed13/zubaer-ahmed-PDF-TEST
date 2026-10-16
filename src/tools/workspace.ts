@@ -1,3 +1,4 @@
+import { workspaceRuntime } from '../app/workspaceRuntime';
 import type { ToolDefinition } from './registry';
 import type { InputFile, OperationResult, WorkerOperation } from '../pdf/types';
 import { runWorkerOperation, type RunningOperation } from '../pdf/workerClient';
@@ -67,6 +68,7 @@ async function readInputs(records: FileRecord[]): Promise<InputFile[]> {
 }
 
 export function mountWorkspace(container: HTMLDivElement, tool: ToolDefinition): void {
+  const runtime = workspaceRuntime(container);
   const accept = pdfOnly.has(tool.id) ? '.pdf,application/pdf' : '.jpg,.jpeg,.png,image/jpeg,image/png';
   container.innerHTML = `
     <div class="workspace-grid">
@@ -81,7 +83,7 @@ export function mountWorkspace(container: HTMLDivElement, tool: ToolDefinition):
         <div class="drop-zone" tabindex="0" role="button" aria-label="Choose files or drop files here">
           <strong>Drop ${tool.multipleFiles ? 'files' : 'a file'} here</strong>
           <span>or choose from your device</span>
-          <input id="workspace-file" type="file" accept="${accept}" ${tool.multipleFiles ? 'multiple' : ''}>
+          <input id="workspace-file" type="file" aria-label="Source files" accept="${accept}" ${tool.multipleFiles ? 'multiple' : ''}>
         </div>
         <div id="memory-warning" class="memory-warning" hidden></div>
         <div id="file-list" class="file-list" aria-live="polite"></div>
@@ -119,6 +121,7 @@ export function mountWorkspace(container: HTMLDivElement, tool: ToolDefinition):
   let records: FileRecord[] = [];
   let running: RunningOperation | null = null;
   let mainCancelled = false;
+  let disposed = false;
   let previewController: PreviewController | null = null;
   let previewUiCleanup: (() => void) | null = null;
   let objectUrls: string[] = [];
@@ -154,6 +157,7 @@ export function mountWorkspace(container: HTMLDivElement, tool: ToolDefinition):
     percent.textContent = `${Math.round(value)}%`;
   };
   const renderFiles = (): void => {
+    runtime.inputs(records.map(record => record.file));
     list.innerHTML = records.map(({file,id}, index) => `<div class="file-row"><span><strong>${escapeHtml(file.name)}</strong><small>${humanBytes(file.size)}</small></span><button type="button" data-remove="${id}" aria-label="Remove ${escapeHtml(file.name)}">Remove</button>${tool.multipleFiles ? `<span class="order">#${index + 1}</span>` : ''}</div>`).join('');
     const totalBytes = records.reduce((sum, record) => sum + record.file.size, 0);
     const memory = navigator as Navigator & { deviceMemory?: number };
@@ -205,6 +209,8 @@ export function mountWorkspace(container: HTMLDivElement, tool: ToolDefinition):
   });
 
   const renderOutputs = (result: OperationResult): void => {
+    if (disposed || mainCancelled) return;
+    runtime.result(result);
     clearUrls();
     const info = result.info ? `<pre class="info-result">${escapeHtml(JSON.stringify(result.info, null, 2))}</pre>` : '';
     const downloads = result.outputs.map((output) => {
@@ -344,6 +350,7 @@ export function mountWorkspace(container: HTMLDivElement, tool: ToolDefinition):
     clearUrls();
     resultArea.replaceChildren();
     mainCancelled = false;
+    runtime.busy(true);
     run.disabled = true;
     cancel.disabled = false;
     setProgress('Preparing document', 4);
@@ -492,6 +499,7 @@ export function mountWorkspace(container: HTMLDivElement, tool: ToolDefinition):
       const operation = (tool.id === 'forms' ? 'forms-fill' : tool.id === 'compress' ? 'optimize' : tool.id) as WorkerOperation;
       const workerFiles = await readInputs(records);
       const selectedOptions = formOptions(optionsForm);
+      if (tool.id === 'split' && runtime.sessionActive()) selectedOptions.individualPdfResults = true;
       if (tool.id === 'sign-visual') selectedOptions.signaturePng = signaturePad?.getData() ?? '';
       running = runWorkerOperation(operation, workerFiles, selectedOptions, (update) => setProgress(update.message, Math.min(96, update.percent)));
       const result = await running.result;
@@ -502,6 +510,7 @@ export function mountWorkspace(container: HTMLDivElement, tool: ToolDefinition):
       else if (error instanceof Error) { setError(`${error.name !== 'Error' ? `${error.name}: ` : ''}${error.message}`); setProgress('Failed', 0); }
       else { setError('The operation failed.'); setProgress('Failed', 0); }
     } finally {
+      runtime.busy(false);
       running = null;
       activeAbort = null;
       run.disabled = false;
@@ -536,6 +545,7 @@ export function mountWorkspace(container: HTMLDivElement, tool: ToolDefinition):
           if (visualHost && textarea) visualEditor = mountVisualFormEditor(visualHost, textarea, fields);
         }
         setProgress('Form inspection complete', 100);
+        container.dispatchEvent(new CustomEvent('docflow-form-ready'));
       } catch (error) {
         if (generation !== inspectionGeneration) return;
         const message = error instanceof Error ? `${error.name !== 'Error' ? `${error.name}: ` : ''}${error.message}` : 'Form inspection failed.';
@@ -556,6 +566,7 @@ export function mountWorkspace(container: HTMLDivElement, tool: ToolDefinition):
   });
 
   container.addEventListener('docflow-cleanup', () => {
+    disposed = true;
     mainCancelled = true;
     activeAbort?.abort();
     inspectionGeneration += 1;

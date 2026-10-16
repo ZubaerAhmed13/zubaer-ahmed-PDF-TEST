@@ -1,3 +1,4 @@
+import { workspaceRuntime } from '../app/workspaceRuntime';
 import '../styles/organize.css';
 import type { ToolDefinition } from './registry';
 import { mountWorkspace as mountRecoveredWorkspace } from './workspaceWithRecovery';
@@ -21,6 +22,7 @@ function parseOrder(value: string, pageCount: number): number[] | null {
 }
 
 export function mountWorkspace(container: HTMLDivElement, tool: ToolDefinition): void {
+  const runtime = workspaceRuntime(container);
   mountRecoveredWorkspace(container, tool);
 
   const form = container.querySelector<HTMLFormElement>('#tool-options');
@@ -87,6 +89,7 @@ export function mountWorkspace(container: HTMLDivElement, tool: ToolDefinition):
   const updateSummary = (): void => {
     summary.textContent = `${items.length} output page${items.length === 1 ? '' : 's'} from ${sourcePageCount} source page${sourcePageCount === 1 ? '' : 's'} · ${selectedIds.size} selected`;
     updateButtons();
+    runtime.selection(items.filter(item => selectedIds.has(item.id)).map(item => item.sourcePage));
   };
 
   const syncOrder = (): void => {

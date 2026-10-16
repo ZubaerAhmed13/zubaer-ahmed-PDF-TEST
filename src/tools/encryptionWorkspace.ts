@@ -1,3 +1,4 @@
+import { workspaceRuntime } from '../app/workspaceRuntime';
 import type { ToolDefinition } from './registry';
 import { mountWorkspace as mountBaseWorkspace } from './workspace';
 import { runQpdfOperation, type RunningQpdfOperation } from '../pdf/qpdfWorkerClient';
@@ -21,6 +22,7 @@ async function inputFile(file: File): Promise<InputFile> {
 }
 
 export function mountWorkspace(container: HTMLDivElement, tool: ToolDefinition): void {
+  const runtime = workspaceRuntime(container);
   // Use a PDF-only surrogate id for the shared shell. Encryption execution is intercepted below.
   mountBaseWorkspace(container, { ...tool, id: 'metadata' });
 
@@ -96,6 +98,7 @@ export function mountWorkspace(container: HTMLDivElement, tool: ToolDefinition):
   };
 
   const renderOutput = (operationResult: OperationResult): void => {
+    runtime.result(operationResult);
     clearOutputUrl();
     const output = operationResult.outputs[0];
     if (!output) throw new Error('The encryption operation returned no PDF output.');
@@ -119,6 +122,7 @@ export function mountWorkspace(container: HTMLDivElement, tool: ToolDefinition):
     clearOutputUrl();
     result.replaceChildren();
     cancelled = false;
+    runtime.busy(true);
     runButton.disabled = true;
     cancelButton.disabled = false;
     setProgress('Preparing document locally', 4);
@@ -144,6 +148,7 @@ export function mountWorkspace(container: HTMLDivElement, tool: ToolDefinition):
         setError('The encryption operation failed.');
       }
     } finally {
+      runtime.busy(false);
       running = null;
       clearPasswords();
       if (!disposed) {

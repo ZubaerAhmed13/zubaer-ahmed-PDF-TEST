@@ -1,3 +1,4 @@
+import { workspaceRuntime } from '../app/workspaceRuntime';
 import '../styles/batch.css';
 import type { ToolDefinition } from './registry';
 import { runWorkerOperation, type RunningOperation } from '../pdf/workerClient';
@@ -76,6 +77,7 @@ async function inputFile(file: File): Promise<InputFile> {
 }
 
 export function mountWorkspace(container: HTMLDivElement, tool: ToolDefinition): void {
+  const runtime = workspaceRuntime(container);
   container.innerHTML = `
     <div class="batch-workspace">
       <aside class="batch-side">
@@ -162,6 +164,7 @@ export function mountWorkspace(container: HTMLDivElement, tool: ToolDefinition):
   };
 
   const renderQueue = (): void => {
+    runtime.inputs(items.map(item => item.file));
     queue.innerHTML = items.map((item, index) => `
       <div class="batch-row" data-batch-id="${item.id}" data-state="${item.state}">
         <span><strong>${escapeHtml(item.file.name)}</strong><small>${humanBytes(item.file.size)} · Queue #${index + 1}</small><span class="batch-state">${escapeHtml(item.status)}</span></span>
@@ -204,6 +207,7 @@ export function mountWorkspace(container: HTMLDivElement, tool: ToolDefinition):
   };
 
   const lockUi = (value: boolean): void => {
+    runtime.busy(value);
     locked = value;
     input.disabled = value;
     operationSelect.disabled = value;
@@ -279,6 +283,7 @@ export function mountWorkspace(container: HTMLDivElement, tool: ToolDefinition):
       });
       renderQueue();
       renderResults();
+      if (!cancelled) runtime.result({ outputs: items.filter(item => item.state === 'complete' && item.output).map(item => item.output!) });
       setProgress(cancelled ? `Batch cancelled · ${succeeded} completed` : `Batch complete · ${succeeded} of ${items.length} succeeded`, cancelled ? Math.min(99, (succeeded / items.length) * 100) : 100);
       lockUi(false);
       zipButton.disabled = items.every((item) => item.state !== 'complete' || !item.output);

@@ -126,6 +126,8 @@ function enhanceDropZone(state: ParityState): void {
   const input = state.root.querySelector<HTMLInputElement>('#workspace-file');
   if (!drop || !input || drop.dataset.parityDrop === 'true') return;
   drop.dataset.parityDrop = 'true';
+  drop.setAttribute('role', 'group');
+  drop.removeAttribute('tabindex');
   const strong = drop.querySelector<HTMLElement>('strong');
   const detail = drop.querySelector<HTMLElement>('span');
   if (strong) strong.textContent = input.multiple ? 'Add compatible files' : 'Add a compatible file';
@@ -441,8 +443,7 @@ function enhanceAvailable(): void {
 export function installLegacyScreenshotParity(): void {
   if (installed) return;
   installed = true;
-  const bodyObserver = new MutationObserver(enhanceAvailable);
-  bodyObserver.observe(document.body, { subtree: true, childList: true });
+  document.addEventListener('docflow-workspace-presented', enhanceAvailable);
   enhanceAvailable();
 
   document.addEventListener('change', (event) => {

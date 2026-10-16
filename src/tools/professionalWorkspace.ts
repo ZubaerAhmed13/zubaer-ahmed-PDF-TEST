@@ -1,3 +1,4 @@
+import { workspaceRuntime } from '../app/workspaceRuntime';
 import '../styles/professional-tools.css';
 import type { ToolDefinition } from './registry';
 import { rectangleFromDrag, validateRedactions, redactPdf, renderPageImage, loadRedactionDocument, type RedactionRect, REDACTION_MAX_BYTES } from '../pdf/secureRasterRedaction';
@@ -9,6 +10,7 @@ function cleanName(value: string): string {
   return value.replace(/[^a-z0-9_.-]+/gi,'-').slice(0,95) || 'document';
 }
 export function mountWorkspace(container: HTMLDivElement, tool: ToolDefinition): void {
+  const runtime = workspaceRuntime(container);
   const redact = tool.id === 'redact-secure';
   container.innerHTML = '<div class="pro-tool"><header class="pro-head"><p class="eyebrow">PROFESSIONAL · LOCAL</p><h2></h2><p>' +
     (redact ? 'Permanently remove selected visible regions by rebuilding all pages into a new image-only PDF.' : 'Attempt to recover damaged cross-reference tables and normalise PDF structure with local qpdf.') + '</p></header>' +
@@ -75,6 +77,7 @@ export function mountWorkspace(container: HTMLDivElement, tool: ToolDefinition):
     output.replaceChildren();
   };
   const renderResult = (result: OperationResult): void => {
+    runtime.result(result);
     resetDownload();
     const entry = result.outputs[0];
     if (!entry || entry.type !== 'application/pdf') throw Error('Output is not a PDF.');
@@ -233,6 +236,7 @@ export function mountWorkspace(container: HTMLDivElement, tool: ToolDefinition):
     if (redact && (!pdf || !confirm?.checked)) { showError('Load the PDF and confirm the raster redaction warning before continuing.'); return; }
     if (redact && !marks.length) { showError('Mark at least one area on the PDF.'); return; }
     showError(); resetDownload();
+    runtime.busy(true);
     active = true; input.disabled = true; run.disabled = true; cancel.disabled = false;
     nav();
     const currentAbort = new AbortController();
@@ -280,6 +284,7 @@ export function mountWorkspace(container: HTMLDivElement, tool: ToolDefinition):
         ? 'Operation cancelled. No output was saved.'
         : e instanceof Error ? e.message : 'Operation failed.');
     } finally {
+      runtime.busy(false);
       qpdf = null;
       abort = null;
       active = false;

@@ -43,17 +43,46 @@ self.addEventListener('install', (event) => {
 
 self.addEventListener('activate', (event) => {
   event.waitUntil(Promise.all([
-    caches.keys().then((keys) => Promise.all(keys.filter((key) => key.startsWith('docflow-static-') && key !== CACHE_NAME).map((key) => caches.delete(key)))),
+    caches.keys().then((keys) => Promise.all(keys.filter((key) => key.startsWith('docflow-static-')).slice(0, -2).filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key)))),
     self.clients.claim()
   ]));
 });
 
-self.addEventListener('message', (event) => {
-  if (event.data?.type === 'SKIP_WAITING') void self.skipWaiting();
+async function clientIsSafe(client) {
+  return new Promise(resolve => {
+    const channel = new MessageChannel();
+    const timer = setTimeout(() => { channel.port1.close(); resolve(false); }, 2000);
+    channel.port1.onmessage = event => {
+      clearTimeout(timer);
+      channel.port1.close();
+      resolve(event.data?.safe === true);
+    };
+    try { client.postMessage({ type: 'DOCFLOW_QUERY_WORK' }, [channel.port2]); }
+    catch { clearTimeout(timer); channel.port1.close(); resolve(false); }
+  });
+}
+
+self.addEventListener('message', event => {
+  if (event.data?.type !== 'SKIP_WAITING') return;
+  event.waitUntil((async () => {
+    const clients = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+    const scope = new URL(self.registration.scope);
+    const appClients = clients.filter(client => {
+      const url = new URL(client.url);
+      return url.origin === scope.origin && url.pathname.startsWith(scope.pathname);
+    });
+    const approvals = await Promise.all(appClients.map(clientIsSafe));
+    if (approvals.every(Boolean)) {
+      event.source?.postMessage({ type: 'DOCFLOW_UPDATE_ACCEPTED' });
+      await self.skipWaiting();
+    }
+    else event.source?.postMessage({ type: 'DOCFLOW_UPDATE_BLOCKED' });
+  })());
 });
 
 async function matchStatic(request) {
-  return caches.match(request, { ignoreVary: true });
+  const current = await caches.open(CACHE_NAME);
+  return (await current.match(request, { ignoreVary: true })) || caches.match(request, { ignoreVary: true });
 }
 
 self.addEventListener('fetch', (event) => {

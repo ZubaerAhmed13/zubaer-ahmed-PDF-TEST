@@ -210,8 +210,19 @@ export function installLegacyIntegrationGuard(): void {
     if (workspace) trackedFiles.delete(workspace);
   });
 
-  const observer = new MutationObserver(scheduleEnhance);
-  observer.observe(document.body, { subtree: true, childList: true });
+  document.addEventListener('docflow-workspace-mounted', enhance);
+  document.addEventListener('docflow-workspace-presented', () => {
+    enhance();
+    const root = document.querySelector<HTMLElement>('#workspace');
+    if (!root) return;
+    const observer = new MutationObserver(scheduleEnhance);
+    observer.observe(root, { subtree: true, childList: true });
+    root.addEventListener('docflow-cleanup', () => {
+      observer.disconnect();
+      trackedFiles.delete(root);
+      rebuilding.delete(root);
+    }, { once: true });
+  });
   enhance();
 
   document.addEventListener('change', (event) => {

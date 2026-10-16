@@ -1,3 +1,4 @@
+import { workspaceRuntime } from '../app/workspaceRuntime';
 import '../styles/batch.css';
 import '../styles/workflows.css';
 import type { ToolDefinition } from './registry';
@@ -80,6 +81,7 @@ const titleOf = (operation: WorkflowOperation): string =>
   WORKFLOW_OPERATIONS.find(item => item.id === operation)?.label ?? operation;
 
 export function mountWorkspace(root: HTMLDivElement, _tool: ToolDefinition): void {
+  const runtime = workspaceRuntime(root);
   root.innerHTML = '<div class="batch-workspace wf-workspace">' +
     '<aside class="batch-side wf-intro"><p class="eyebrow">WORKFLOWS · PRIVATE · REUSABLE</p>' +
     '<h2>Workflow builder</h2><p>Configure PDF actions once, run them in order on one or more PDFs, and download the finished results.</p>' +
@@ -178,6 +180,7 @@ export function mountWorkspace(root: HTMLDivElement, _tool: ToolDefinition): voi
     del.disabled = locked || selectedPreset.startsWith('built-in-');
   };
   const updateLocked = (state: boolean): void => {
+    runtime.busy(state);
     locked = state;
     root.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLButtonElement>(
       'input, select, button'
@@ -275,6 +278,7 @@ export function mountWorkspace(root: HTMLDivElement, _tool: ToolDefinition): voi
     }
   };
   const renderQueue = (): void => {
+    runtime.inputs(files.map(item => item.file));
     queue.replaceChildren();
     if (!files.length) {
       const empty = document.createElement('p');
@@ -422,6 +426,7 @@ export function mountWorkspace(root: HTMLDivElement, _tool: ToolDefinition): voi
     }
     if (disposed) return;
     renderResults();
+    if (!cancelled) runtime.result({ outputs: files.filter(item => item.state === 'complete' && item.output).map(item => item.output!) });
     updateLocked(false);
     setProgress(cancelled ? 'Cancelled · ' + succeeded + ' completed' :
       'Finished · ' + succeeded + ' completed' + (failures ? ', ' + failures + ' failed' : ''), cancelled ? Math.min(99, succeeded / targets.length * 100) : 100);
