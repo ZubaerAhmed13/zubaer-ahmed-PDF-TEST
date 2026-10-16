@@ -86,6 +86,11 @@ test('same-named sources merge once each and the selected split result becomes t
   await next(page, 'merge');
   await page.locator('#workspace-file').setInputFiles({ name: 'same.pdf', mimeType: 'application/pdf', buffer: await fixture('BETA') });
   await expect(page.locator('#file-list .file-row')).toHaveCount(2);
+  // Tool switches must release the previous adapter's source list.
+  await page.locator('#file-list .file-row').nth(1).locator('[data-parity-move="-1"]').click();
+  await expect(page.locator('#file-list .file-row')).toHaveCount(2);
+  await page.locator('#file-list .file-row').first().locator('[data-parity-move="1"]').click();
+  await expect(page.locator('#file-list .file-row')).toHaveCount(2);
   await page.getByRole('button', { name: 'Run Merge PDF', exact: true }).click();
   await apply(page);
   const merged = await exportCurrent(page);

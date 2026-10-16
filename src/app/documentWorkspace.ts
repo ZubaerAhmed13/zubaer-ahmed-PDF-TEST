@@ -108,6 +108,8 @@ export class DocumentWorkspace {
       inputs: files => {
         const seededFile = this.viewing ?? this.session.snapshot().current?.file;
         if (this.seeded && seededFile && files[0]) this.session.aliasSource(files[0], seededFile);
+        const changed = files.length !== this.files.length || files.some((file, index) => this.session.sourceId(file) !== (this.files[index] ? this.session.sourceId(this.files[index]!) : ''));
+        if (changed && !this.seeded && this.enabled && this.session.snapshot().current && this.tool?.id !== 'preview') this.draft = true;
         this.files = [...files];
         this.render();
       },
@@ -189,12 +191,14 @@ export class DocumentWorkspace {
   }
 
   private acceptFiles(incoming: File[], multiple: boolean): void {
+    const known = this.viewing ?? this.session.snapshot().current?.file;
+    if (this.seeded && known && incoming[0]) this.session.aliasSource(incoming[0], known);
     this.files = multiple ? [...this.files, ...incoming] : incoming.slice(0, 1);
     if (this.enabled && !this.session.snapshot().current) {
       const file = this.files.find(pdfInput);
       if (file) { this.session.start(file); this.filename = file.name; }
     }
-    if (!this.seeded && this.enabled) this.draft = false;
+    if (!this.seeded && this.enabled && this.tool?.id !== 'preview') this.draft = true;
     // The dedicated reader has no separate pre-edit preview.
     if (this.enabled && this.tool?.id === 'preview') queueMicrotask(() => this.options.root.querySelector<HTMLButtonElement>('#run-operation')?.click());
     this.render();

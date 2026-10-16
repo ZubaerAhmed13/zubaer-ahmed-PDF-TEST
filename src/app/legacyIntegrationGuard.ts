@@ -217,7 +217,11 @@ export function installLegacyIntegrationGuard(): void {
     if (!root) return;
     const observer = new MutationObserver(scheduleEnhance);
     observer.observe(root, { subtree: true, childList: true });
-    root.addEventListener('docflow-cleanup', () => observer.disconnect(), { once: true });
+    root.addEventListener('docflow-cleanup', () => {
+      observer.disconnect();
+      trackedFiles.delete(root);
+      rebuilding.delete(root);
+    }, { once: true });
   });
   enhance();
 
