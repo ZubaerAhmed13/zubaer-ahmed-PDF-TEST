@@ -154,10 +154,7 @@ function createLegacyShell(root: HTMLElement, grid: HTMLElement, tool: ToolDefin
   });
   const unsubscribeFavorite = subscribeFavorites(() => setFavorite(favorite, tool));
   headerActions.append(favorite);
-  if (dialogBar) {
-    dialogBar.classList.add('legacy-header-close-form');
-    headerActions.append(dialogBar);
-  }
+  // The native close form is owned by the dialog, never reparented here.
   header.append(headerActions);
 
   const info = document.createElement('div');
@@ -577,8 +574,10 @@ export function installLegacyExactWorkspace(): void {
   if (installed) return;
   installed = true;
 
-  const documentObserver = new MutationObserver(() => queueMicrotask(enhanceAvailableWorkspaces));
-  documentObserver.observe(document.body, { subtree: true, childList: true });
+  document.addEventListener('docflow-workspace-mounted', () => {
+    enhanceAvailableWorkspaces();
+    document.dispatchEvent(new CustomEvent('docflow-workspace-presented'));
+  });
   enhanceAvailableWorkspaces();
 
   document.addEventListener('change', (event) => {

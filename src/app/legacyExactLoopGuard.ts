@@ -120,7 +120,6 @@ function findWorkspaces(): void {
 export function installLegacyExactLoopGuard(): void {
   if (installed) return;
   installed = true;
-  const observer = new MutationObserver(findWorkspaces);
-  observer.observe(document.body, { subtree: true, childList: true });
+  document.addEventListener('docflow-workspace-presented', findWorkspaces);
   findWorkspaces();
 }

@@ -1,3 +1,4 @@
+import { workspaceRuntime } from '../app/workspaceRuntime';
 import '../styles/preview.css';
 import type { ToolDefinition } from './registry';
 import { createPreview, type PreviewController } from '../pdf/render';
@@ -31,6 +32,7 @@ function clampScale(value: number): number {
 }
 
 export function mountWorkspace(container: HTMLDivElement, tool: ToolDefinition): void {
+  const runtime = workspaceRuntime(container);
   container.innerHTML = `
     <div class="workspace-grid">
       <aside class="workspace-side">
@@ -43,7 +45,7 @@ export function mountWorkspace(container: HTMLDivElement, tool: ToolDefinition):
       <section class="workspace-main">
         <div class="drop-zone" tabindex="0" role="button" aria-label="Choose files or drop files here">
           <strong>Drop a PDF here</strong><span>or choose from your device</span>
-          <input id="workspace-file" type="file" accept=".pdf,application/pdf">
+          <input id="workspace-file" type="file" aria-label="Source files" accept=".pdf,application/pdf">
         </div>
         <div id="memory-warning" class="memory-warning" hidden></div>
         <div id="recovery-panel" class="notice" hidden></div>
@@ -159,6 +161,7 @@ export function mountWorkspace(container: HTMLDivElement, tool: ToolDefinition):
     setError();
     run.disabled = true;
     cancel.disabled = false;
+    runtime.busy(true);
     setProgress('Opening PDF', 8);
 
     previewUiCleanup?.();
@@ -380,6 +383,7 @@ export function mountWorkspace(container: HTMLDivElement, tool: ToolDefinition):
       setProgress('Failed', 0);
     } finally {
       if (!disposed && myGeneration === generation) {
+        runtime.busy(false);
         run.disabled = false;
         cancel.disabled = true;
       }
@@ -388,6 +392,7 @@ export function mountWorkspace(container: HTMLDivElement, tool: ToolDefinition):
 
   run.addEventListener('click', () => { void openPreview(); });
   cancel.addEventListener('click', () => {
+    runtime.busy(false);
     generation += 1;
     previewUiCleanup?.();
     previewUiCleanup = null;

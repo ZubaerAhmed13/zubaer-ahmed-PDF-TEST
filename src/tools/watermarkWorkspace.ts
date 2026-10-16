@@ -1,3 +1,4 @@
+import { workspaceRuntime } from '../app/workspaceRuntime';
 import type { ToolDefinition } from './registry';
 import { mountWorkspace as mountRecoveredWorkspace } from './workspaceWithRecovery';
 import { runWorkerOperation, type RunningOperation } from '../pdf/workerClient';
@@ -21,6 +22,7 @@ async function inputFile(file: File): Promise<InputFile> {
 }
 
 export function mountWorkspace(container: HTMLDivElement, tool: ToolDefinition): void {
+  const runtime = workspaceRuntime(container);
   mountRecoveredWorkspace(container, tool);
 
   const form = container.querySelector<HTMLFormElement>('#tool-options');
@@ -108,6 +110,7 @@ export function mountWorkspace(container: HTMLDivElement, tool: ToolDefinition):
   };
 
   const renderOutput = (operationResult: OperationResult): void => {
+    runtime.result(operationResult);
     clearOutputUrl();
     const output = operationResult.outputs[0];
     if (!output) throw new Error('The image-watermark operation returned no PDF output.');
@@ -141,6 +144,7 @@ export function mountWorkspace(container: HTMLDivElement, tool: ToolDefinition):
     setError();
     clearOutputUrl();
     result.replaceChildren();
+    runtime.busy(true);
     runButton.disabled = true;
     cancelButton.disabled = false;
     setProgress('Preparing image watermark', 4);
@@ -172,6 +176,7 @@ export function mountWorkspace(container: HTMLDivElement, tool: ToolDefinition):
         setError('The image-watermark operation failed.');
       }
     } finally {
+      runtime.busy(false);
       running = null;
       if (!disposed) {
         runButton.disabled = false;

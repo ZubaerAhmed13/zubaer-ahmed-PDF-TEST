@@ -1,3 +1,4 @@
+import { workspaceRuntime } from '../app/workspaceRuntime';
 import * as pdfjs from 'pdfjs-dist';
 import type { PDFPageProxy } from 'pdfjs-dist';
 import type { ToolDefinition } from './registry';
@@ -241,6 +242,7 @@ async function extractEmbeddedImages(
 }
 
 export function mountWorkspace(container: HTMLDivElement, tool: ToolDefinition): void {
+  const runtime = workspaceRuntime(container);
   container.innerHTML = `
     <div class="workspace-grid">
       <aside class="workspace-side">
@@ -253,7 +255,7 @@ export function mountWorkspace(container: HTMLDivElement, tool: ToolDefinition):
       <section class="workspace-main">
         <div class="drop-zone" tabindex="0" role="button" aria-label="Choose files or drop files here">
           <strong>Drop a PDF here</strong><span>or choose from your device</span>
-          <input id="workspace-file" type="file" accept=".pdf,application/pdf">
+          <input id="workspace-file" type="file" aria-label="Source files" accept=".pdf,application/pdf">
         </div>
         <div id="memory-warning" class="memory-warning" hidden></div>
         <div id="file-list" class="file-list" aria-live="polite"></div>
@@ -340,6 +342,7 @@ export function mountWorkspace(container: HTMLDivElement, tool: ToolDefinition):
     if (!file || running) { if (!file) setError('Choose a PDF first.'); return; }
     cancelled = false;
     running = true;
+    runtime.busy(true);
     run.disabled = true;
     cancel.disabled = false;
     setError();
@@ -363,6 +366,7 @@ export function mountWorkspace(container: HTMLDivElement, tool: ToolDefinition):
         setProgress('Failed', 0);
       })
       .finally(() => {
+        runtime.busy(false);
         running = false;
         run.disabled = false;
         cancel.disabled = true;

@@ -1,3 +1,4 @@
+import './styles/document-session.css';
 import './styles/main.css';
 import './styles/quick.css';
 import './styles/preview.css';

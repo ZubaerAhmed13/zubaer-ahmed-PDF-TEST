@@ -441,8 +441,7 @@ function enhanceAvailable(): void {
 export function installLegacyScreenshotParity(): void {
   if (installed) return;
   installed = true;
-  const bodyObserver = new MutationObserver(enhanceAvailable);
-  bodyObserver.observe(document.body, { subtree: true, childList: true });
+  document.addEventListener('docflow-workspace-presented', enhanceAvailable);
   enhanceAvailable();
 
   document.addEventListener('change', (event) => {

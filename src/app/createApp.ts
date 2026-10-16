@@ -1,3 +1,5 @@
+import { DocumentWorkspace } from './documentWorkspace';
+import { approveReload, prepareApprovedReload } from './workProtection';
 import { toolCategories, tools } from '../tools/registry';
 import { getFavorites, setFavorite, subscribeFavorites, replaceFavorites } from './favoriteStore';
 import { mountCloudPanel } from './cloudSync';
@@ -91,6 +93,7 @@ export function createApp(root: HTMLDivElement | null): void {
           </div>
         </section>
 
+        <section class="document-resume" data-document-home hidden aria-label="Current document"></section>
         <section class="quick-access" aria-label="Quick access">
           <article class="quick-panel">
             <div class="quick-heading"><p class="eyebrow">Favorites</p><h2>Your pinned tools</h2></div>
@@ -143,6 +146,7 @@ export function createApp(root: HTMLDivElement | null): void {
 
         <dialog id="workspace-dialog" class="workspace-dialog" aria-labelledby="workspace-title">
           <form method="dialog" class="dialog-bar"><strong id="workspace-title">Workspace</strong><button aria-label="Close workspace">Close</button></form>
+          <section class="document-toolbar" data-document-toolbar hidden aria-label="Document session"></section>
           <div id="workspace" class="workspace"></div>
         </dialog>
         <dialog id="info-dialog" class="info-dialog"><div id="info-content"></div><form method="dialog"><button class="primary">Close</button></form></dialog>
@@ -168,6 +172,24 @@ export function createApp(root: HTMLDivElement | null): void {
   let category = 'all';
   let workspaceGeneration = 0;
   let workspaceTrigger: HTMLElement | null = null;
+
+  const documents = new DocumentWorkspace({
+    root: workspace, dialog: workspaceDialog,
+    toolbar: root.querySelector<HTMLElement>('[data-document-toolbar]')!,
+    home: root.querySelector<HTMLElement>('[data-document-home]')!,
+    open: (id, view) => openTool(id, null, view)
+  });
+  const closeWorkspace = async (): Promise<void> => {
+    if (await documents.canLeave()) workspaceDialog.close();
+  };
+  // Own every close path, including native form submission, the restored
+  // header/footer buttons and Escape. Active work is never silently cancelled.
+  workspaceDialog.addEventListener('click', event => {
+    const target = event.target instanceof Element ? event.target : null;
+    if (!target?.closest('[data-legacy-header-close],.legacy-footer-close,.dialog-bar button,[data-load-close]')) return;
+    event.preventDefault(); event.stopImmediatePropagation(); void closeWorkspace();
+  }, true);
+  workspaceDialog.addEventListener('cancel', event => { event.preventDefault(); void closeWorkspace(); });
 
   const toolButtons = (ids: string[], emptyMessage: string): string => {
     const available = ids.map((id) => tools.find((tool) => tool.id === id)).filter((tool): tool is NonNullable<typeof tool> => Boolean(tool));
@@ -209,9 +231,13 @@ export function createApp(root: HTMLDivElement | null): void {
 
   const sessionIsActive = (generation: number): boolean => generation === workspaceGeneration && workspaceDialog.open;
 
-  const openTool = async (id: string, trigger: HTMLElement | null = null): Promise<void> => {
+  const openTool = async (id: string, trigger: HTMLElement | null = null, view?: File): Promise<void> => {
     const tool = tools.find((candidate) => candidate.id === id);
     if (!tool) return;
+    if (!await documents.canLeave()) { documents.refresh(); return; }
+    documents.unmount();
+    workspace.dispatchEvent(new CustomEvent('docflow-cleanup'));
+    workspaceDialog.classList.remove('legacy-exact-active');
     const generation = ++workspaceGeneration;
     if (trigger) workspaceTrigger = trigger;
     recent = [id, ...recent.filter((item) => item !== id)].slice(0, 6);
@@ -223,7 +249,10 @@ export function createApp(root: HTMLDivElement | null): void {
     try {
       const module = await tool.load();
       if (!sessionIsActive(generation)) return;
+      documents.prepare(tool, view);
       module.mountWorkspace(workspace, tool);
+      document.dispatchEvent(new CustomEvent('docflow-workspace-mounted'));
+      documents.mounted();
     } catch (error) {
       if (!sessionIsActive(generation)) return;
       console.error('DocFlow tool load failed', {
@@ -246,7 +275,7 @@ export function createApp(root: HTMLDivElement | null): void {
       `;
       workspace.querySelector<HTMLButtonElement>('[data-load-retry]')?.addEventListener('click', () => { void openTool(id, workspaceTrigger); });
       workspace.querySelector<HTMLButtonElement>('[data-load-close]')?.addEventListener('click', () => workspaceDialog.close());
-      workspace.querySelector<HTMLButtonElement>('[data-load-reload]')?.addEventListener('click', () => location.reload());
+      workspace.querySelector<HTMLButtonElement>('[data-load-reload]')?.addEventListener('click', async () => { if (await approveReload()) { prepareApprovedReload(); location.reload(); } });
       workspace.querySelector<HTMLButtonElement>('[data-load-retry]')?.focus();
     }
   };
@@ -285,7 +314,7 @@ export function createApp(root: HTMLDivElement | null): void {
       search.focus();
       search.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
-    if (action === 'open') void openTool('preview', actionTarget ?? null);
+    if (action === 'open') { workspaceTrigger = actionTarget ?? null; void documents.begin(); }
     if (action === 'cloud') {
       mountCloudPanel(infoContent, {
         allowedToolIds: new Set(tools.map((tool) => tool.id)),
@@ -300,7 +329,7 @@ export function createApp(root: HTMLDivElement | null): void {
       infoDialog.showModal();
     }
     if (action === 'privacy') {
-      infoContent.innerHTML = '<h2>Privacy</h2><p>DocFlow processes PDF documents in your browser. No analytics, telemetry, crash reporting, trackers, or remote document-processing APIs are configured.</p><p>Favorites and recent-tool IDs are stored in localStorage. Optional account-linked Cloud Sync sends only those tool IDs to the dedicated DocFlow Supabase project when Save is selected; no PDF content is uploaded. Lightweight project recovery stores the selected tool, settings, and file metadata (name, size, type, and last-modified time) in IndexedDB. PDF/image contents and encryption passwords are not stored in localStorage or the recovery database; original files must be reselected after recovery.</p>';
+      infoContent.innerHTML = '<h2>Privacy</h2><p>DocFlow processes PDF documents in your browser. No analytics, telemetry, crash reporting, trackers, or remote document-processing APIs are configured.</p><p>Favorites and recent-tool IDs are stored in localStorage. Optional account-linked Cloud Sync sends only those tool IDs to the dedicated DocFlow Supabase project when Save is selected; no PDF content is uploaded. Lightweight project recovery stores the selected tool, settings, and file metadata (name, size, type, and last-modified time) in IndexedDB. An optional document session keeps revisions and results in this tab’s memory only. Export before closing or reloading the tab. PDF/image contents and encryption passwords are not stored in localStorage or the recovery database; original files must be reselected after recovery.</p>';
       infoDialog.showModal();
     }
     if (action === 'diagnostics') {
@@ -322,6 +351,7 @@ export function createApp(root: HTMLDivElement | null): void {
 
   workspaceDialog.addEventListener('close', () => {
     workspaceGeneration += 1;
+    documents.unmount();
     workspace.dispatchEvent(new CustomEvent('docflow-cleanup'));
     workspace.replaceChildren();
     const trigger = workspaceTrigger;

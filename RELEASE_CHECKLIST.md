@@ -1,6 +1,6 @@
 # Release gates
 
-Use the exact commit's Actions evidence and docs/R0_RELEASE.md. Historical September numbers are not current results.
+Use the exact commit's Actions evidence and docs/R1_RELEASE.md (R0 remains historical). Historical September numbers are not current results.
 
 ## Before merge
 - [ ] Dependency audit, typecheck, lint, unit/build pass.
@@ -10,6 +10,8 @@ Use the exact commit's Actions evidence and docs/R0_RELEASE.md. Historical Septe
 - [ ] Genuine damaged-repair and fail-closed fixtures pass.
 - [ ] Capability docs, preservation warnings and build identity agree.
 - [ ] No new document network/persistence path.
+- [ ] One-import organise → annotate → number → export and exact undo/redo pass.
+- [ ] Redaction history barrier, close guards and two-tab update safety pass.
 - [ ] Schema change has isolation/privilege evidence.
 
 ## After merge

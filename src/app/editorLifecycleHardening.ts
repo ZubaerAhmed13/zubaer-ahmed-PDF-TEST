@@ -1,3 +1,4 @@
+import { approveReload, prepareApprovedReload } from './workProtection';
 const RETRY_TOOL_KEY = 'docflow.retry-tool.v1';
 const RETRY_TOOL_PARAM = 'docflowRetry';
 const STACKED_EDITOR_QUERY = '(max-width: 820px)';
@@ -86,8 +87,12 @@ function retryFailedModule(errorPanel: HTMLElement, event: Event): void {
    * No PDF/image bytes are stored or replayed. */
   event.preventDefault();
   event.stopImmediatePropagation();
-  try { sessionStorage.setItem(RETRY_TOOL_KEY, toolId); } catch { /* storage unavailable */ }
-  location.replace(retryUrl(toolId));
+  void approveReload().then(approved => {
+    if (!approved) return;
+    try { sessionStorage.setItem(RETRY_TOOL_KEY, toolId); } catch { /* storage unavailable */ }
+    prepareApprovedReload();
+    location.replace(retryUrl(toolId));
+  });
 }
 
 function resumeRetriedTool(): void {

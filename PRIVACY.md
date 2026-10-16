@@ -21,3 +21,8 @@ The migrated core:
 Automated encryption certification checks that its known test password is absent from DocFlow localStorage and the project-state IndexedDB snapshot after a Protect PDF operation. This is evidence for those DocFlow-managed storage locations and the tested implementation; it is not a claim about browser extensions, operating-system memory, swap, device compromise, screenshots, or other software outside DocFlow's control.
 
 The application must not claim broader privacy guarantees for any future feature that introduces remote processing. Such a feature would require an explicit disclosure before use.
+
+
+## In-memory document sessions
+
+Optional document sessions hold the starting PDF, working revisions, page selection and pending results only in the current tab's memory. Export before closing or reloading the tab. Closing an individual tool keeps the applied document until the tab ends or New document is confirmed. Session content and history are not written to IndexedDB, localStorage, URLs or cloud preferences. Applied secure redaction removes previous session revisions/source previews; the original file on the user's device stays under their control. Service-worker update coordination exchanges boolean safety responses only, with no document names, contents or settings.
