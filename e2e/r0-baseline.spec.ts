@@ -4,21 +4,25 @@ import { tools } from '../src/tools/registry';
 import { readFile } from 'node:fs/promises';
 
 test('all 28 tools load their deployed workspaces with no uncaught errors', async ({ page }) => {
-  test.setTimeout(120_000);
+  // WebKit on the CI runner takes about five seconds per animated open/close
+  // cycle. Budget for all 28 tools while keeping each action bounded.
+  test.setTimeout(240_000);
   const errors: string[] = [];
   page.on('pageerror', error => errors.push(error.message));
   await page.goto('/zubaer-ahmed-PDF-TEST/');
   expect(tools).toHaveLength(28);
   await expect(page.locator('#tool-grid .tool-card')).toHaveCount(28);
   for (const tool of tools) {
-    await page.locator('#tool-grid [data-open-tool="' + tool.id + '"]').click();
-    const dialog = page.getByRole('dialog', { name: 'Workspace' });
-    await expect(dialog).toBeVisible();
-    await expect(dialog.locator('.workspace-loading')).toHaveCount(0);
-    await expect(dialog.locator('[data-load-error-for]')).toHaveCount(0);
-    await expect(dialog.getByRole('heading', { name: tool.name, exact: true })).toBeVisible();
-    await dialog.getByRole('button', { name: 'Close workspace' }).click();
-    await expect(dialog).toBeHidden();
+    await test.step(tool.name, async () => {
+      await page.locator('#tool-grid [data-open-tool="' + tool.id + '"]').click({ timeout: 8_000 });
+      const dialog = page.getByRole('dialog', { name: 'Workspace' });
+      await expect(dialog).toBeVisible();
+      await expect(dialog.locator('.workspace-loading')).toHaveCount(0);
+      await expect(dialog.locator('[data-load-error-for]')).toHaveCount(0);
+      await expect(dialog.getByRole('heading', { name: tool.name, exact: true })).toBeVisible();
+      await dialog.getByRole('button', { name: 'Close workspace' }).click({ timeout: 8_000 });
+      await expect(dialog).toBeHidden();
+    });
   }
   expect(errors).toEqual([]);
 });
