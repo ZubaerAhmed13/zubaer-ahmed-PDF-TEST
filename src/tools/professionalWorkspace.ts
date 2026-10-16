@@ -10,7 +10,7 @@ function cleanName(value: string): string {
 }
 export function mountWorkspace(container: HTMLDivElement, tool: ToolDefinition): void {
   const redact = tool.id === 'redact-secure';
-  container.innerHTML = '<div class="pro-tool"><header class="pro-head"><p class="eyebrow">PROFESSIONAL · LOCAL</p><h2>' + (redact ? 'Secure raster redaction' : 'Repair PDF structure') + '</h2><p>' +
+  container.innerHTML = '<div class="pro-tool"><header class="pro-head"><p class="eyebrow">PROFESSIONAL · LOCAL</p><h2></h2><p>' +
     (redact ? 'Permanently remove selected visible regions by rebuilding all pages into a new image-only PDF.' : 'Attempt to recover damaged cross-reference tables and normalise PDF structure with local qpdf.') + '</p></header>' +
     '<div class="pro-callout" role="note"><strong>' + (redact ? 'Redaction removes document structure' : 'Recovery is not guaranteed') + '</strong><p>' +
     (redact ? 'Every page is rasterised. All original text layers, embedded files, forms, bookmarks, scripts, signatures, accessibility tags and metadata are discarded—even on pages without redaction marks. Never use Crop or Annotate for confidential removal. Review the downloaded PDF visually.' :
@@ -35,6 +35,7 @@ export function mountWorkspace(container: HTMLDivElement, tool: ToolDefinition):
     '<button type="button" id="pro-execute" class="primary">' + (redact ? 'Apply permanent redactions' : 'Attempt structural repair') + '</button></div>' +
     '<div id="pro-results" aria-live="polite"></div></div></div>';
 
+  container.querySelector<HTMLHeadingElement>('.pro-head h2')!.textContent = tool.name;
   const input = container.querySelector<HTMLInputElement>('#pro-pdf')!;
   const run = container.querySelector<HTMLButtonElement>('#pro-execute')!;
   const cancel = container.querySelector<HTMLButtonElement>('#pro-cancel')!;
