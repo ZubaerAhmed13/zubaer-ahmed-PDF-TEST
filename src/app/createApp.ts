@@ -237,6 +237,8 @@ export function createApp(root: HTMLDivElement | null): void {
   const openTool = async (id: string, trigger: HTMLElement | null = null, view?: File): Promise<void> => {
     const tool = tools.find((candidate) => candidate.id === id);
     if (!tool) return;
+    // Capture before the asynchronous leave guard consumes the retry marker.
+    const recoveryRetry = new URL(location.href).searchParams.get('docflowRetry') === id;
     if (!await documents.canLeave()) { documents.refresh(); return; }
     documents.unmount();
     workspace.dispatchEvent(new CustomEvent('docflow-cleanup'));
@@ -250,7 +252,7 @@ export function createApp(root: HTMLDivElement | null): void {
     if (!workspaceDialog.open) workspaceDialog.showModal();
 
     try {
-      const module = await tool.load();
+      const module = await tool.load(recoveryRetry);
       if (!sessionIsActive(generation)) return;
       documents.prepare(tool, view);
       module.mountWorkspace(workspace, tool);
