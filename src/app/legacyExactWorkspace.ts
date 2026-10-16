@@ -90,6 +90,7 @@ function closeWorkspace(root: HTMLElement): void {
 function structuralWarning(tool: ToolDefinition): string {
   if (tool.quality === 'Inspection') return 'Preview only — the source document is not changed.';
   if (tool.id === 'protect-pdf' || tool.id === 'unlock-pdf') return 'Security processing stays local; passwords are not stored by DocFlow.';
+  if (['merge', 'split', 'remove-pages', 'extract-pages', 'organize'].includes(tool.id)) return 'Page content is copied into a new PDF. Bookmarks, attachments, page labels and editable form structure may be lost; signatures can be invalidated.';
   return 'Bookmarks may not be preserved; modifying signed files can invalidate signatures.';
 }
 
@@ -138,7 +139,7 @@ function createLegacyShell(root: HTMLElement, grid: HTMLElement, tool: ToolDefin
   if (eyebrow) eyebrow.textContent = categoryLabel(tool);
   const meta = document.createElement('div');
   meta.className = 'legacy-title-meta';
-  meta.innerHTML = `<span class="legacy-full-badge">${tool.status === 'Migrated' ? 'Full' : escapeHtml(tool.status)}</span><span>${escapeHtml(outputLabel(tool))}</span>`;
+  meta.innerHTML = `<span class="legacy-full-badge">On-device</span><span>${escapeHtml(outputLabel(tool))}</span>`;
   side.append(meta);
   header.append(side);
 

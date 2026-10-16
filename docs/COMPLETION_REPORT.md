@@ -1,3 +1,5 @@
+> Historical migration record. Current capabilities and evidence: [CAPABILITIES.md](CAPABILITIES.md), [R0_RELEASE.md](R0_RELEASE.md). Older OCR, compression, test counts and release verdicts below describe their original snapshot.
+
 # DocFlow Professional — Completion Report
 
 Release assessment date: 2026-09-03  

@@ -24,7 +24,6 @@ export function createApp(root: HTMLDivElement | null): void {
 
   let recent = readList(RECENT_KEY);
   let favorites = getFavorites();
-  const migratedCount = tools.filter((tool) => tool.status === 'Migrated').length;
   const categoryCount = new Set(tools.map((tool) => tool.category)).size;
 
   root.innerHTML = `
@@ -58,7 +57,7 @@ export function createApp(root: HTMLDivElement | null): void {
             </div>
             <div class="hero-microcopy" aria-label="Product benefits">
               <span><b class="hero-check" aria-hidden="true">✓</b> No document upload</span>
-              <span><b class="hero-check" aria-hidden="true">✓</b> Works offline after install</span>
+              <span><b class="hero-check" aria-hidden="true">✓</b> Offline after setup</span>
               <span><b class="hero-check" aria-hidden="true">✓</b> No analytics configured</span>
             </div>
           </div>
@@ -69,7 +68,7 @@ export function createApp(root: HTMLDivElement | null): void {
               <div class="window-content">
                 <div class="window-feature">
                   <div class="window-feature-icon" aria-hidden="true">PDF</div>
-                  <div><strong>Worker-backed processing</strong><small>Heavy operations stay off the main UI thread.</small></div>
+                  <div><strong>Work on your device</strong><small>Edit and export without uploading your documents.</small></div>
                   <span class="window-status">Local</span>
                 </div>
                 <div class="window-feature">
@@ -84,7 +83,7 @@ export function createApp(root: HTMLDivElement | null): void {
                 </div>
                 <div class="window-summary" aria-label="Current product capability summary">
                   <div><strong>${tools.length}</strong><span>Tools</span></div>
-                  <div><strong>${migratedCount}</strong><span>Migrated</span></div>
+                  <div><strong>Local</strong><span>Processing</span></div>
                   <div><strong>${categoryCount}</strong><span>Categories</span></div>
                 </div>
               </div>
@@ -125,9 +124,9 @@ export function createApp(root: HTMLDivElement | null): void {
           </div>
           <div class="steps-grid">
             <article class="step-card"><span class="step-number">01</span><h3>Choose a tool</h3><p>Search or browse by category. Favorites and recent tools keep common jobs close.</p></article>
-            <article class="step-card"><span class="step-number">02</span><h3>Add your document</h3><p>Input validation, file metadata and memory warnings happen before heavy processing begins.</p></article>
-            <article class="step-card"><span class="step-number">03</span><h3>Work locally</h3><p>PDF.js, pdf-lib and qpdf WASM run in-browser with workers, progress and cancellation where applicable.</p></article>
-            <article class="step-card"><span class="step-number">04</span><h3>Download the result</h3><p>Export-capable tools validate generated artifacts in automated release tests before they are considered migrated.</p></article>
+            <article class="step-card"><span class="step-number">02</span><h3>Add your document</h3><p>Choose files from your device and review any file or memory warnings.</p></article>
+            <article class="step-card"><span class="step-number">03</span><h3>Work locally</h3><p>Review the preview and options, then apply your changes on this device.</p></article>
+            <article class="step-card"><span class="step-number">04</span><h3>Download the result</h3><p>Download a new copy and review it before sharing. Your original file stays unchanged.</p></article>
           </div>
         </section>
 
@@ -138,7 +137,7 @@ export function createApp(root: HTMLDivElement | null): void {
           <div class="trust-grid">
             <article class="trust-card"><span class="trust-icon" aria-hidden="true">✓</span><div><strong>Local processing</strong><p>Core PDF and image operations execute in the browser instead of uploading files to a processing server.</p></div></article>
             <article class="trust-card"><span class="trust-icon" aria-hidden="true">◎</span><div><strong>Offline-ready core</strong><p>The application shell and local engines are precached for offline use where the browser permits worker execution.</p></div></article>
-            <article class="trust-card"><span class="trust-icon" aria-hidden="true">i</span><div><strong>Honest capability labels</strong><p>Tools expose quality and migration status, and unsupported capabilities are not presented as working features.</p></div></article>
+            <article class="trust-card"><span class="trust-icon" aria-hidden="true">i</span><div><strong>Clear export choices</strong><p>Review quality changes and supported features before you export.</p></div></article>
           </div>
         </section>
 
@@ -196,7 +195,7 @@ export function createApp(root: HTMLDivElement | null): void {
         <p class="tool-category-label">${tool.category}</p>
         <h3>${tool.name}</h3>
         <p>${tool.description}</p>
-        <div class="tool-meta"><span>${tool.quality}</span><span>${tool.status}</span></div>
+        <div class="tool-meta"><span>${tool.quality}</span><span>On-device</span></div>
         <button class="card-action" data-open-tool="${tool.id}">Open tool</button>
       </article>
     `).join('') || `<div class="empty-state"><strong>No tools found</strong><p>Try another search or category.</p></div>`;
@@ -301,11 +300,11 @@ export function createApp(root: HTMLDivElement | null): void {
       infoDialog.showModal();
     }
     if (action === 'privacy') {
-      infoContent.innerHTML = '<h2>Privacy</h2><p>DocFlow performs the migrated PDF-processing core in your browser. No analytics, telemetry, crash reporting, trackers, or remote document-processing APIs are configured.</p><p>Favorites and recent-tool IDs are stored in localStorage. Optional account-linked Cloud Sync sends only those tool IDs to the dedicated DocFlow Supabase project when Save is selected; no PDF content is uploaded. Lightweight project recovery stores the selected tool, settings, and file metadata (name, size, type, and last-modified time) in IndexedDB. PDF/image contents and encryption passwords are not stored in localStorage or the recovery database; original files must be reselected after recovery.</p>';
+      infoContent.innerHTML = '<h2>Privacy</h2><p>DocFlow processes PDF documents in your browser. No analytics, telemetry, crash reporting, trackers, or remote document-processing APIs are configured.</p><p>Favorites and recent-tool IDs are stored in localStorage. Optional account-linked Cloud Sync sends only those tool IDs to the dedicated DocFlow Supabase project when Save is selected; no PDF content is uploaded. Lightweight project recovery stores the selected tool, settings, and file metadata (name, size, type, and last-modified time) in IndexedDB. PDF/image contents and encryption passwords are not stored in localStorage or the recovery database; original files must be reselected after recovery.</p>';
       infoDialog.showModal();
     }
     if (action === 'diagnostics') {
-      infoContent.innerHTML = `<h2>Diagnostics</h2><dl><dt>Version</dt><dd>1.0 professional core</dd><dt>Online</dt><dd>${navigator.onLine}</dd><dt>Worker support</dt><dd>${typeof Worker !== 'undefined'}</dd><dt>Service worker</dt><dd>${'serviceWorker' in navigator}</dd><dt>Storage estimate</dt><dd id="storage-estimate">Checking…</dd></dl>`;
+      infoContent.innerHTML = `<h2>Diagnostics</h2><dl><dt>Version</dt><dd>${__DOCFLOW_VERSION__}</dd><dt>Build</dt><dd>${__DOCFLOW_BUILD__}</dd><dt>Online</dt><dd>${navigator.onLine}</dd><dt>Worker support</dt><dd>${typeof Worker !== 'undefined'}</dd><dt>Service worker</dt><dd>${'serviceWorker' in navigator}</dd><dt>Storage estimate</dt><dd id="storage-estimate">Checking…</dd></dl>`;
       infoDialog.showModal();
       if (navigator.storage?.estimate) void navigator.storage.estimate().then(({usage, quota}) => {
         const field = document.querySelector<HTMLElement>('#storage-estimate');

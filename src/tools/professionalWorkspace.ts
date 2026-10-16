@@ -256,11 +256,17 @@ export function mountWorkspace(container: HTMLDivElement, tool: ToolDefinition):
         GlobalWorkerOptions.workerSrc = new URL('pdfjs-dist/build/pdf.worker.min.mjs', import.meta.url).toString();
         const bytes = result.outputs[0]?.buffer;
         if (!bytes) throw Error('qpdf returned no output.');
-        const task = getDocument({ data: new Uint8Array(bytes.slice(0)) });
+        const task = getDocument({ data: new Uint8Array(bytes.slice(0)), stopAtErrors: true });
         const verified = await task.promise;
         try {
           if (verified.numPages < 1) throw Error('The rewritten document contains no pages.');
-          await verified.getPage(1);
+          for (let pageNumber = 1; pageNumber <= verified.numPages; pageNumber++) {
+            if (currentAbort.signal.aborted || disposed) throw new DOMException('Cancelled', 'AbortError');
+            progressText('Validating repaired page ' + pageNumber + ' of ' + verified.numPages, 97);
+            const checkedPage = await verified.getPage(pageNumber);
+            await checkedPage.getOperatorList();
+            checkedPage.cleanup();
+          }
         } finally { await verified.destroy(); }
         if (currentAbort.signal.aborted || disposed) return;
         renderResult(result);

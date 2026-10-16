@@ -1,7 +1,9 @@
 import { test, expect, type Page, type Locator } from '@playwright/test';
-import { PDFDocument, StandardFonts } from 'pdf-lib';
+import { PDFDocument, PDFName, StandardFonts } from 'pdf-lib';
 import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs';
 import { readFile } from 'node:fs/promises';
+import { redactionCorpus, repairCorpus } from '../tests/fixtures/pdfCorpus';
+import { pdfPixels } from './helpers/pdfPixels';
 
 async function fixture(): Promise<Buffer> {
   const pdf = await PDFDocument.create();
@@ -105,4 +107,102 @@ test('redaction offers keyboard coordinate entry on narrow mobile viewport',asyn
   await expect(dialog.locator('#pro-page-status')).toContainText('Page 2 of 2');
   await dialog.getByRole('button',{name:'Undo last area'}).click();
   await expect(dialog.locator('#pro-mark-count')).toContainText('0 redaction area');
+});
+
+test('redacted pixels cover the intended viewport region at every rotation and retain surrounding content', async ({ page }) => {
+  test.setTimeout(120_000);
+  const source = await redactionCorpus();
+  const dialog = await open(page, 'permanent redaction', 'redact-secure');
+  await dialog.locator('#pro-pdf').setInputFiles({ name: 'rotated-cropped-forms-images.pdf', mimeType: 'application/pdf', buffer: source });
+  await expect(dialog.locator('#pro-page-status')).toContainText('Page 1 of 4');
+  for (let index = 1; index <= 4; index++) {
+    await dialog.locator('#pro-coordinates input[name=x]').fill('10');
+    await dialog.locator('#pro-coordinates input[name=y]').fill('20');
+    await dialog.locator('#pro-coordinates input[name=width]').fill('30');
+    await dialog.locator('#pro-coordinates input[name=height]').fill('25');
+    await dialog.getByRole('button', { name: 'Add area using coordinates' }).click();
+    if (index < 4) {
+      await dialog.getByRole('button', { name: 'Next page' }).click();
+      await expect(dialog.locator('#pro-page-status')).toContainText('Page ' + (index + 1) + ' of 4');
+    }
+  }
+  await dialog.locator('#pro-confirm').check();
+  await dialog.getByRole('button', { name: 'Apply permanent redactions' }).click();
+  await expect(dialog.locator('#pro-stage')).toHaveText('Complete', { timeout: 90_000 });
+  const output = await downloaded(page, dialog.locator('#pro-results a.download'));
+  const parsed = await PDFDocument.load(output);
+  expect(parsed.getForm().getFields()).toHaveLength(0);
+  expect(parsed.catalog.has(PDFName.of('Names'))).toBe(false);
+  for (let index = 1; index <= 4; index++) {
+    const before = await pdfPixels(source, index);
+    const after = await pdfPixels(output, index);
+    expect([after.width, after.height]).toEqual([before.width, before.height]);
+    // Every interior pixel must be black, not just an image-only/no-text result.
+    let tested = 0;
+    for (let y = Math.ceil(after.height * .2) + 3; y < Math.floor(after.height * .45) - 3; y++) {
+      for (let x = Math.ceil(after.width * .1) + 3; x < Math.floor(after.width * .4) - 3; x++) {
+        const offset = (y * after.width + x) * 4;
+        if (Math.max(after.data[offset]!, after.data[offset + 1]!, after.data[offset + 2]!) > 4)
+          throw Error('Unmasked pixel in exported redaction on page ' + index + ' at ' + x + ',' + y);
+        tested++;
+      }
+    }
+    expect(tested).toBeGreaterThan(1000);
+    // A wrong viewport transform must not silently blackout unrelated areas.
+    for (const [nx, ny] of [[.8, .8], [.8, .1], [.05, .9]]) {
+      const offset = (Math.floor(ny! * after.height) * after.width + Math.floor(nx! * after.width)) * 4;
+      for (let channel = 0; channel < 3; channel++)
+        expect(Math.abs(after.data[offset + channel]! - before.data[offset + channel]!)).toBeLessThanOrEqual(12);
+    }
+  }
+});
+
+for (const damage of ['wrong-startxref', 'missing-xref'] as const) {
+  test('repair reconstructs ' + damage + ' and keeps actual document text', async ({ page }) => {
+    const source = repairCorpus(damage);
+    expect(source.equals(repairCorpus())).toBe(false);
+    const dialog = await open(page, 'repair PDF', 'repair-pdf');
+    await dialog.locator('#pro-pdf').setInputFiles({ name: damage + '.pdf', mimeType: 'application/pdf', buffer: source });
+    await dialog.getByRole('button', { name: 'Attempt structural repair' }).click();
+    await expect(dialog.locator('#pro-stage')).toHaveText('Complete', { timeout: 90_000 });
+    await expect(dialog.locator('.pro-warning')).toContainText('warnings');
+    const result = await downloaded(page, dialog.locator('#pro-results a.download'));
+    const document = await getDocument({ data: new Uint8Array(result), stopAtErrors: true }).promise;
+    try {
+      expect(document.numPages).toBe(1);
+      const content = await (await document.getPage(1)).getTextContent();
+      expect(content.items.map(item => 'str' in item ? item.str : '').join(' ')).toContain('DocFlow repair corpus v1');
+    } finally { await document.destroy(); }
+  });
+}
+
+test('repair fails closed when a referenced page object is missing', async ({ page }) => {
+  const dialog = await open(page, 'repair PDF', 'repair-pdf');
+  await dialog.locator('#pro-pdf').setInputFiles({ name: 'missing-page.pdf', mimeType: 'application/pdf', buffer: repairCorpus('missing-page') });
+  await dialog.getByRole('button', { name: 'Attempt structural repair' }).click();
+  await expect(dialog.locator('#pro-stage')).toHaveText('Failed', { timeout: 90_000 });
+  await expect(dialog.locator('#pro-error')).toBeVisible();
+  await expect(dialog.locator('#pro-results a.download')).toHaveCount(0);
+});
+
+test('cancellation during redaction encoding never publishes a partially redacted output', async ({ page }) => {
+  const dialog = await open(page, 'permanent redaction', 'redact-secure');
+  await dialog.locator('#pro-pdf').setInputFiles({ name: 'cancel.pdf', mimeType: 'application/pdf', buffer: await redactionCorpus() });
+  await expect(dialog.locator('#pro-page-status')).toContainText('Page 1 of 4');
+  await dialog.getByRole('button', { name: 'Add area using coordinates' }).click();
+  await dialog.locator('#pro-confirm').check();
+  // Pause a real encoding boundary so the cancellation race is deterministic.
+  await page.evaluate(() => {
+    const encode = HTMLCanvasElement.prototype.toBlob;
+    HTMLCanvasElement.prototype.toBlob = function (callback, type, quality) {
+      document.documentElement.dataset.r0Encoding = 'pending';
+      document.addEventListener('r0-continue-encoding', () => encode.call(this, callback, type, quality), { once: true });
+    };
+  });
+  await dialog.getByRole('button', { name: 'Apply permanent redactions' }).click();
+  await expect(page.locator('html')).toHaveAttribute('data-r0-encoding', 'pending');
+  await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await page.evaluate(() => document.dispatchEvent(new Event('r0-continue-encoding')));
+  await expect(dialog.locator('#pro-error')).toContainText('cancelled');
+  await expect(dialog.locator('#pro-results a.download')).toHaveCount(0);
 });

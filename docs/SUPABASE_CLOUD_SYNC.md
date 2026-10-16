@@ -32,5 +32,15 @@ Supabase is contacted only when you explicitly interact with cloud preferences. 
 
 ## Verification boundary
 
-Schema/row ownership protections verified by the database tools.
-Production GitHub Actions and a real authenticated two-device sync roundtrip remain necessary before declaring this feature release-ready.
+R0's live database transaction checks pass own-row CRUD/upsert, denied cross-user access/reassignment, array limits and anonymous denial. All synthetic users/rows are rolled back. Authenticated browser roles now have SELECT/INSERT/UPDATE/DELETE only; TRUNCATE/REFERENCES/TRIGGER were revoked. Source migrations and tests are in supabase/.
+
+Mocked browser Auth/API tests establish payload/UI behaviour, not actual Auth login or email delivery. The live project currently has no Auth users. Real email confirmation, password sign-in, Save/Restore across two browser sessions, expired-session refresh and sign-out remain independent acceptance work. Auth Site URL/redirect settings also require direct confirmation.
+
+### Real-account acceptance
+1. Use your own confirmed DocFlow account in the Cloud sync panel. Never send credentials in chat.
+2. Choose a distinctive favourite, Save, then sign in in a second browser and Restore. Verify only favourites/recent tool IDs changed.
+3. Sign out and check local PDF tools still work; repeat with the network unavailable.
+4. With disposable test accounts only, verify the REST API rejects access to another account's preferences. The rollback SQL test already covers database policy behaviour.
+5. Record the tested build/date and outcome. Do not label mocked tests or database role tests as a real browser login.
+
+See R0_RELEASE.md for current recorded evidence. The initial schema migration was reconstructed from the live catalog for reproducible fresh installs; its original remote migration identity is retained. Do not reset production to replay it.

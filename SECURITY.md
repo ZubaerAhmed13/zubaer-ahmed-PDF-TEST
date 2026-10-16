@@ -60,3 +60,9 @@ Application logs must not contain document text, passwords or form values. Favor
 ## Dependency gate
 
 `npm audit` is part of CI for the locked npm dependency graph. The vendored qpdf runtime is not an npm dependency, so its immutable upstream source, license and cryptographic file provenance are tracked separately in `src/vendor/qpdf/PROVENANCE.md`. Audit/provenance evidence applies to the tested versions at that point in time and is not a blanket security guarantee.
+
+## R0 privileges and hosting boundary
+
+The browser-authenticated role has only SELECT, INSERT, UPDATE and DELETE on docflow_preferences. RLS does not constrain TRUNCATE, so default extra privileges were explicitly revoked. No anonymous grants. Reproducible migration and rollback-only ownership tests are in supabase/.
+
+Response inspection on 16 October 2026 found HTTPS/HSTS but no CSP HTTP response header or X-Frame-Options. Meta CSP enforces its supported directives, but frame-ancestors cannot be delivered through meta; the ignored directive was removed. Effective anti-framing protection requires response-header support from the serving infrastructure. It remains an explicit limitation; this release does not change hosting or add JavaScript frame-busting.

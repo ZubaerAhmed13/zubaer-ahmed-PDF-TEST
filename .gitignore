@@ -1,0 +1,11 @@
+node_modules/
+dist/
+public/ocr/
+playwright-report/
+test-results/
+artifacts/
+*.tsbuildinfo
+.env.local
+.env.*.local
+supabase/.temp/
+supabase/.branches/

@@ -5,7 +5,15 @@ if (!baseURL) throw new Error('DOCFLOW_PRODUCTION_BASE_URL is required for produ
 
 export default defineConfig({
   testDir: './e2e',
-  testMatch: 'production.spec.ts',
+  // Reuse the same export/reopen assertions against the built deployment.
+  // Keep expensive stress tests in the full pre-deployment browser matrix.
+  testMatch: [
+    'production.spec.ts', 'r0-baseline.spec.ts',
+    'forms-matrix.spec.ts', 'color-fidelity.spec.ts',
+    'phase3-ocr-comparison.spec.ts', 'workflow-builder.spec.ts',
+    'professional-redaction-repair.spec.ts'
+  ],
+  workers: 2,
   timeout: 120_000,
   expect: { timeout: 12_000 },
   retries: 1,
