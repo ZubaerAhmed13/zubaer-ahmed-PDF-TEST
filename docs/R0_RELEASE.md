@@ -13,7 +13,7 @@ Current capability docs/build identity, synthetic PDF corpus, pixel-level redact
 - Local browser binary download failed. Full browser checks run on GitHub Actions; they are not counted as locally executed.
 
 ## Release status
-Awaiting exact-head browser certification, merge/deploy and expanded production verification. Record final SHA/run links before marking the shipped source verified.
+Live release status is tracked in [PR #15](https://github.com/ZubaerAhmed13/zubaer-ahmed-PDF-TEST/pull/15) and the [Pages workflow](https://github.com/ZubaerAhmed13/zubaer-ahmed-PDF-TEST/actions/workflows/pages.yml). Merge requires passing quality and all three browsers for the final PR head. A shipped-release claim additionally requires the final main deployment and expanded production suite to pass. The PR description records the exact run links; this document does not substitute for those live states.
 
 ## Independent acceptance
 There are no real Auth accounts. Email confirmation, real browser login/two-browser preference restore and Auth redirect configuration remain unverified. Local PDF use does not depend on them.
