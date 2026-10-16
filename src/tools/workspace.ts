@@ -75,7 +75,7 @@ export function mountWorkspace(container: HTMLDivElement, tool: ToolDefinition):
         <h2>${escapeHtml(tool.name)}</h2>
         <p>${escapeHtml(tool.description)}</p>
         <div class="quality-box"><strong>${tool.quality}</strong><span>${tool.quality === 'Lossless' ? 'Existing page structure is preserved where the operation allows it.' : tool.quality === 'Potentially lossy' ? 'This operation can change representation or image quality.' : 'No export quality change unless you run another operation.'}</span></div>
-        <div class="privacy-box"><strong>Local processing</strong><span>No remote PDF-processing API is configured in this migration.</span></div>
+        <div class="privacy-box"><strong>Local processing</strong><span>Your documents are processed on this device.</span></div>
       </aside>
       <section class="workspace-main">
         <div class="drop-zone" tabindex="0" role="button" aria-label="Choose files or drop files here">

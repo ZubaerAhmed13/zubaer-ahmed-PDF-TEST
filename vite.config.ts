@@ -1,6 +1,18 @@
 import { defineConfig } from 'vite';
+import { execFileSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
+
+const packageInfo = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8')) as { version: string };
+const commit = process.env.GITHUB_SHA || (() => {
+  try { return execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim(); }
+  catch { return 'local'; }
+})();
 
 export default defineConfig({
+  define: {
+    __DOCFLOW_VERSION__: JSON.stringify(packageInfo.version),
+    __DOCFLOW_BUILD__: JSON.stringify(commit)
+  },
   base: '/zubaer-ahmed-PDF-TEST/',
   build: {
     target: 'es2022',

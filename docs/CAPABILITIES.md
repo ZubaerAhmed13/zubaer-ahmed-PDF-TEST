@@ -1,0 +1,36 @@
+# Current capability and evidence matrix
+
+Baseline: R0 / 0.2.0, 28 stable tool IDs. Test links identify coverage; passing results must be checked at the exact release SHA. Catalog preservation is not implied by a structural/lossless label.
+
+| Tool / ID | Coverage | Important boundary |
+|---|---|---|
+| View PDF (`preview`) | [Browser coverage](../e2e/preview-controls.spec.ts) | Structural/catalog limits: see [preservation baseline](R0_PRESERVATION_MATRIX.md). |
+| Merge PDF (`merge`) | [Browser coverage](../e2e/app.spec.ts) | Structural/catalog limits: see [preservation baseline](R0_PRESERVATION_MATRIX.md). |
+| Split PDF (`split`) | [Browser coverage](../e2e/release.spec.ts) | Structural/catalog limits: see [preservation baseline](R0_PRESERVATION_MATRIX.md). |
+| Remove pages (`remove-pages`) | [Browser coverage](../e2e/release.spec.ts) | Structural/catalog limits: see [preservation baseline](R0_PRESERVATION_MATRIX.md). |
+| Extract pages (`extract-pages`) | [Browser coverage](../e2e/release.spec.ts) | Structural/catalog limits: see [preservation baseline](R0_PRESERVATION_MATRIX.md). |
+| Organize pages (`organize`) | [Browser coverage](../e2e/organize-workspace.spec.ts) | Structural/catalog limits: see [preservation baseline](R0_PRESERVATION_MATRIX.md). |
+| Rotate pages (`rotate`) | [Browser coverage](../e2e/release.spec.ts) | Structural/catalog limits: see [preservation baseline](R0_PRESERVATION_MATRIX.md). |
+| Permanent redaction (`redact-secure`) | [Browser coverage](../e2e/professional-redaction-repair.spec.ts) | All pages rasterised; 15 pages/40 MiB/120 masks. Review visible output. |
+| Repair PDF (`repair-pdf`) | [Browser coverage](../e2e/professional-redaction-repair.spec.ts) | Supported structural corruption only; all pages post-checked, missing content not reconstructed. |
+| Crop PDF (`crop`) | [Browser coverage](../e2e/essential-utilities.spec.ts) | CropBox hides content, not redaction. |
+| Annotate PDF (`annotate`) | [Browser coverage](../e2e/essential-utilities.spec.ts) | Baked-in marks, not editable PDF comment objects. |
+| Visual signature (`sign-visual`) | [Browser coverage](../e2e/essential-utilities.spec.ts) | Visible mark only, no certificate signature. |
+| Edit document properties (`metadata-edit`) | [Browser coverage](../e2e/essential-utilities.spec.ts) | Standard Info fields only, not hidden-data sanitisation. |
+| OCR scanned PDF (`ocr`) | [Browser coverage](../e2e/phase3-ocr-comparison.spec.ts) | English/German; 30 pages; rotated pages skipped; approximate font/word placement. |
+| Compare PDFs (`compare`) | [Browser coverage](../e2e/phase3-ocr-comparison.spec.ts) | Page-position/downscaled comparison; 50 positions; no semantic alignment. |
+| Search & extract text (`text-search`) | [Browser coverage](../e2e/essential-utilities.spec.ts) | Structural/catalog limits: see [preservation baseline](R0_PRESERVATION_MATRIX.md). |
+| Add page numbers (`page-numbers`) | [Browser coverage](../e2e/release.spec.ts) | Structural/catalog limits: see [preservation baseline](R0_PRESERVATION_MATRIX.md). |
+| Add watermark (`watermark`) | [Browser coverage](../e2e/image-watermark.spec.ts) | Structural/catalog limits: see [preservation baseline](R0_PRESERVATION_MATRIX.md). |
+| Images to PDF (`images-to-pdf`) | [Browser coverage](../e2e/release.spec.ts) | Structural/catalog limits: see [preservation baseline](R0_PRESERVATION_MATRIX.md). |
+| PDF to images (`pdf-to-images`) | [Browser coverage](../e2e/color-fidelity.spec.ts) | Structural/catalog limits: see [preservation baseline](R0_PRESERVATION_MATRIX.md). |
+| Extract images (`extract-images`) | [Browser coverage](../e2e/extract-images.spec.ts) | Decoded rasters, not original compressed-byte extraction. |
+| Fill PDF forms (`forms`) | [Browser coverage](../e2e/forms-matrix.spec.ts) | Supported AcroForm only; XFA unsupported; flatten removes fields. |
+| Protect PDF (`protect-pdf`) | [Browser coverage](../e2e/encryption.spec.ts) | Structural/catalog limits: see [preservation baseline](R0_PRESERVATION_MATRIX.md). |
+| Unlock PDF (`unlock-pdf`) | [Browser coverage](../e2e/encryption.spec.ts) | Structural/catalog limits: see [preservation baseline](R0_PRESERVATION_MATRIX.md). |
+| Document information (`metadata`) | [Browser coverage](../e2e/input-resilience.spec.ts) | Structural/catalog limits: see [preservation baseline](R0_PRESERVATION_MATRIX.md). |
+| Optimize PDF (`compress`) | [Browser coverage](../e2e/professional-compression.spec.ts) | Selective eligible RGB JPEGs; complex colour/mask cases skipped. |
+| Workflow builder (`workflow`) | [Browser coverage](../e2e/workflow-builder.spec.ts) | 1–8 steps, 20 files, 50 MiB/file, 150 MiB total; presets local. |
+| Batch process PDFs (`batch`) | [Browser coverage](../e2e/batch-workspace.spec.ts) | Sequential queue; quality follows selected operation. |
+
+All workspaces also pass through [registry loading/error checks](../e2e/r0-baseline.spec.ts). Existing-text replacement, certificate signing, Office conversion, PDF/A and PDF/UA are not advertised as implemented. [R0 release record](R0_RELEASE.md).
