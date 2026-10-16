@@ -94,13 +94,18 @@ export async function splitPdf(files: InputFile[], options: Record<string, unkno
   else groups = parseSplitRanges(asString(options.ranges, `1-${total}`), total);
 
   const zip = new JSZip();
+  const outputs: OperationResult['outputs'] = [];
   for (let index = 0; index < groups.length; index += 1) {
     const doc = await PDFDocument.create();
     const pages = await doc.copyPages(source, groups[index]!);
     pages.forEach((page) => doc.addPage(page));
-    zip.file(`split-${String(index + 1).padStart(2, '0')}.pdf`, await savePdf(doc));
+    const name = `split-${String(index + 1).padStart(2, '0')}.pdf`;
+    const bytes = await savePdf(doc);
+    if (options.individualPdfResults === true) outputs.push(pdfOutput(name, bytes));
+    else zip.file(name, bytes);
     progress(emit, 'processing', index + 1, groups.length, `Created ${index + 1} of ${groups.length} files`);
   }
+  if (options.individualPdfResults === true) return { outputs };
   progress(emit, 'writing', groups.length, groups.length, 'Creating ZIP archive');
   const bytes = await zip.generateAsync({ type: 'uint8array', compression: 'DEFLATE', compressionOptions: { level: 6 } });
   return { outputs: [{ name: 'split-pdf.zip', type: 'application/zip', buffer: bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer }] };

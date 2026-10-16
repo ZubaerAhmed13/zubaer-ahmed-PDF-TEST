@@ -67,3 +67,10 @@
 .workspace .legacy-settings-note,.workspace [data-legacy-footer-state-ui] { color:var(--df-muted); }
 .workspace .legacy-editor-footer #run-operation { background:var(--df-accent); border-color:var(--df-accent); }
 .document-invitation { width:100%; min-height:40px; margin-top:12px; white-space:normal; font-size:11px; }
+
+/* The title now lives in the header, rather than the former optional sidebar. */
+.workspace-side.legacy-title-block { display:block; }
+@media(max-width:600px) {
+  .workspace-side.legacy-title-block h2 { font-size:18px; overflow-wrap:anywhere; }
+  .workspace-side.legacy-title-block .legacy-title-meta { display:none; }
+}

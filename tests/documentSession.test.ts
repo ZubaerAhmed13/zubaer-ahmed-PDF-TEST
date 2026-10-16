@@ -3,7 +3,7 @@ import { PDFDocument } from 'pdf-lib';
 import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs';
 import { DocumentSession, pdfFilename, validateSessionPdf } from '../src/app/documentSession';
 import { connectWorkspace, workspaceRuntime } from '../src/app/workspaceRuntime';
-import { organizePdf, addPageNumbers } from '../src/pdf/core';
+import { organizePdf, addPageNumbers, splitPdf } from '../src/pdf/core';
 import { annotatePdf } from '../src/pdf/essentialEdits';
 import type { InputFile, OperationResult } from '../src/pdf/types';
 
@@ -101,11 +101,16 @@ describe('in-memory document revisions', () => {
     expect(session.snapshot().current!.file.name).toBe('new.pdf');
   });
 
-  it('selects one split output explicitly and releases pending/history references on clear', async () => {
-    const a = await fixture('a.pdf'); const b = await fixture('b.pdf'); const session = new DocumentSession(); session.start(a);
-    session.stage(session.snapshot().current!.id, 'split', 'Split PDF', [], [...await output(a), ...await output(b)]);
-    await session.apply(1, validateSessionPdf); expect(session.snapshot().current!.file.name).toBe('b.pdf');
-    session.clear(); expect(session.snapshot().current).toBeNull(); expect(session.snapshot().pending).toBeNull(); expect(session.snapshot().retainedBytes).toBe(0);
+  it('selects a real split PDF explicitly and releases pending/history references on clear', async () => {
+    const a = await fixture('a.pdf'); const session = new DocumentSession(); session.start(a);
+    const result = await splitPdf([await input(a)], { mode: 'individual', individualPdfResults: true }, () => {});
+    expect(result.outputs.map(item => item.type)).toEqual(['application/pdf', 'application/pdf']);
+    session.stage(session.snapshot().current!.id, 'split', 'Split PDF', [session.sourceId(a)], result.outputs);
+    await session.apply(1, validateSessionPdf);
+    expect(session.snapshot().current!.file.name).toBe('split-02.pdf');
+    const pdf = await PDFDocument.load(await session.snapshot().current!.file.arrayBuffer());
+    expect(pdf.getPageCount()).toBe(1); expect(pdf.getPage(0).getWidth()).toBe(400);
+    session.clear(); expect(session.snapshot().retainedBytes).toBe(0); expect(session.snapshot().pending).toBeNull();
   });
 
   it('sanitises export paths and control characters without exposing a filename as HTML', () => {
@@ -115,9 +120,9 @@ describe('in-memory document revisions', () => {
 
   it('invalidates callbacks from disposed workspaces before mounting the next one', () => {
     const root = {} as HTMLElement; const calls: string[] = [];
-    const disconnect = connectWorkspace(root, { inputs: () => {}, busy: () => calls.push('old'), result: () => calls.push('old'), selection: () => calls.push('old') });
+    const disconnect = connectWorkspace(root, { sessionActive: () => true, inputs: () => {}, busy: () => calls.push('old'), result: () => calls.push('old'), selection: () => calls.push('old') });
     const oldRuntime = workspaceRuntime(root); disconnect();
-    connectWorkspace(root, { inputs: () => {}, busy: () => calls.push('new'), result: () => calls.push('new'), selection: () => calls.push('new') });
+    connectWorkspace(root, { sessionActive: () => true, inputs: () => {}, busy: () => calls.push('new'), result: () => calls.push('new'), selection: () => calls.push('new') });
     oldRuntime.busy(false); oldRuntime.result({ outputs: [] });
     workspaceRuntime(root).busy(true); expect(calls).toEqual(['new']);
   });

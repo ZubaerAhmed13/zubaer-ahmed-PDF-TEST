@@ -499,6 +499,7 @@ export function mountWorkspace(container: HTMLDivElement, tool: ToolDefinition):
       const operation = (tool.id === 'forms' ? 'forms-fill' : tool.id === 'compress' ? 'optimize' : tool.id) as WorkerOperation;
       const workerFiles = await readInputs(records);
       const selectedOptions = formOptions(optionsForm);
+      if (tool.id === 'split' && runtime.sessionActive()) selectedOptions.individualPdfResults = true;
       if (tool.id === 'sign-visual') selectedOptions.signaturePng = signaturePad?.getData() ?? '';
       running = runWorkerOperation(operation, workerFiles, selectedOptions, (update) => setProgress(update.message, Math.min(96, update.percent)));
       const result = await running.result;

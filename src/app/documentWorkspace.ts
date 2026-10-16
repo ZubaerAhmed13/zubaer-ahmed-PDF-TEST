@@ -105,6 +105,7 @@ export class DocumentWorkspace {
     const signal = (this.bindings = new AbortController()).signal;
     const { root } = this.options;
     this.disconnect = connectWorkspace(root, {
+      sessionActive: () => this.enabled,
       inputs: files => {
         const seededFile = this.viewing ?? this.session.snapshot().current?.file;
         if (this.seeded && seededFile && files[0]) this.session.aliasSource(files[0], seededFile);
@@ -261,7 +262,7 @@ export class DocumentWorkspace {
     const button = (event.target as Element).closest<HTMLElement>('[data-session-action]');
     const action = button?.dataset.sessionAction;
     if (!action) return;
-    if (action === 'export') { window.setTimeout(() => this.session.markExported(), 0); return; }
+    if (action === 'export') { this.session.markExported(); return; }
     if (this.busy) return;
     const state = this.session.snapshot();
     const outputIndex = Number(this.options.toolbar.querySelector<HTMLSelectElement>('[data-session-output]')?.value ?? 0);

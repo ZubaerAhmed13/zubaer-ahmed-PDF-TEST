@@ -162,7 +162,8 @@ export class DocumentSession {
   markExported(): void {
     const current = this.snapshot().current;
     if (current) this.exportedIds.add(current.id);
-    this.emit();
+    // Export bookkeeping must not replace the clicked anchor or revoke its URL.
+    // Some browsers accept the Blob download after the click task has finished.
   }
 
   clear(emit = true): void {
