@@ -1,4 +1,5 @@
 import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs';
+import { fileURLToPath } from 'node:url';
 
 interface CanvasTarget { canvas: HTMLCanvasElement; context: CanvasRenderingContext2D }
 interface CanvasFactory {
@@ -9,7 +10,10 @@ export interface PdfPixels { width: number; height: number; data: Uint8ClampedAr
 
 /** Independent PDF.js/Node rasterisation of downloaded bytes; no editor canvas reuse. */
 export async function pdfPixels(bytes: Buffer, pageNumber: number): Promise<PdfPixels> {
-  const doc = await getDocument({ data: new Uint8Array(bytes) }).promise;
+  const doc = await getDocument({
+    data: new Uint8Array(bytes),
+    standardFontDataUrl: fileURLToPath(new URL('../../node_modules/pdfjs-dist/standard_fonts/', import.meta.url))
+  }).promise;
   let target: CanvasTarget | null = null;
   const factory = doc.canvasFactory as CanvasFactory;
   try {

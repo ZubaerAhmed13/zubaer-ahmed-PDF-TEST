@@ -30,6 +30,13 @@ jobs:
       - run: npm run lint
       - run: npm test
       - run: npm run build
+      - name: Retain synthetic preservation baseline
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: r0-preservation-baseline
+          path: artifacts/r0/
+          if-no-files-found: ignore
       - name: Report production bundle sizes
         run: find dist -type f -printf '%p %s bytes\n' | sort
       - uses: actions/upload-pages-artifact@v3
@@ -53,7 +60,7 @@ jobs:
       - run: npx playwright install --with-deps ${{ matrix.project }}
       - run: npx playwright test --project=${{ matrix.project }}
       - uses: actions/upload-artifact@v4
-        if: failure()
+        if: always()
         with:
           name: release-playwright-${{ matrix.project }}
           path: |
@@ -92,7 +99,7 @@ jobs:
       - name: Verify deployed DocFlow with real PDF operations
         run: npm run test:production
       - uses: actions/upload-artifact@v4
-        if: failure()
+        if: always()
         with:
           name: production-playwright
           path: |
