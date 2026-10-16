@@ -11,7 +11,7 @@ Original, current and pending-result previews are distinct. Undo/redo switches i
 - Applied permanent redaction clears earlier session revisions and source previews. Its warning and action label explain this barrier before application; files on the device remain unchanged.
 - Protected/encrypted outputs are download-only, so a password is never retained to make them silently editable. Split/batch/workflow PDF results require an explicit output selection.
 - Existing preservation, OCR, comparison and raster-export limitations still apply to every step. A chain inherits its least-preserving operation.
-- Active processing and unapplied edits have close/switch guards. Late results from disposed tools cannot become a revision in a new tool.
+- Active processing and unapplied edits have close/switch guards. PDF result validation is a brief atomic commit: leaving waits until that check finishes, with an explicit status. Late results from disposed tools cannot become a revision in a new tool.
 - Update/retry/reload protects local work. A waiting service worker checks all same-scope tabs; retained work, active processing or an unresponsive older tab blocks activation. Finish/export/close that tab and try again.
 
 ## Architecture and evidence

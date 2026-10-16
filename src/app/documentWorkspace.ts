@@ -84,6 +84,12 @@ export class DocumentWorkspace {
   }
 
   async canLeave(): Promise<boolean> {
+    // Applying a validated revision is an atomic commit, rather than a cancellable tool run.
+    if (this.applying) {
+      this.notice = 'Checking the PDF result. Please wait before leaving.';
+      this.render();
+      return false;
+    }
     if (this.allowedLeave) return true;
     if (this.busy) {
       const approved = await confirmAction('Stop processing?', 'The unfinished operation will be cancelled. Your current document revision will stay in this tab.', 'Stop and leave');
@@ -287,7 +293,7 @@ export class DocumentWorkspace {
       try {
         await this.session.apply(outputIndex, validateSessionPdf);
         this.filename = this.session.snapshot().current!.file.name;
-        this.draft = false; this.viewing = null;
+        this.draft = false; this.viewing = null; this.notice = '';
       } catch (error) { this.notice = error instanceof Error ? error.message : 'The result could not be applied.'; }
       finally { this.applying = false; this.render(); }
       if (!this.session.snapshot().pending) await this.options.open(this.tool?.id ?? 'preview');

@@ -175,6 +175,40 @@ test('applied redaction clears previous revisions and source preview', async ({ 
   expect(await text(await exportCurrent(page))).toBe('');
 });
 
+test('result validation keeps the workspace open until its atomic revision commit completes', async ({ page }) => {
+  test.setTimeout(90_000);
+  await begin(page);
+  await next(page, 'rotate');
+  await page.getByRole('button', { name: 'Run Rotate pages', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Use result', exact: true })).toBeEnabled();
+  await page.evaluate(() => {
+    const read = File.prototype.arrayBuffer;
+    let intercepted = false;
+    File.prototype.arrayBuffer = function () {
+      if (this.name !== 'rotated.pdf' || intercepted) return read.call(this);
+      intercepted = true;
+      document.documentElement.dataset.r1Validation = 'pending';
+      return new Promise<ArrayBuffer>((resolve, reject) => {
+        document.addEventListener('r1-complete-validation', () => { void read.call(this).then(resolve, reject); }, { once: true });
+      });
+    };
+  });
+  await page.getByRole('button', { name: 'Use result', exact: true }).click();
+  await expect(page.locator('html')).toHaveAttribute('data-r1-validation', 'pending');
+  await page.getByRole('button', { name: 'Close workspace', exact: true }).click();
+  await expect(page.getByRole('dialog', { name: 'Workspace', exact: true })).toBeVisible();
+  await expect(page.locator('.session-notice')).toContainText('Please wait before leaving');
+  await expect(page.getByRole('dialog', { name: 'Stop processing?', exact: true })).toHaveCount(0);
+  await page.evaluate(() => document.dispatchEvent(new Event('r1-complete-validation')));
+  await expect(page.getByText('Result ready · not yet applied', { exact: true })).toHaveCount(0);
+  await expect(page.locator('.session-notice')).not.toContainText('Please wait before leaving');
+  await page.getByRole('button', { name: 'Close workspace', exact: true }).click();
+  await expect(page.getByRole('dialog', { name: 'Workspace', exact: true })).toBeHidden();
+  await page.getByRole('button', { name: 'Resume document', exact: true }).click();
+  const result = await PDFDocument.load(await exportCurrent(page));
+  expect(result.getPage(0).getRotation().angle).toBe(90);
+});
+
 test('real service-worker coordination blocks another tab with a document and allows activation after it closes', async ({ page, context, browserName }) => {
   test.skip(browserName !== 'chromium', 'Live multi-tab service-worker protocol is certified here in Chromium; state decisions also have runtime tests.');
   test.setTimeout(90_000);
