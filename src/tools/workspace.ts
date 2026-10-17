@@ -1,3 +1,5 @@
+import { showDerivedFormPreview } from '../app/preEditPreview';
+import { mountFormPageOverlay } from '../app/formPageOverlay';
 import { workspaceRuntime } from '../app/workspaceRuntime';
 import type { ToolDefinition } from './registry';
 import type { InputFile, OperationResult, WorkerOperation } from '../pdf/types';
@@ -133,6 +135,7 @@ export function mountWorkspace(container: HTMLDivElement, tool: ToolDefinition):
   let inspectionGeneration = 0;
   let inspectionTimer: number | null = null;
   let inspectionRun: RunningOperation | null = null;
+  let formOverlay: { dispose(): void } | null = null;
   let visualEditor: ReturnType<typeof mountVisualFormEditor> | null = null;
   const formSummary = container.querySelector<HTMLElement>('#form-field-summary');
   const formInspector = container.querySelector<HTMLButtonElement>('[data-inspect-form]');
@@ -177,7 +180,8 @@ export function mountWorkspace(container: HTMLDivElement, tool: ToolDefinition):
       inspectionGeneration += 1;
       inspectionRun?.cancel();
       if (inspectionTimer !== null) window.clearTimeout(inspectionTimer);
-      visualEditor?.dispose();
+      formOverlay?.dispose(); formOverlay = null;
+    visualEditor?.dispose();
       visualEditor = null;
       if (advancedFormValues) advancedFormValues.value = '{}';
       if (formSummary) formSummary.textContent = records.length ? 'Discovering form fields locally…' : 'Add a PDF form to discover editable fields.';
@@ -202,7 +206,8 @@ export function mountWorkspace(container: HTMLDivElement, tool: ToolDefinition):
     if (tool.id === 'forms') {
       inspectionGeneration += 1;
       inspectionRun?.cancel();
-      visualEditor?.dispose();
+      formOverlay?.dispose(); formOverlay = null;
+    visualEditor?.dispose();
       visualEditor = null;
       if (formSummary) formSummary.textContent = 'Select a form to discover its editable fields.';
     }
@@ -540,9 +545,25 @@ export function mountWorkspace(container: HTMLDivElement, tool: ToolDefinition):
           const fieldsText = typeof result.info.fields === 'string' ? result.info.fields : '[]';
           const fields = JSON.parse(fieldsText) as InspectedFormField[];
           summary.textContent = `${fields.length} supported field(s) · edit visually or use Advanced JSON`;
-          visualEditor?.dispose();
+          formOverlay?.dispose(); formOverlay = null;
+    visualEditor?.dispose();
           visualEditor = null;
-          if (visualHost && textarea) visualEditor = mountVisualFormEditor(visualHost, textarea, fields);
+          if (visualHost && textarea) { visualEditor = mountVisualFormEditor(visualHost, textarea, fields); formOverlay = mountFormPageOverlay(container, textarea, fields, async flattened => {
+            const source = records[0]?.file;
+            if (!source) return;
+            if (!flattened) { await showDerivedFormPreview(container, source); return; }
+            mainCancelled = false; runtime.busy(true); run!.disabled = true; cancel!.disabled = false;
+            try {
+              const files = await readInputs(records);
+              if (disposed || mainCancelled || records[0]?.file !== source) return;
+              running = runWorkerOperation('forms-fill', files, { values: textarea.value, flatten: true }, () => {});
+              const result = await running.result;
+              if (disposed || mainCancelled || records[0]?.file !== source) return;
+              const output = result.outputs[0]!;
+              await showDerivedFormPreview(container, new File([output.buffer], output.name, { type: output.type }), true);
+              setProgress('Flattened appearance preview ready', 100);
+            } finally { if (!disposed) { runtime.busy(false); run!.disabled = false; cancel!.disabled = true; running = null; } }
+          }); }
         }
         setProgress('Form inspection complete', 100);
         container.dispatchEvent(new CustomEvent('docflow-form-ready'));
@@ -572,6 +593,7 @@ export function mountWorkspace(container: HTMLDivElement, tool: ToolDefinition):
     inspectionGeneration += 1;
     if (inspectionTimer !== null) window.clearTimeout(inspectionTimer);
     inspectionRun?.cancel();
+    formOverlay?.dispose(); formOverlay = null;
     visualEditor?.dispose();
     signaturePad?.dispose();
     running?.cancel();

@@ -53,7 +53,7 @@ function toolName(root: HTMLElement): string {
 }
 
 function shouldEnhance(root: HTMLElement): boolean {
-  return toolName(root) !== 'View PDF';
+  return toolName(root) !== 'View PDF' && !root.querySelector('[data-direct-editor]');
 }
 
 function sourceIdFor(file: File, rowId?: string): string {
@@ -331,6 +331,8 @@ async function renderPdfPreview(session: PreviewSession, file: File): Promise<vo
       markCurrent();
       updateZoom();
     };
+    const onNavigate = (event: Event): void => { const detail = (event as CustomEvent<{ page: number; minimumScale?: number }>).detail; const page = Number(detail.page); if (Number.isInteger(page)) { if (detail.minimumScale) scale = Math.max(scale, clampScale(detail.minimumScale)); void showPage(page); } };
+    session.root.addEventListener('docflow-preview-page', onNavigate);
     const viewportAnchor = (): { x: number; y: number } => ({
       x: (shell.scrollLeft + shell.clientWidth / 2) / Math.max(shell.scrollWidth, 1),
       y: (shell.scrollTop + shell.clientHeight / 2) / Math.max(shell.scrollHeight, 1)
@@ -410,6 +412,7 @@ async function renderPdfPreview(session: PreviewSession, file: File): Promise<vo
     shell.addEventListener('keydown', onKeyDown);
     shell.addEventListener('wheel', onWheel, { passive: false });
     session.cleanupViewer = () => {
+      session.root.removeEventListener('docflow-preview-page', onNavigate);
       thumbnailGeneration += 1;
       if (frame) cancelAnimationFrame(frame);
       controller.cancelThumbnails();
@@ -421,7 +424,8 @@ async function renderPdfPreview(session: PreviewSession, file: File): Promise<vo
     };
 
     await showPage(1);
-    await fit('page');
+    if (session.root.dataset.formOverlayActive === 'true') await setScale(1, false);
+    else await fit('page');
   } catch (error) {
     if (generation !== session.generation) return;
     session.panel.dataset.previewReady = 'false';
@@ -513,4 +517,12 @@ export function installPreEditPreview(): void {
     const session = root ? sessions.get(root) : undefined;
     if (session) void disposeSession(session);
   }, true);
+}
+/** Show a local derived document without replacing the operation's source. */
+export async function showDerivedFormPreview(root: HTMLElement, file: File, flattened = false): Promise<void> {
+  const session = sessions.get(root);
+  if (!session || !session.panel.isConnected) return;
+  await renderPdfPreview(session, file);
+  const hint = session.panel.querySelector<HTMLElement>('[data-pre-edit-hint]');
+  if (hint) hint.textContent = flattened ? 'Flattened appearance preview · the source form remains unchanged. Return to editable fields to continue filling.' : 'Editable form preview · changes are applied only when you run the tool.';
 }

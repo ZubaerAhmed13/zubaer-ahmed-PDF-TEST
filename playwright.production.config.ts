@@ -8,7 +8,7 @@ export default defineConfig({
   // Reuse the same export/reopen assertions against the built deployment.
   // Keep expensive stress tests in the full pre-deployment browser matrix.
   testMatch: [
-    'production.spec.ts', 'r0-baseline.spec.ts', 'document-session.spec.ts',
+    'r2-editing-reading.spec.ts', 'production.spec.ts', 'r0-baseline.spec.ts', 'document-session.spec.ts',
     'forms-matrix.spec.ts', 'color-fidelity.spec.ts',
     'phase3-ocr-comparison.spec.ts', 'workflow-builder.spec.ts',
     'professional-redaction-repair.spec.ts'

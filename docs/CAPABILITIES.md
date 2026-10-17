@@ -1,10 +1,11 @@
 # Current capability and evidence matrix
 
-Baseline: R0 / 0.2.0, 28 stable tool IDs. Test links identify coverage; passing results must be checked at the exact release SHA. Catalog preservation is not implied by a structural/lossless label.
+Current release: R2 / 0.4.0, 29 tool IDs; the original 28 stable IDs are retained. Test links identify coverage; passing results must be checked at the exact release SHA. Catalog preservation is not implied by a structural/lossless label.
 
 | Tool / ID | Coverage | Important boundary |
 |---|---|---|
-| View PDF (`preview`) | [Browser coverage](../e2e/preview-controls.spec.ts) | Structural/catalog limits: see [preservation baseline](R0_PRESERVATION_MATRIX.md). |
+| Edit PDF (`edit-pdf`) | [R2 exports and independent reopen](../tests/r2Editing.test.ts), [browser journeys](../e2e/r2-editing-reading.spec.ts) | Added content only; Latin/Greek/Cyrillic tested; native Text sticky notes; crop hides content. [R2 limits](R2_RELEASE.md). |
+| View PDF (`preview`) | [Controls](../e2e/preview-controls.spec.ts), [R2 reader](../e2e/r2-editing-reading.spec.ts) | Selectable-text search; OCR needed for scans. Continuous mode uses a three-page group. |
 | Merge PDF (`merge`) | [Browser coverage](../e2e/app.spec.ts) | Structural/catalog limits: see [preservation baseline](R0_PRESERVATION_MATRIX.md). |
 | Split PDF (`split`) | [Browser coverage](../e2e/release.spec.ts) | Structural/catalog limits: see [preservation baseline](R0_PRESERVATION_MATRIX.md). |
 | Remove pages (`remove-pages`) | [Browser coverage](../e2e/release.spec.ts) | Structural/catalog limits: see [preservation baseline](R0_PRESERVATION_MATRIX.md). |

@@ -14,9 +14,9 @@ async function previewCycle(page: import('@playwright/test').Page, fixture: Buff
   await dialog.locator('#workspace-file').setInputFiles({ name: `heap-${cycle}.pdf`, mimeType: 'application/pdf', buffer: fixture });
   await dialog.getByRole('button', { name: 'Run View PDF' }).click();
   await expect(dialog.locator('#stage')).toHaveText('Preview ready');
-  await dialog.getByRole('button', { name: 'Next' }).click();
+  await dialog.getByRole('button', { name: 'Next', exact: true }).click();
   await expect(dialog.locator('#viewer-status')).toHaveText('Page 2 of 16');
-  await dialog.getByRole('button', { name: 'Next' }).click();
+  await dialog.getByRole('button', { name: 'Next', exact: true }).click();
   await expect(dialog.locator('#viewer-status')).toHaveText('Page 3 of 16');
   await dialog.getByRole('button', { name: 'Close workspace' }).click();
   await expect(dialog).toBeHidden();

@@ -10,6 +10,9 @@ export interface InspectedFormField {
   choices?: string[];
   selected?: string[];
   multiline?: boolean;
+  required?: boolean;
+  readOnly?: boolean;
+  widgets?: { page: number; rect: { x: number; y: number; width: number; height: number }; choice?: string }[];
 }
 
 interface VisualFormEditor {
@@ -47,7 +50,10 @@ export function normalizeInspectedFields(source: unknown): InspectedFormField[] 
     return {
       name: item.name, type,
       value: typeof item.value === 'string' ? item.value : '',
-      choices, selected, multiline: item.multiline === true
+      choices, selected, multiline: item.multiline === true,
+      ...(typeof item.required === 'boolean' ? { required: item.required } : {}),
+      ...(typeof item.readOnly === 'boolean' ? { readOnly: item.readOnly } : {}),
+      ...(Array.isArray(item.widgets) ? { widgets: item.widgets.slice(0,1000) as InspectedFormField['widgets'] } : {})
     };
   });
 }
@@ -205,10 +211,17 @@ export function mountVisualFormEditor(
       if (control instanceof HTMLInputElement || control instanceof HTMLTextAreaElement || control instanceof HTMLSelectElement) {
         label.htmlFor = control.id;
       }
+      const inputs = control.matches('input,select,textarea') ? [control] : [...control.querySelectorAll('input,select,textarea')];
+      for (const input of inputs) {
+        if (input instanceof HTMLInputElement || input instanceof HTMLSelectElement || input instanceof HTMLTextAreaElement) {
+          input.disabled = field.readOnly === true; input.required = field.required === true;
+          input.setAttribute('aria-readonly', String(field.readOnly === true));
+        }
+      }
       controls.set(field.name, control);
       const pill = document.createElement('small');
       pill.className = 'visual-form-type';
-      pill.textContent = field.type === 'option-list' ? 'Multi-select' : field.type;
+      pill.textContent = (field.type === 'option-list' ? 'Multi-select' : field.type) + (field.required ? ' · Required' : '') + (field.readOnly ? ' · Read only' : '');
       item.append(label, pill, control);
       if (field.type === 'option-list') {
         const hint = document.createElement('small');

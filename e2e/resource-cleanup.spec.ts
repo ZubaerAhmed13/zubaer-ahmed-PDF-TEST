@@ -52,7 +52,7 @@ test('repeated preview cycles terminate dedicated workers and release canvas DOM
     await expect(dialog.locator('#stage')).toHaveText('Preview ready', { timeout: 20_000 });
     await expect(dialog.locator('#viewer-status')).toHaveText('Page 1 of 12', { timeout: 20_000 });
 
-    const next = dialog.getByRole('button', { name: 'Next' });
+    const next = dialog.getByRole('button', { name: 'Next', exact: true });
     await expect(next).toBeVisible({ timeout: 20_000 });
     await expect(next).toBeEnabled({ timeout: 20_000 });
     await next.click({ timeout: 20_000 });

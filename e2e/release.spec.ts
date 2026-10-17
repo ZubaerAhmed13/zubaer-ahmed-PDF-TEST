@@ -141,7 +141,7 @@ test('PDF.js preview renders and navigates pages with the worker enabled', async
   const dimensions = await dialog.locator('#pdf-canvas').evaluate((canvas: HTMLCanvasElement) => ({ width: canvas.width, height: canvas.height }));
   expect(dimensions.width).toBeGreaterThan(1);
   expect(dimensions.height).toBeGreaterThan(1);
-  await dialog.getByRole('button', { name: 'Next' }).click();
+  await dialog.getByRole('button', { name: 'Next', exact: true }).click();
   await expect(dialog.locator('#viewer-status')).toHaveText('Page 2 of 2');
 });
 

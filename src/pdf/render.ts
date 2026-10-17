@@ -3,8 +3,12 @@ import type { PDFDocumentProxy, RenderTask } from 'pdfjs-dist';
 
 pdfjs.GlobalWorkerOptions.workerSrc = new URL('pdfjs-dist/build/pdf.worker.min.mjs', import.meta.url).toString();
 
+export interface RenderedPage { page: import('pdfjs-dist').PDFPageProxy; viewport: ReturnType<import('pdfjs-dist').PDFPageProxy['getViewport']>; pageNumber: number; canvas: HTMLCanvasElement }
+const renderedPages = new WeakMap<HTMLCanvasElement, RenderedPage>();
+export const renderedPage = (canvas: HTMLCanvasElement): RenderedPage | undefined => renderedPages.get(canvas);
 export interface PreviewController {
   pageCount: number;
+  document: PDFDocumentProxy;
   render: (pageNumber: number, scale?: number) => Promise<void>;
   renderThumbnail: (pageNumber: number, canvas: HTMLCanvasElement, scale?: number) => Promise<boolean>;
   cancelThumbnails: () => void;
@@ -26,6 +30,7 @@ export async function createPreview(buffer: ArrayBuffer, canvas: HTMLCanvasEleme
 
   return {
     pageCount: doc.numPages,
+    document: doc,
     async render(pageNumber: number, scale = 1.25): Promise<void> {
       const generation = ++mainGeneration;
       currentTask?.cancel();
@@ -50,7 +55,12 @@ export async function createPreview(buffer: ArrayBuffer, canvas: HTMLCanvasEleme
       } finally {
         page.cleanup();
       }
-      if (!destroyed && generation === mainGeneration) status.textContent = `Page ${pageNumber} of ${doc.numPages}`;
+      if (!destroyed && generation === mainGeneration) {
+        status.textContent = `Page ${pageNumber} of ${doc.numPages}`;
+        const detail = { page, viewport, pageNumber, canvas };
+        renderedPages.set(canvas, detail);
+        canvas.dispatchEvent(new CustomEvent('docflow-page-rendered', { bubbles: true, detail }));
+      }
     },
     async renderThumbnail(pageNumber: number, target: HTMLCanvasElement, scale = 0.22): Promise<boolean> {
       if (destroyed) return false;
@@ -80,6 +90,7 @@ export async function createPreview(buffer: ArrayBuffer, canvas: HTMLCanvasEleme
     },
     cancelThumbnails,
     async destroy(): Promise<void> {
+      renderedPages.delete(canvas);
       destroyed = true;
       mainGeneration += 1;
       currentTask?.cancel();

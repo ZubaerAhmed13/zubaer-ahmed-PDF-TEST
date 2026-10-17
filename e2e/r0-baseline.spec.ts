@@ -3,15 +3,15 @@ import { expect, test } from '@playwright/test';
 import { tools } from '../src/tools/registry';
 import { readFile } from 'node:fs/promises';
 
-test('all 28 tools load their deployed workspaces with no uncaught errors', async ({ page }) => {
+test('all 29 tools load their deployed workspaces with no uncaught errors', async ({ page }) => {
   // WebKit on the CI runner takes about five seconds per animated open/close
-  // cycle. Budget for all 28 tools while keeping each action bounded.
+  // cycle. Budget for all 29 tools while keeping each action bounded.
   test.setTimeout(240_000);
   const errors: string[] = [];
   page.on('pageerror', error => errors.push(error.message));
   await page.goto('/zubaer-ahmed-PDF-TEST/');
-  expect(tools).toHaveLength(28);
-  await expect(page.locator('#tool-grid .tool-card')).toHaveCount(28);
+  expect(tools).toHaveLength(29);
+  await expect(page.locator('#tool-grid .tool-card')).toHaveCount(29);
   for (const tool of tools) {
     await test.step(tool.name, async () => {
       await page.locator('#tool-grid [data-open-tool="' + tool.id + '"]').click({ timeout: 8_000 });

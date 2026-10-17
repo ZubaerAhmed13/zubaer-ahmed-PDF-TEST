@@ -46,6 +46,7 @@ function tool(definition: Omit<ToolDefinition, 'load'>): ToolDefinition {
 }
 
 export const tools: ToolDefinition[] = [
+  { id: 'edit-pdf', name: 'Edit PDF', category: 'edit', description: 'Position added text, images, shapes, visual signatures, editable sticky-note comments and crop frames directly on each page. Keyboard controls and edit undo/redo included.', keywords: ['editor','text','image','signature','crop','comment','unicode'], icon: '✎', quality: 'Lossless', status: 'Migrated', multipleFiles: false, load: (retry = isRecoveryRetry('edit-pdf')) => retry ? import('./directEditWorkspace?retry') : import('./directEditWorkspace') },
   {
     id: 'preview', name: 'View PDF', category: 'review',
     description: 'Inspect pages with worker-backed PDF.js rendering, virtualized thumbnails, zoom, fit modes and keyboard/wheel navigation.',

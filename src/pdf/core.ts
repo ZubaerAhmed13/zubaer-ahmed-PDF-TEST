@@ -284,7 +284,15 @@ export async function inspectForms(files: InputFile[], _options: Record<string, 
     else if (field instanceof PDFRadioGroup) { type = 'radio'; value = field.getSelected() ?? ''; choices = field.getOptions(); }
     else if (field instanceof PDFDropdown) { type = 'dropdown'; selected = field.getSelected(); value = selected[0] ?? ''; choices = field.getOptions(); }
     else if (field instanceof PDFOptionList) { type = 'option-list'; selected = field.getSelected(); value = selected.join(', '); choices = field.getOptions(); }
-    return { name: field.getName(), type, value, choices, selected, multiline };
+    const widgets = field.acroField.getWidgets().map(widget => {
+      const pageIndex = doc.getPages().findIndex(page => {
+        const annots = page.node.Annots();
+        for (let i = 0; annots && i < annots.size(); i++) if (doc.context.lookup(annots.get(i)) === widget.dict) return true;
+        return false;
+      });
+      return { page: pageIndex + 1, rect: widget.getRectangle(), choice: widget.getOnValue()?.decodeText() };
+    }).filter(widget => widget.page > 0);
+    return { name: field.getName(), type, value, choices, selected, multiline, required: field.isRequired(), readOnly: field.isReadOnly(), widgets };
   });
   progress(emit, 'finalizing', 1, 1, 'Form inspection complete');
   if (!fieldInfo.length) throw new PdfOperationError('NO_FORM_FIELDS', 'No supported AcroForm fields were detected.');
@@ -302,14 +310,18 @@ export async function fillForms(files: InputFile[], options: Record<string, unkn
   try { values = JSON.parse(rawValues) as Record<string, unknown>; } catch { throw new PdfOperationError('INVALID_FORM_VALUES', 'Form values must be valid JSON.'); }
   fields.forEach((field, index) => {
     const value = values[field.getName()];
+    if (field.isReadOnly()) return;
+    const actual = value === undefined ? (field instanceof PDFTextField ? field.getText() : field instanceof PDFCheckBox ? field.isChecked() : field instanceof PDFRadioGroup ? field.getSelected() : field instanceof PDFDropdown || field instanceof PDFOptionList ? field.getSelected() : undefined) : value;
+    const empty = actual === undefined || actual === '' || actual === false || (Array.isArray(actual) && actual.length === 0);
+    if (field.isRequired() && empty) throw new PdfOperationError('REQUIRED_FIELD', `Complete the required field: ${field.getName()}`);
     if (value === undefined) return;
     if (field instanceof PDFTextField) field.setText(String(value));
     else if (field instanceof PDFCheckBox) {
       if (asBoolean(value)) field.check();
       else field.uncheck();
     }
-    else if (field instanceof PDFRadioGroup) field.select(String(value));
-    else if (field instanceof PDFDropdown) field.select(String(value));
+    else if (field instanceof PDFRadioGroup) { if (empty) field.clear(); else field.select(String(value)); }
+    else if (field instanceof PDFDropdown) { if (empty) field.clear(); else field.select(String(value)); }
     else if (field instanceof PDFOptionList) field.select(Array.isArray(value) ? value.map(String) : [String(value)]);
     progress(emit, 'processing', index + 1, fields.length, `Updated field ${index + 1} of ${fields.length}`);
   });

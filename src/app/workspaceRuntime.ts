@@ -5,6 +5,7 @@ export interface WorkspaceRuntime {
   busy(value: boolean): void;
   inputs(files: readonly File[]): void;
   result(value: OperationResult): void;
+  changed?(): void;
   selection(pages: readonly number[]): void;
 }
 
@@ -21,6 +22,7 @@ export function connectWorkspace(root: HTMLElement, callbacks: WorkspaceRuntime)
     busy(value) { if (active) callbacks.busy(value); },
     inputs(files) { if (active) callbacks.inputs(files); },
     result(value) { if (active) callbacks.result(value); },
+    changed() { if (active) callbacks.changed?.(); },
     selection(pages) { if (active) callbacks.selection(pages); }
   };
   runtimes.set(root, runtime);
