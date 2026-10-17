@@ -331,7 +331,7 @@ async function renderPdfPreview(session: PreviewSession, file: File): Promise<vo
       markCurrent();
       updateZoom();
     };
-    const onNavigate = (event: Event): void => { const page = Number((event as CustomEvent<{ page: number }>).detail.page); if (Number.isInteger(page)) void showPage(page); };
+    const onNavigate = (event: Event): void => { const detail = (event as CustomEvent<{ page: number; minimumScale?: number }>).detail; const page = Number(detail.page); if (Number.isInteger(page)) { if (detail.minimumScale) scale = Math.max(scale, clampScale(detail.minimumScale)); void showPage(page); } };
     session.root.addEventListener('docflow-preview-page', onNavigate);
     const viewportAnchor = (): { x: number; y: number } => ({
       x: (shell.scrollLeft + shell.clientWidth / 2) / Math.max(shell.scrollWidth, 1),
@@ -424,7 +424,8 @@ async function renderPdfPreview(session: PreviewSession, file: File): Promise<vo
     };
 
     await showPage(1);
-    await fit('page');
+    if (session.root.dataset.formOverlayActive === 'true') await setScale(1, false);
+    else await fit('page');
   } catch (error) {
     if (generation !== session.generation) return;
     session.panel.dataset.previewReady = 'false';

@@ -177,6 +177,7 @@ test("direct editor exports Unicode, draggable shapes, crop and editable comment
       .join(" "),
   ).toContain("Grüße Ελληνικά Привет");
   await pdf.destroy();
+  await page.getByRole("button", { name: "Run Edit PDF", exact: true }).hover();
   const axe = await new AxeBuilder({ page })
     .include(".direct-editor")
     .analyze();
@@ -360,6 +361,32 @@ test("on-page forms sync with the field list, navigate pages, respect read-only 
     .getByRole("listbox", { name: "On page 2: Skills", exact: true })
     .selectOption(["One", "Two"]);
 
+  // PDF widgets keep their exact geometry even in a very small page overview.
+  await page.getByRole("button", { name: "Fit page", exact: true }).click();
+  await expect
+    .poll(async () =>
+      parseInt(await page.locator("[data-pre-edit-zoom]").innerText(), 10),
+    )
+    .toBeLessThan(50);
+  const box = await page
+    .getByRole("checkbox", { name: "On page 2: Accepted", exact: true })
+    .boundingBox();
+  const drop = await page
+    .getByRole("combobox", { name: "On page 2: Preference", exact: true })
+    .boundingBox();
+  if (!box || !drop) throw Error("Form controls were not visible.");
+  expect(box.y + box.height).toBeLessThanOrEqual(drop.y);
+  // Field navigation returns to a readable, clickable editing scale.
+  await page.getByRole("button", { name: "Next field", exact: true }).click();
+  await expect(
+    page.getByRole("checkbox", { name: "On page 2: Accepted", exact: true }),
+  ).toBeFocused();
+  await page
+    .getByRole("checkbox", { name: "On page 2: Accepted", exact: true })
+    .uncheck();
+  await page
+    .getByRole("checkbox", { name: "On page 2: Accepted", exact: true })
+    .check();
   await page
     .getByRole("button", { name: "Review flattened appearance", exact: true })
     .click();

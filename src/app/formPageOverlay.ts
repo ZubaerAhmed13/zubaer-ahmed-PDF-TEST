@@ -14,6 +14,7 @@ export function mountFormPageOverlay(
   review: (flattened: boolean) => Promise<void>,
 ): { dispose(): void } {
   const runtime = workspaceRuntime(root);
+  root.dataset.formOverlayActive = "true";
   const fields = normalizeInspectedFields(rawFields),
     events = new AbortController(),
     signal = events.signal;
@@ -121,9 +122,9 @@ export function mountFormPageOverlay(
         Object.assign(input.style, {
           left: `${Math.min(points[0], points[2])}px`,
           top: `${Math.min(points[1], points[3])}px`,
-          width: `${Math.max(12, Math.abs(points[2] - points[0]))}px`,
-          height: `${Math.max(12, Math.abs(points[3] - points[1]))}px`,
-          fontSize: `${Math.max(10, 12 * viewport.scale)}px`,
+          width: `${Math.max(1, Math.abs(points[2] - points[0]))}px`,
+          height: `${Math.max(1, Math.abs(points[3] - points[1]))}px`,
+          fontSize: `${12 * viewport.scale}px`,
         });
         input.addEventListener(
           field.type === "text" ? "input" : "change",
@@ -228,12 +229,14 @@ export function mountFormPageOverlay(
     const field = targets[index]!,
       page = field.widgets![0]!.page;
     pending = field.name;
-    if (current?.pageNumber === page) {
+    if (current?.pageNumber === page && current.viewport.scale >= 0.75) {
       controls.find((c) => c.field.name === field.name)?.input.focus();
       pending = "";
     } else
       root.dispatchEvent(
-        new CustomEvent("docflow-preview-page", { detail: { page } }),
+        new CustomEvent("docflow-preview-page", {
+          detail: { page, minimumScale: 1 },
+        }),
       );
   };
   actions
@@ -247,11 +250,20 @@ export function mountFormPageOverlay(
   );
   if (canvas) {
     const detail = renderedPage(canvas);
-    if (detail) render(detail);
+    if (detail) {
+      render(detail);
+      if (detail.viewport.scale < 0.75)
+        root.dispatchEvent(
+          new CustomEvent("docflow-preview-page", {
+            detail: { page: detail.pageNumber, minimumScale: 1 },
+          }),
+        );
+    }
   }
   return {
     dispose() {
       events.abort();
+      delete root.dataset.formOverlayActive;
       teardown();
       actions.remove();
       current = undefined;

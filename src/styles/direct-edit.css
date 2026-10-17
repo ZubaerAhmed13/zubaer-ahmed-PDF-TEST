@@ -230,3 +230,14 @@
   overflow: auto;
   box-sizing: border-box;
 }
+
+.direct-editor button.primary {
+  color: #fff;
+  background: #a83b2b;
+  border-color: #a83b2b;
+}
+.direct-editor button.primary:hover {
+  color: #fff;
+  background: #8e3023;
+  border-color: #8e3023;
+}
