@@ -16,14 +16,33 @@ async function start(page: Page): Promise<void> {
   await page.goto(app);
   await page.waitForFunction(() => Boolean(navigator.serviceWorker?.controller), undefined, { timeout: 30_000 });
 }
-async function disconnect(page: Page, context: BrowserContext, browserName: string): Promise<void> {
-  if (browserName === 'webkit') {
-    // WebKit's forced-offline shim rejects new workers before its SW can respond.
-    // Deny real network traffic instead; cached SW responses and local workers still execute.
-    await context.route('**/*', route => route.abort('internetdisconnected'));
-  } else await context.setOffline(true);
+async function disconnect(page: Page, context: BrowserContext): Promise<void> {
+  await context.setOffline(true);
   // Network emulation does not consistently update navigator.onLine in every engine.
   await page.addInitScript(() => Object.defineProperty(navigator, 'onLine', { configurable: true, get: () => false }));
+}
+async function verifyWebKitStorageOffline(page: Page, context: BrowserContext, group: 'core' | 'eng'): Promise<void> {
+  test.info().annotations.push({ type: 'verification-scope', description: 'WebKit: real offline CacheStorage integrity plus online PDF execution. The automation runtime blocks offline reload/new-worker creation; Safari offline execution remains unverified.' });
+  const manifest = await page.evaluate(async () => await (await fetch('./offline-manifest.json')).json() as {
+    coreCache: string; ocrCache: string; groups: Record<string, {path: string; bytes: number; sha256: string}[]>;
+  });
+  await context.setOffline(true);
+  try {
+    const evidence = await page.evaluate(async ({ manifest, group }) => {
+      const cache = await caches.open(group === 'core' ? manifest.coreCache : manifest.ocrCache);
+      const invalid: string[] = [];
+      for (const asset of manifest.groups[group]!) {
+        const response = await cache.match(new URL(asset.path, location.href).href, { ignoreVary: true });
+        if (!response?.ok) { invalid.push(asset.path); continue; }
+        const bytes = await response.arrayBuffer();
+        const hash = Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', bytes)), b => b.toString(16).padStart(2, '0')).join('');
+        if (bytes.byteLength !== asset.bytes || hash !== asset.sha256) invalid.push(asset.path);
+      }
+      const shell = await (await caches.open(manifest.coreCache)).match(new URL('./', location.href).href, { ignoreVary: true });
+      return { count: manifest.groups[group]!.length, invalid, shell: (await shell?.text())?.includes('<div id="app"></div>') };
+    }, { manifest, group });
+    expect(evidence.count).toBeGreaterThan(0); expect(evidence.invalid).toEqual([]); expect(evidence.shell).toBe(true);
+  } finally { await context.setOffline(false); }
 }
 async function offlinePanel(page: Page): Promise<void> {
   await page.locator('footer [data-action="offline"]').click();
@@ -53,22 +72,25 @@ async function scanned(page: Page): Promise<Buffer> {
   return Buffer.from(await doc.save());
 }
 
-test('prepared mobile core reloads offline, edits with non-drag controls and exports a readable PDF', async ({ page, context, browserName }, info) => {
+test('prepared mobile core edits and exports with offline Chromium/Firefox and scoped WebKit storage checks', async ({ page, context, browserName }, info) => {
   test.setTimeout(150_000);
   await page.setViewportSize({ width: 390, height: 844 });
   await start(page); await offlinePanel(page);
   await expect(page.locator('[data-offline-state="eng"]')).toContainText('missing');
   await page.getByRole('dialog', { name: 'Offline and storage' }).getByRole('button', { name: 'Close', exact: true }).click();
-  await disconnect(page, context, browserName);
-  await page.reload();
-  expect(await page.evaluate(async () => { try { await fetch('./offline-probe?test=' + Date.now(), { cache: 'no-store' }); return false; } catch { return true; } })).toBe(true);
+  if (browserName === 'webkit') await verifyWebKitStorageOffline(page, context, 'core');
+  else {
+    await disconnect(page, context);
+    await page.reload();
+    expect(await page.evaluate(async () => { try { await fetch('./offline-probe?test=' + Date.now(), { cache: 'no-store' }); return false; } catch { return true; } })).toBe(true);
+  }
   await expect(page.getByRole('heading', { name: /Private PDF tools/ })).toBeVisible();
   await open(page, 'edit-pdf');
   await page.locator('#workspace-file').setInputFiles({ name: 'mobile.pdf', mimeType: 'application/pdf', buffer: await fixture() });
   await expect(page.locator('#stage')).toContainText('Editing page 1');
   expect(await page.evaluate(() => window.dispatchEvent(new Event('beforeunload', { cancelable: true })))).toBe(false);
   await page.getByRole('button', { name: 'Help & offline', exact: true }).click();
-  await expect(page.locator('[data-network]')).toContainText('offline');
+  if (browserName !== 'webkit') await expect(page.locator('[data-network]')).toContainText('offline');
   await page.getByRole('dialog', { name: 'Offline and storage' }).getByRole('button', { name: 'Close', exact: true }).click();
   await expect(page.locator('#stage')).toContainText('Editing page 1');
   await page.getByRole('button', { name: 'Add text', exact: true }).click();
@@ -95,7 +117,7 @@ test('prepared mobile core reloads offline, edits with non-drag controls and exp
   await context.setOffline(false);
 });
 
-test('OCR prepares a language explicitly, runs a real scan offline, and reports an evicted model', async ({ page, context, browserName }) => {
+test('prepared OCR reopens scanned output and detects eviction, offline in Chromium/Firefox and storage-scoped in WebKit', async ({ page, context, browserName }) => {
   test.setTimeout(180_000);
   await start(page); const scan = await scanned(page); await offlinePanel(page);
   await page.getByRole('button', { name: 'Prepare English OCR', exact: true }).click();
@@ -113,7 +135,8 @@ test('OCR prepares a language explicitly, runs a real scan offline, and reports 
     await cache.put(new Request(url, { headers: { 'X-DocFlow-Variant': 'prepared' } }), new Response(body, { headers }));
   });
   await page.getByRole('dialog', { name: 'Offline and storage' }).getByRole('button', { name: 'Close', exact: true }).click();
-  await disconnect(page, context, browserName); await page.reload();
+  if (browserName === 'webkit') await verifyWebKitStorageOffline(page, context, 'eng');
+  else { await disconnect(page, context); await page.reload(); }
   await open(page, 'ocr');
   await page.locator('#workspace-file').setInputFiles({ name: 'scan.pdf', mimeType: 'application/pdf', buffer: scan });
   await page.getByRole('button', { name: 'Run OCR scanned PDF', exact: true }).click();
@@ -127,6 +150,7 @@ test('OCR prepares a language explicitly, runs a real scan offline, and reports 
     const m = await (await fetch('./offline-manifest.json')).json();
     await (await caches.open(m.ocrCache)).delete(new URL('./ocr/lang/eng.traineddata', location.href).href);
   });
+  if (browserName === 'webkit') await page.evaluate(() => Object.defineProperty(navigator, 'onLine', { configurable: true, get: () => false }));
   await page.getByRole('button', { name: 'Run OCR scanned PDF', exact: true }).click();
   await expect(page.locator('#error')).toContainText('Offline OCR assets are missing');
   await expect(page.locator('#run-operation')).toBeEnabled();

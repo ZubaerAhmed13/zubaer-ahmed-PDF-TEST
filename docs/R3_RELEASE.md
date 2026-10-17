@@ -21,10 +21,10 @@ Offline assets contain application code/fonts/engines/models only. Documents, ed
 ## Automated verification
 
 - Unit checks cover real cache-body truncation/eviction, checksum mismatch, incomplete downloads, cancellation before publication, retry, quota preflight, cache-write failure and missing reload-shell entries. Existing independent PDF output checks and multi-tab update checks remain release gates.
-- R3 browser journeys cover narrow-screen offline reload → Unicode edit → download/reopen, non-drag move controls, pan-mode touch action, reduced-motion accessibility, real scanned-page OCR offline after explicit preparation, evicted-model errors, system-share cancellation/user activation/export size, cancelled pointer movement and landscape dialog geometry.
+- R3 browser journeys in Chromium/Firefox cover narrow-screen offline reload → Unicode edit → download/reopen, non-drag move controls, pan-mode touch action, reduced-motion accessibility, real scanned-page OCR offline after explicit preparation, evicted-model errors, system-share cancellation/user activation/export size, cancelled pointer movement and landscape dialog geometry.
 - The complete Chromium, Firefox and WebKit regression matrix runs before merge and again before Pages deployment. The deployed production suite includes the R3 journeys. CI artifacts retain the mobile screenshot and failure traces.
 
-Chromium and Firefox use Playwright’s offline network mode. The existing WebKit forced-offline shim blocks newly created workers before the service worker can answer, so R3 denies all actual network requests through routing and reports the browser offline while still executing cached local workers. This exercises the no-network processing path; it is not a claim about physical Safari airplane mode.
+Chromium and Firefox use Playwright’s offline network mode, explicitly check a failed network request, and complete real export/reopen and recognition. WebKit’s forced-offline shim rejects new workers, and its network-routing alternative returns “Blocked by Web Inspector” on reload. Its R3 tests therefore verify every prepared core/OCR cache body, byte count and digest while offline, restore the connection, then execute the mobile editor/OCR and independent export checks. The eviction-error guard is also checked. Each WebKit test carries a verification-scope annotation. This is **not** WebKit/Safari offline execution certification; that acceptance remains open alongside physical-device testing.
 
 Final run links and counts belong in the release PR after validation; this document alone is not a certificate.
 
@@ -39,7 +39,7 @@ Automated mobile-size browsers are not physical-device certification. The follow
 | VoiceOver (iOS/macOS) | Headings, reading/selection, form labels, object selection/properties, processing messages, modal focus and export |
 | NVDA (Windows) | Keyboard-only journey, modal/focus restoration, reader text, field navigation, download and errors |
 
-The declared automated offline core journey is opening/reading/editing a PDF and exporting it. All core engine files are enumerated, but arbitrary PDFs, every browser storage policy, all device-memory limits and every OS share target are not certified. Existing original-text editing, PDF preservation, manual Adobe/Preview, real-account cloud acceptance and hosting limitations remain documented in CAPABILITIES.md and earlier release records.
+The declared Chromium/Firefox automated offline core journey is opening/reading/editing a PDF and exporting it. All core engine files are enumerated, but arbitrary PDFs, every browser storage policy, all device-memory limits and every OS share target are not certified. Existing original-text editing, PDF preservation, manual Adobe/Preview, real-account cloud acceptance and hosting limitations remain documented in CAPABILITIES.md and earlier release records.
 
 ## References
 
