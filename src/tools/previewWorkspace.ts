@@ -1,3 +1,4 @@
+import { mountReaderEnhancements } from '../app/readerEnhancements';
 import { workspaceRuntime } from '../app/workspaceRuntime';
 import '../styles/preview.css';
 import type { ToolDefinition } from './registry';
@@ -282,6 +283,7 @@ export function mountWorkspace(container: HTMLDivElement, tool: ToolDefinition):
         updateZoom();
         setProgress('Preview ready', 100);
       };
+      const disposeReader = mountReaderEnhancements(previewArea, canvas, nextController, showPage);
       const setScale = async (value: number, mode: typeof fitMode = 'manual'): Promise<void> => {
         currentScale = clampScale(value);
         fitMode = mode;
@@ -294,7 +296,7 @@ export function mountWorkspace(container: HTMLDivElement, tool: ToolDefinition):
         const baseHeight = rect.height / currentScale;
         if (!baseWidth || !baseHeight) return;
         const availableWidth = Math.max(180, canvasShell.clientWidth - 24);
-        const availableHeight = Math.max(240, window.innerHeight - canvasShell.getBoundingClientRect().top - 28);
+        const availableHeight = Math.max(120, Math.min(canvasShell.clientHeight - 24, window.innerHeight - canvasShell.getBoundingClientRect().top - 28));
         const target = mode === 'width' ? availableWidth / baseWidth : Math.min(availableWidth / baseWidth, availableHeight / baseHeight);
         await setScale(target, mode);
       };
@@ -362,6 +364,7 @@ export function mountWorkspace(container: HTMLDivElement, tool: ToolDefinition):
       canvasShell.addEventListener('pointerup', onPointerUp);
       window.addEventListener('resize', onResize);
       previewUiCleanup = () => {
+        disposeReader();
         windowGeneration += 1;
         if (renderFrame) cancelAnimationFrame(renderFrame);
         nextController.cancelThumbnails();

@@ -7,7 +7,11 @@ import { metadata } from '../pdf/metadata';
 import { normalizePdfError } from '../pdf/errors';
 import type { OperationResult, WorkerRequest, WorkerResponse } from '../pdf/types';
 
+import { applyDirectEdit, inspectDirectEdit } from '../pdf/directEdit';
+
 const handlers = {
+  'direct-edit': applyDirectEdit,
+  'direct-edit-inspect': inspectDirectEdit,
   merge: mergePdf,
   split: splitPdf,
   'remove-pages': removePages,

@@ -53,7 +53,7 @@ function toolName(root: HTMLElement): string {
 }
 
 function shouldEnhance(root: HTMLElement): boolean {
-  return toolName(root) !== 'View PDF';
+  return toolName(root) !== 'View PDF' && !root.querySelector('[data-direct-editor]');
 }
 
 function sourceIdFor(file: File, rowId?: string): string {
@@ -331,6 +331,8 @@ async function renderPdfPreview(session: PreviewSession, file: File): Promise<vo
       markCurrent();
       updateZoom();
     };
+    const onNavigate = (event: Event): void => { const page = Number((event as CustomEvent<{ page: number }>).detail.page); if (Number.isInteger(page)) void showPage(page); };
+    session.root.addEventListener('docflow-preview-page', onNavigate);
     const viewportAnchor = (): { x: number; y: number } => ({
       x: (shell.scrollLeft + shell.clientWidth / 2) / Math.max(shell.scrollWidth, 1),
       y: (shell.scrollTop + shell.clientHeight / 2) / Math.max(shell.scrollHeight, 1)
@@ -410,6 +412,7 @@ async function renderPdfPreview(session: PreviewSession, file: File): Promise<vo
     shell.addEventListener('keydown', onKeyDown);
     shell.addEventListener('wheel', onWheel, { passive: false });
     session.cleanupViewer = () => {
+      session.root.removeEventListener('docflow-preview-page', onNavigate);
       thumbnailGeneration += 1;
       if (frame) cancelAnimationFrame(frame);
       controller.cancelThumbnails();

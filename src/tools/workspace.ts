@@ -1,3 +1,4 @@
+import { mountFormPageOverlay } from '../app/formPageOverlay';
 import { workspaceRuntime } from '../app/workspaceRuntime';
 import type { ToolDefinition } from './registry';
 import type { InputFile, OperationResult, WorkerOperation } from '../pdf/types';
@@ -133,6 +134,7 @@ export function mountWorkspace(container: HTMLDivElement, tool: ToolDefinition):
   let inspectionGeneration = 0;
   let inspectionTimer: number | null = null;
   let inspectionRun: RunningOperation | null = null;
+  let formOverlay: { dispose(): void } | null = null;
   let visualEditor: ReturnType<typeof mountVisualFormEditor> | null = null;
   const formSummary = container.querySelector<HTMLElement>('#form-field-summary');
   const formInspector = container.querySelector<HTMLButtonElement>('[data-inspect-form]');
@@ -177,7 +179,8 @@ export function mountWorkspace(container: HTMLDivElement, tool: ToolDefinition):
       inspectionGeneration += 1;
       inspectionRun?.cancel();
       if (inspectionTimer !== null) window.clearTimeout(inspectionTimer);
-      visualEditor?.dispose();
+      formOverlay?.dispose(); formOverlay = null;
+    visualEditor?.dispose();
       visualEditor = null;
       if (advancedFormValues) advancedFormValues.value = '{}';
       if (formSummary) formSummary.textContent = records.length ? 'Discovering form fields locally…' : 'Add a PDF form to discover editable fields.';
@@ -202,7 +205,8 @@ export function mountWorkspace(container: HTMLDivElement, tool: ToolDefinition):
     if (tool.id === 'forms') {
       inspectionGeneration += 1;
       inspectionRun?.cancel();
-      visualEditor?.dispose();
+      formOverlay?.dispose(); formOverlay = null;
+    visualEditor?.dispose();
       visualEditor = null;
       if (formSummary) formSummary.textContent = 'Select a form to discover its editable fields.';
     }
@@ -540,9 +544,10 @@ export function mountWorkspace(container: HTMLDivElement, tool: ToolDefinition):
           const fieldsText = typeof result.info.fields === 'string' ? result.info.fields : '[]';
           const fields = JSON.parse(fieldsText) as InspectedFormField[];
           summary.textContent = `${fields.length} supported field(s) · edit visually or use Advanced JSON`;
-          visualEditor?.dispose();
+          formOverlay?.dispose(); formOverlay = null;
+    visualEditor?.dispose();
           visualEditor = null;
-          if (visualHost && textarea) visualEditor = mountVisualFormEditor(visualHost, textarea, fields);
+          if (visualHost && textarea) { visualEditor = mountVisualFormEditor(visualHost, textarea, fields); formOverlay = mountFormPageOverlay(container, textarea, fields); }
         }
         setProgress('Form inspection complete', 100);
         container.dispatchEvent(new CustomEvent('docflow-form-ready'));
@@ -572,6 +577,7 @@ export function mountWorkspace(container: HTMLDivElement, tool: ToolDefinition):
     inspectionGeneration += 1;
     if (inspectionTimer !== null) window.clearTimeout(inspectionTimer);
     inspectionRun?.cancel();
+    formOverlay?.dispose(); formOverlay = null;
     visualEditor?.dispose();
     signaturePad?.dispose();
     running?.cancel();

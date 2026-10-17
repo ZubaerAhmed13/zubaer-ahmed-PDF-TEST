@@ -137,6 +137,7 @@ export class DocumentWorkspace {
         }
         this.render();
       },
+      changed: () => { if (this.enabled) this.draft = true; },
       selection: pages => { if (this.enabled) this.session.select(pages); }
     });
     root.addEventListener('change', event => {
@@ -236,7 +237,7 @@ export class DocumentWorkspace {
         button.className = 'secondary document-invitation'; button.dataset.sessionInline = 'true';
         button.textContent = 'Keep working with this PDF';
         const input = this.options.root.querySelector<HTMLInputElement>(sourceSelector);
-        const pane = this.options.root.querySelector('.legacy-files-pane');
+        const pane = this.options.root.querySelector('[data-document-invitation-slot], .legacy-files-pane');
         if (pane) pane.append(button);
         else if (input) (input.closest('.drop-zone') ?? input).insertAdjacentElement('afterend', button);
       }

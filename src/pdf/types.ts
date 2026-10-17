@@ -26,6 +26,8 @@ export interface OperationResult {
 }
 
 export type WorkerOperation =
+  | 'direct-edit'
+  | 'direct-edit-inspect'
   | 'merge'
   | 'split'
   | 'remove-pages'
