@@ -44,8 +44,8 @@ test('R4 photo crop, perspective review, rotate and reorder export a reopenable 
     const original = HTMLCanvasElement.prototype.toBlob;
     HTMLCanvasElement.prototype.toBlob = function(callback, type, quality) {
       if (this.width === 480 && this.height === 800) {
-        const canvas = this;
-        (window as Window & { releaseR4Encoder?: () => void }).releaseR4Encoder = () => { HTMLCanvasElement.prototype.toBlob = original; original.call(canvas, callback, type, quality); };
+        const encode = original.bind(this);
+        (window as Window & { releaseR4Encoder?: () => void }).releaseR4Encoder = () => { HTMLCanvasElement.prototype.toBlob = original; encode(callback, type, quality); };
       } else original.call(this, callback, type, quality);
     };
   });
