@@ -143,7 +143,7 @@ self.addEventListener('fetch', (event) => {
   event.respondWith((async () => {
     const isOcr = url.pathname.startsWith(new URL('./ocr/', self.registration.scope).pathname);
     const cache = await caches.open(isOcr ? OCR_CACHE : CACHE_NAME).catch(() => null);
-    const cached = isOcr ? await cache?.match(request).catch(() => undefined) : await matchStatic(request);
+    const cached = isOcr ? await cache?.match(request, { ignoreVary: true }).catch(() => undefined) : await matchStatic(request);
     if (cached && request.cache !== 'reload') return cached;
     const response = await fetch(request);
     if (response.ok) {

@@ -101,6 +101,17 @@ test('OCR prepares a language explicitly, runs a real scan offline, and reports 
   await page.getByRole('button', { name: 'Prepare English OCR', exact: true }).click();
   await expect(page.locator('[data-offline-state="eng"]')).toHaveText('Ready in this browser', { timeout: 90_000 });
   await expect(page.locator('[data-offline-state="deu"]')).toContainText('missing');
+  // Static prepared bytes must not become unreachable when request headers differ from the preparation request.
+  // Pages uses Vary: Accept-Encoding; a controllable Vary header reproduces the Cache API boundary here.
+  await page.evaluate(async () => {
+    const m = await (await fetch('./offline-manifest.json')).json();
+    const cache = await caches.open(m.ocrCache), url = new URL('./ocr/worker.min.js', location.href).href;
+    const response = (await cache.match(url))!;
+    const headers = new Headers(response.headers);
+    headers.set('Vary', 'X-DocFlow-Variant'); headers.delete('Content-Encoding'); headers.delete('Content-Length');
+    const body = await response.arrayBuffer(); await cache.delete(url);
+    await cache.put(new Request(url, { headers: { 'X-DocFlow-Variant': 'prepared' } }), new Response(body, { headers }));
+  });
   await page.getByRole('dialog', { name: 'Offline and storage' }).getByRole('button', { name: 'Close', exact: true }).click();
   await disconnect(page, context, browserName); await page.reload();
   await open(page, 'ocr');

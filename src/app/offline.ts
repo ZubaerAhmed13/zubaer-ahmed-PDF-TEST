@@ -23,7 +23,7 @@ export async function missingAssets(manifest: OfflineManifest, group: OfflineGro
   const cache = await caches.open(cacheFor(manifest, group));
   const missing: OfflineAsset[] = [];
   for (const asset of manifest.groups[group]) {
-    const response = await cache.match(assetUrl(asset));
+    const response = await cache.match(assetUrl(asset), { ignoreVary: true });
     // Verify real stored bytes: eviction, truncation and same-size corruption must show as missing.
     if (!response?.ok) { missing.push(asset); continue; }
     const bytes = await response.arrayBuffer();
