@@ -17,10 +17,12 @@ async function start(page: Page): Promise<void> {
   await page.waitForFunction(() => Boolean(navigator.serviceWorker?.controller), undefined, { timeout: 30_000 });
 }
 async function disconnect(page: Page, context: BrowserContext, browserName: string): Promise<void> {
-  if (browserName !== 'webkit') { await context.setOffline(true); return; }
-  // WebKit's forced-offline shim rejects new workers before its SW can respond.
-  // Deny real network traffic instead; cached SW responses and local workers still execute.
-  await context.route('**/*', route => route.abort('internetdisconnected'));
+  if (browserName === 'webkit') {
+    // WebKit's forced-offline shim rejects new workers before its SW can respond.
+    // Deny real network traffic instead; cached SW responses and local workers still execute.
+    await context.route('**/*', route => route.abort('internetdisconnected'));
+  } else await context.setOffline(true);
+  // Network emulation does not consistently update navigator.onLine in every engine.
   await page.addInitScript(() => Object.defineProperty(navigator, 'onLine', { configurable: true, get: () => false }));
 }
 async function offlinePanel(page: Page): Promise<void> {
@@ -31,9 +33,9 @@ async function open(page: Page, tool: string): Promise<void> {
   await page.locator(`#tool-grid [data-open-tool="${tool}"]`).click();
   await expect(page.getByRole('dialog', { name: 'Workspace', exact: true })).toBeVisible();
 }
-async function exported(page: Page, name: string): Promise<Buffer> {
+async function exported(page: Page, name: string | RegExp): Promise<Buffer> {
   const pending = page.waitForEvent('download');
-  await page.getByRole('link', { name, exact: true }).click();
+  await page.getByRole('link', { name, exact: typeof name === 'string' }).click();
   const path = await (await pending).path();
   if (!path) throw Error('Missing exported file');
   return readFile(path);
@@ -59,6 +61,7 @@ test('prepared mobile core reloads offline, edits with non-drag controls and exp
   await page.getByRole('dialog', { name: 'Offline and storage' }).getByRole('button', { name: 'Close', exact: true }).click();
   await disconnect(page, context, browserName);
   await page.reload();
+  expect(await page.evaluate(async () => { try { await fetch('./offline-probe?test=' + Date.now(), { cache: 'no-store' }); return false; } catch { return true; } })).toBe(true);
   await expect(page.getByRole('heading', { name: /Private PDF tools/ })).toBeVisible();
   await open(page, 'edit-pdf');
   await page.locator('#workspace-file').setInputFiles({ name: 'mobile.pdf', mimeType: 'application/pdf', buffer: await fixture() });
@@ -104,7 +107,7 @@ test('OCR prepares a language explicitly, runs a real scan offline, and reports 
   await page.locator('#workspace-file').setInputFiles({ name: 'scan.pdf', mimeType: 'application/pdf', buffer: scan });
   await page.getByRole('button', { name: 'Run OCR scanned PDF', exact: true }).click();
   await expect(page.locator('#stage')).toContainText('OCR complete', { timeout: 90_000 });
-  const bytes = await exported(page, 'Download searchable-ocr.pdf');
+  const bytes = await exported(page, /^Download searchable-ocr\.pdf/);
   const pdf = await getDocument({ data: new Uint8Array(bytes) }).promise;
   const text = (await (await pdf.getPage(1)).getTextContent()).items.map(i => 'str' in i ? i.str : '').join(' ');
   expect(text.toUpperCase()).toContain('OFFLINE'); await pdf.destroy();
