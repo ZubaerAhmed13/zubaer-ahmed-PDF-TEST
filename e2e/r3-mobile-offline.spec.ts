@@ -3,6 +3,7 @@ import AxeBuilder from '@axe-core/playwright';
 import { PDFDocument } from 'pdf-lib';
 import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs';
 import { readFile } from 'node:fs/promises';
+import JSZip from 'jszip';
 import { createHash } from 'node:crypto';
 
 const app = '/zubaer-ahmed-PDF-TEST/';
@@ -203,4 +204,37 @@ test('cancelled pointer movement restores its starting geometry and keyboard pro
   await expect(page.locator('.direct-inspector summary')).toBeFocused();
   await page.setViewportSize({ width: 640, height: 390 });
   expect((await page.locator('#workspace-dialog').boundingBox())!.height).toBeLessThanOrEqual(390);
+});
+
+
+test('same-named batch inputs retain distinct downloads, sharing bytes and ZIP entries', async ({ page }) => {
+  test.setTimeout(120_000);
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, 'canShare', { configurable: true, value: () => true });
+    Object.defineProperty(navigator, 'share', { configurable: true, value: async (data: ShareData) => {
+      const bytes = await data.files![0]!.arrayBuffer();
+      document.documentElement.dataset.batchShareHash = Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', bytes)), b => b.toString(16).padStart(2, '0')).join('');
+    } });
+  });
+  const first = await fixture(), other = await PDFDocument.create();
+  other.addPage([500, 700]); other.addPage([500, 700]);
+  await start(page); await open(page, 'batch');
+  await page.locator('#batch-files').setInputFiles([
+    { name: 'same.pdf', mimeType: 'application/pdf', buffer: first },
+    { name: 'same.pdf', mimeType: 'application/pdf', buffer: Buffer.from(await other.save()) }
+  ]);
+  await expect(page.locator('.batch-row')).toHaveCount(2);
+  await page.getByRole('button', { name: 'Run batch', exact: true }).click();
+  await expect(page.locator('#batch-stage')).toHaveText('Batch complete · 2 of 2 succeeded');
+  const names = await page.locator('#batch-results a[download]').evaluateAll(links => links.map(a => (a as HTMLAnchorElement).download));
+  expect(names).toEqual(['same-rotated.pdf', 'same-rotated-2.pdf']);
+  const bytes = await exported(page, /^Download same-rotated-2\.pdf/);
+  expect((await PDFDocument.load(bytes)).getPageCount()).toBe(2);
+  await page.getByRole('button', { name: 'Save / share same-rotated-2.pdf', exact: true }).click();
+  await expect(page.locator('html')).toHaveAttribute('data-batch-share-hash', createHash('sha256').update(bytes).digest('hex'));
+  await page.getByRole('button', { name: 'Prepare ZIP', exact: true }).click();
+  await expect(page.locator('#batch-stage')).toHaveText('ZIP ready · 2 outputs');
+  const archive = await JSZip.loadAsync(await exported(page, /^Download docflow-batch-results\.zip/));
+  expect(Object.keys(archive.files).sort()).toEqual([...names].sort());
+  expect((await PDFDocument.load(await archive.file(names[1]!)!.async('uint8array'))).getPageCount()).toBe(2);
 });

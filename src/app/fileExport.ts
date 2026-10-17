@@ -23,8 +23,10 @@ export function addShareButton(link: HTMLAnchorElement, blob: Blob, onShared?: (
 
 /** Called explicitly after a tool renders its output links. No DOM observers. */
 export function addOutputSharing(host: HTMLElement, outputs: { name: string; type: string; buffer: ArrayBuffer }[]): void {
+  const remaining = [...outputs];
   for (const link of host.querySelectorAll<HTMLAnchorElement>('a[download]')) {
-    const output = outputs.find(output => output.name === link.download);
+    const index = remaining.findIndex(output => output.name === link.download);
+    const output = index < 0 ? undefined : remaining.splice(index, 1)[0];
     if (output) addShareButton(link, new Blob([output.buffer], { type: output.type }));
   }
 }

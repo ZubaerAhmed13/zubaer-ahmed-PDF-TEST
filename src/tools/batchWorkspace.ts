@@ -234,6 +234,7 @@ export function mountWorkspace(container: HTMLDivElement, tool: ToolDefinition):
     lockUi(true);
 
     let succeeded = 0;
+    const outputNames = new Set<string>();
     for (let index = 0; index < items.length; index += 1) {
       const item = items[index]!;
       if (cancelled || disposed) {
@@ -260,7 +261,11 @@ export function mountWorkspace(container: HTMLDivElement, tool: ToolDefinition):
         const operationResult: OperationResult = await running.result;
         const output = operationResult.outputs[0];
         if (!output) throw new Error('This batch operation did not return a PDF output.');
-        item.output = { ...output, name: outputName(item.file.name, operation) };
+        const base = outputName(item.file.name, operation);
+        let name = base, suffix = 2;
+        while (outputNames.has(name.toLowerCase())) name = base.replace(/\.pdf$/i, '') + '-' + suffix++ + '.pdf';
+        outputNames.add(name.toLowerCase());
+        item.output = { ...output, name };
         item.state = 'complete';
         item.status = 'Complete';
         succeeded += 1;
