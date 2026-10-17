@@ -67,6 +67,23 @@ export async function prepareOffline(
     progress(done, total);
   }
 }
+export async function removeOfflineLanguage(manifest: OfflineManifest, language: 'eng' | 'deu'): Promise<void> {
+  const other = new Set(manifest.groups[language === 'eng' ? 'deu' : 'eng'].map(a => a.path));
+  const cache = await caches.open(manifest.ocrCache);
+  for (const asset of manifest.groups[language]) if (!other.has(asset.path)) await cache.delete(assetUrl(asset), { ignoreVary: true });
+  // Releases before R4 also cached Tesseract's model under this exact IndexedDB key.
+  if ('indexedDB' in globalThis) await new Promise<void>((resolve, reject) => {
+    const request = indexedDB.open('keyval-store');
+    request.onupgradeneeded = () => request.transaction?.abort();
+    request.onerror = () => request.error?.name === 'AbortError' ? resolve() : reject(Error('The legacy OCR cache could not be cleared. Clear site data in browser settings if needed.'));
+    request.onsuccess = () => {
+      const db = request.result;
+      if (!db.objectStoreNames.contains('keyval')) { db.close(); resolve(); return; }
+      const tx = db.transaction('keyval', 'readwrite'); tx.objectStore('keyval').delete('./' + language + '.traineddata');
+      tx.oncomplete = () => { db.close(); resolve(); }; tx.onerror = () => { db.close(); reject(Error('The legacy OCR cache could not be cleared.')); };
+    };
+  });
+}
 export async function assertOfflineOcr(language: 'eng' | 'deu'): Promise<void> {
   if (navigator.onLine) return;
   const manifest = await offlineManifest();
@@ -100,7 +117,10 @@ export function mountOfflinePanel(host: HTMLElement): () => void {
         state.textContent = !missing.length && controlled ? 'Ready in this browser' : !missing.length ? 'Assets stored · reload once to enable offline use' : `${missing.length} asset(s) missing · ${sizeLabel(assetBytes(missing))} to store`;
         const button = document.createElement('button'); button.type = 'button'; button.className = 'secondary';
         button.textContent = `Prepare ${labels[group]}`; button.dataset.prepare = group; button.disabled = !missing.length || Boolean(download);
-        row.append(heading, state, button); q('[data-offline-groups]').append(row);
+        const downloadSize = document.createElement('p'); downloadSize.textContent = 'Download size: ' + sizeLabel(assetBytes(manifest!.groups[group])) + ' including shared engine files.';
+        row.append(heading, state, downloadSize, button);
+        if (group !== 'core') { const remove = document.createElement('button'); remove.type = 'button'; remove.className = 'secondary'; remove.textContent = `Remove ${labels[group]} model`; remove.dataset.removeLanguage = group; remove.disabled = Boolean(download); row.append(remove); }
+        q('[data-offline-groups]').append(row);
       }
       const estimate = await navigator.storage?.estimate?.().catch(() => undefined);
       const persistent = await navigator.storage?.persisted?.().catch(() => false);
@@ -117,10 +137,17 @@ export function mountOfflinePanel(host: HTMLElement): () => void {
     if (target.matches('[data-offline-persist]')) {
       void (async () => { const granted = await navigator.storage?.persist?.().catch(() => false); if (!disposed) status.textContent = granted ? 'Persistent storage granted. You can still clear it in browser settings.' : 'Persistence was not granted by this browser. You can still prepare assets, but storage may be evicted.'; })();
     }
+    const removedLanguage = target.dataset.removeLanguage as 'eng' | 'deu' | undefined;
+    if (removedLanguage && manifest && !download) {
+      download = new AbortController();
+      host.querySelectorAll<HTMLButtonElement>('[data-prepare],[data-offline-refresh],[data-remove-language]').forEach(b => { b.disabled = true; });
+      void removeOfflineLanguage(manifest, removedLanguage).then(() => 'Language model removed. Shared OCR engine files are retained. Online OCR can download the model again.').catch((e: unknown) => e instanceof Error ? e.message : 'Could not remove the model.').then(async message => { download = null; if (disposed) return; await refresh(); if (!disposed) status.textContent = message; });
+      return;
+    }
     const group = target.dataset.prepare as OfflineGroup | undefined;
     if (!group || !manifest || download) return;
     const controller = download = new AbortController();
-    host.querySelectorAll<HTMLButtonElement>('[data-prepare],[data-offline-refresh]').forEach(b => { b.disabled = true; });
+    host.querySelectorAll<HTMLButtonElement>('[data-prepare],[data-offline-refresh],[data-remove-language]').forEach(b => { b.disabled = true; });
     q('[data-offline-cancel]').hidden = false;
     status.textContent = 'Downloading application assets…';
     void prepareOffline(manifest, group, controller.signal, (done, total) => { if (!disposed) status.textContent = `Stored ${sizeLabel(done)} of ${sizeLabel(total)}. Keep this panel open.`; })

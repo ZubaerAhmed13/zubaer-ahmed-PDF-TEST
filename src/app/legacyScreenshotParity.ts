@@ -287,7 +287,9 @@ function enhanceFileRows(state: ParityState): void {
     replace.className = 'legacy-replace-file';
     replace.textContent = 'Replace';
     actions.append(replace);
-    if (state.root.querySelector<HTMLInputElement>('#workspace-file')?.multiple) {
+    const nativeMoves = [...row.querySelectorAll<HTMLButtonElement>('[data-up],[data-down]')];
+    if (nativeMoves.length) actions.append(...nativeMoves);
+    else if (state.root.querySelector<HTMLInputElement>('#workspace-file')?.multiple) {
       const up = document.createElement('button');
       up.type = 'button';
       up.dataset.parityMove = '-1';
@@ -444,6 +446,12 @@ export function installLegacyScreenshotParity(): void {
   if (installed) return;
   installed = true;
   document.addEventListener('docflow-workspace-presented', enhanceAvailable);
+  document.addEventListener('docflow-source-files', event => {
+    const root = event.target; if (!(root instanceof HTMLElement)) return;
+    const records = (event as CustomEvent<Array<{ id: string; file: File }>>).detail;
+    const state = ensureState(root), files = records.map(r => r.file);
+    if (files.length !== state.files.length || files.some((file, i) => file !== state.files[i])) setFiles(state, files);
+  });
   enhanceAvailable();
 
   document.addEventListener('change', (event) => {

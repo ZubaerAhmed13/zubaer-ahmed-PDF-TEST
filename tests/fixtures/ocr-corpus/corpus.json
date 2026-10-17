@@ -1,0 +1,68 @@
+[
+  {
+    "file": "eng-sans.png",
+    "language": "eng",
+    "category": "clean",
+    "reference": "DocFlow document quality check. The meeting starts at nine tomorrow morning. Please review the invoice before payment. Reference number 2026 and total amount 125 euros. All files remain on this device."
+  },
+  {
+    "file": "eng-serif.png",
+    "language": "eng",
+    "category": "clean",
+    "reference": "DocFlow document quality check. The meeting starts at nine tomorrow morning. Please review the invoice before payment. Reference number 2026 and total amount 125 euros. All files remain on this device."
+  },
+  {
+    "file": "eng-bold.png",
+    "language": "eng",
+    "category": "clean",
+    "reference": "DocFlow document quality check. The meeting starts at nine tomorrow morning. Please review the invoice before payment. Reference number 2026 and total amount 125 euros. All files remain on this device."
+  },
+  {
+    "file": "eng-skew.png",
+    "language": "eng",
+    "category": "difficult",
+    "reference": "DocFlow document quality check. The meeting starts at nine tomorrow morning. Please review the invoice before payment. Reference number 2026 and total amount 125 euros. All files remain on this device."
+  },
+  {
+    "file": "eng-low-contrast.png",
+    "language": "eng",
+    "category": "difficult",
+    "reference": "DocFlow document quality check. The meeting starts at nine tomorrow morning. Please review the invoice before payment. Reference number 2026 and total amount 125 euros. All files remain on this device."
+  },
+  {
+    "file": "deu-sans.png",
+    "language": "deu",
+    "category": "clean",
+    "reference": "DocFlow prüft die Qualität der Dokumente. Die Besprechung beginnt morgen um neun Uhr. Bitte prüfen Sie die Rechnung vor der Zahlung. Für größere Aufträge beträgt der Preis 125 Euro. Alle Dateien bleiben auf diesem Gerät."
+  },
+  {
+    "file": "deu-serif.png",
+    "language": "deu",
+    "category": "clean",
+    "reference": "DocFlow prüft die Qualität der Dokumente. Die Besprechung beginnt morgen um neun Uhr. Bitte prüfen Sie die Rechnung vor der Zahlung. Für größere Aufträge beträgt der Preis 125 Euro. Alle Dateien bleiben auf diesem Gerät."
+  },
+  {
+    "file": "deu-bold.png",
+    "language": "deu",
+    "category": "clean",
+    "reference": "DocFlow prüft die Qualität der Dokumente. Die Besprechung beginnt morgen um neun Uhr. Bitte prüfen Sie die Rechnung vor der Zahlung. Für größere Aufträge beträgt der Preis 125 Euro. Alle Dateien bleiben auf diesem Gerät."
+  },
+  {
+    "file": "deu-skew.png",
+    "language": "deu",
+    "category": "difficult",
+    "reference": "DocFlow prüft die Qualität der Dokumente. Die Besprechung beginnt morgen um neun Uhr. Bitte prüfen Sie die Rechnung vor der Zahlung. Für größere Aufträge beträgt der Preis 125 Euro. Alle Dateien bleiben auf diesem Gerät."
+  },
+  {
+    "file": "deu-low-contrast.png",
+    "language": "deu",
+    "category": "difficult",
+    "reference": "DocFlow prüft die Qualität der Dokumente. Die Besprechung beginnt morgen um neun Uhr. Bitte prüfen Sie die Rechnung vor der Zahlung. Für größere Aufträge beträgt der Preis 125 Euro. Alle Dateien bleiben auf diesem Gerät."
+  },
+  {
+    "file": "mixed-sans.png",
+    "language": "eng+deu",
+    "category": "mixed",
+    "reference": "Please review the invoice before payment. Bitte prüfen Sie die Rechnung vor der Zahlung. Grüße aus Köln und München. All files remain on this device."
+  }
+]

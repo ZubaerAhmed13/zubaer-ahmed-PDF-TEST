@@ -1,6 +1,6 @@
 # Current capability and evidence matrix
 
-Current release: R3 / 0.5.0, 29 tool IDs; the original 28 stable IDs are retained. Test links identify coverage; passing results must be checked at the exact release SHA. Catalog preservation is not implied by a structural/lossless label.
+Current release: R4 / 0.6.0, 29 tool IDs; the original 28 stable IDs are retained. Test links identify coverage; passing results must be checked at the exact release SHA. Catalog preservation is not implied by a structural/lossless label.
 
 | Tool / ID | Coverage | Important boundary |
 |---|---|---|
@@ -18,8 +18,8 @@ Current release: R3 / 0.5.0, 29 tool IDs; the original 28 stable IDs are retaine
 | Annotate PDF (`annotate`) | [Browser coverage](../e2e/essential-utilities.spec.ts) | Baked-in marks, not editable PDF comment objects. |
 | Visual signature (`sign-visual`) | [Browser coverage](../e2e/essential-utilities.spec.ts) | Visible mark only, no certificate signature. |
 | Edit document properties (`metadata-edit`) | [Browser coverage](../e2e/essential-utilities.spec.ts) | Standard Info fields only, not hidden-data sanitisation. |
-| OCR scanned PDF (`ocr`) | [Browser coverage](../e2e/phase3-ocr-comparison.spec.ts) | English/German; 30 pages; rotated pages skipped; approximate font/word placement. |
-| Compare PDFs (`compare`) | [Browser coverage](../e2e/phase3-ocr-comparison.spec.ts) | Page-position/downscaled comparison; 50 positions; no semantic alignment. |
+| OCR scanned PDF (`ocr`) | [Browser coverage](../e2e/phase3-ocr-comparison.spec.ts) | English/German/mixed; selected ranges in 30-page chunks; rotation/deskew-aware Unicode overlay. Approximate word placement; review required. [R4 limits](R4_RELEASE.md). |
+| Compare PDFs (`compare`) | [Browser coverage](../e2e/phase3-ocr-comparison.spec.ts) | Heuristic text/scan page matching, moves, word changes and navigable reports; first 50 pages/document. Downscaled visual analysis; uncertain matches are marked. |
 | Search & extract text (`text-search`) | [Browser coverage](../e2e/essential-utilities.spec.ts) | Structural/catalog limits: see [preservation baseline](R0_PRESERVATION_MATRIX.md). |
 | Add page numbers (`page-numbers`) | [Browser coverage](../e2e/release.spec.ts) | Structural/catalog limits: see [preservation baseline](R0_PRESERVATION_MATRIX.md). |
 | Add watermark (`watermark`) | [Browser coverage](../e2e/image-watermark.spec.ts) | Structural/catalog limits: see [preservation baseline](R0_PRESERVATION_MATRIX.md). |

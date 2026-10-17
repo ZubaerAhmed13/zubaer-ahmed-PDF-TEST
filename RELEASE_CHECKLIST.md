@@ -30,3 +30,10 @@ Use the exact commit's Actions evidence and docs/R3_RELEASE.md (R0 remains histo
 - [ ] Adequate device performance evidence for performance claims.
 
 Local PDF tools remain usable without login. Temporary adversarial PR #5 is not a product release and must not be merged.
+
+## R4 document quality gate
+
+- Run `npm run benchmark:ocr`; clean fixed-corpus CER must be ≤2%. Retain checksummed per-image results.
+- Pass independent Unicode/invisibility/rotation tests and R4 browser export/reopen journeys.
+- Review uncertainty, range/chunk limits, correction review and model removal. Record exact release SHA and production result in the PR.
+- Keep physical-camera acceptance and Safari offline execution explicitly unverified until performed.

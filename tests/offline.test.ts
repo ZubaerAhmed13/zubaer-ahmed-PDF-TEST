@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createHash } from 'node:crypto';
-import { assetBytes, missingAssets, prepareOffline, type OfflineManifest } from '../src/app/offline';
+import { assetBytes, missingAssets, prepareOffline, removeOfflineLanguage, type OfflineManifest } from '../src/app/offline';
 
 const bytes = new TextEncoder().encode('verified local engine');
 const hash = createHash('sha256').update(bytes).digest('hex');
@@ -13,6 +13,7 @@ beforeEach(() => {
   vi.stubGlobal('navigator', { storage: { estimate: async () => ({ usage: 0, quota: 1e9 }) } });
   vi.stubGlobal('caches', { open: async () => ({
     match: async (url: string) => stored.get(url)?.clone(),
+    delete: async (url: string) => stored.delete(url),
     put: async (url: string, response: Response) => { stored.set(url, response.clone()); }
   }) });
   vi.stubGlobal('fetch', vi.fn(async () => new Response(bytes, { headers: { 'content-type': 'text/javascript' } })));
@@ -61,6 +62,15 @@ describe('offline files, cancellation and storage failures', () => {
     vi.stubGlobal('caches', { open: async () => ({ match: async () => undefined, put: async () => { throw new DOMException('Storage full', 'QuotaExceededError'); } }) });
     await expect(prepareOffline(manifest, 'eng', new AbortController().signal, () => {})).rejects.toMatchObject({ name: 'QuotaExceededError' });
     expect(await missingAssets(manifest, 'eng')).toEqual([asset]);
+  });
+  it('removes one language while retaining shared engine and the other model', async () => {
+    const english = { ...asset, path: './ocr/lang/eng.traineddata' }, german = { ...asset, path: './ocr/lang/deu.traineddata' };
+    const m = { ...manifest, groups: { core: [], eng: [asset, english], deu: [asset, german] } };
+    await prepareOffline(m, 'eng', new AbortController().signal, () => {});
+    await prepareOffline(m, 'deu', new AbortController().signal, () => {});
+    await removeOfflineLanguage(m, 'eng');
+    expect(await missingAssets(m, 'eng')).toEqual([english]);
+    expect(await missingAssets(m, 'deu')).toEqual([]);
   });
   it('requires the reload shell and setup manifest as well as engine assets', async () => {
     expect((await missingAssets(manifest, 'core')).map(a => a.path)).toEqual(['./', './offline-manifest.json']);

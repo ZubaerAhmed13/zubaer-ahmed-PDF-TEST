@@ -7,6 +7,8 @@ Production: https://zubaerahmed13.github.io/zubaer-ahmed-PDF-TEST/
 ## Current release
 Package version and diagnostics share one build-time source; diagnostics also shows the exact Git commit supplied by the release runner.
 
+R4 (0.6.0) adds OCR page ranges, mixed English/German recognition, rotation/deskew review and Unicode overlays; photo crop/perspective cleanup; matched-page comparison and navigable change reports; literal Markdown extraction. [R4 scope, measured OCR results and limits](docs/R4_RELEASE.md).
+
 R3 (0.5.0) adds verified offline-asset setup, explicit English/German OCR downloads, mobile pan/select and non-drag controls, viewport/keyboard handling and capability-detected Save/share. Open **Offline & storage** or **Help & offline** to prepare this browser. [R3 scope and device acceptance](docs/R3_RELEASE.md).
 
 R2 (0.4.0) adds direct page editing, visual crop handles, native sticky-note comments, Unicode added text, reader search/navigation, and on-page form controls. [R2 scope and evidence](docs/R2_RELEASE.md).
@@ -27,7 +29,7 @@ R0 (0.2.0) established current capability documentation, synthetic preservation/
 [Capability/evidence matrix](docs/CAPABILITIES.md) · [Preservation baseline](docs/R0_PRESERVATION_MATRIX.md)
 
 ## Boundaries
-Visual signatures are not certificate signatures; existing page-text replacement is not implemented. Crop hides content; basic properties editing is not hidden-data sanitisation. Redaction rasterises all pages and removes source text/vectors/forms/tags/signatures. OCR has a 30-page bound, English/German models and rotated-page limitations. Comparison is downscaled, page-position based and bounded at 50 positions.
+Visual signatures are not certificate signatures; existing page-text replacement is not implemented. Crop hides content; basic properties editing is not hidden-data sanitisation. Redaction rasterises all pages and removes source text/vectors/forms/tags/signatures. OCR processes selected ranges in chunks of up to 30 pages with English/German models and approximate Unicode placement. Comparison uses heuristic page matching and downscaled visuals, bounded to the first 50 pages per document; uncertain matches require review.
 
 Page-copy operations do not guarantee bookmarks, attachments, labels or editable forms. Whole-file buffers are required; no arbitrary multi-gigabyte, print-proof colour or PDF/UA claim. Offline availability depends on cached assets and browser support. Real Safari/iOS offline acceptance is separate.
 

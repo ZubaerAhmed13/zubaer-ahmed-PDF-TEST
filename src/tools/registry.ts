@@ -83,7 +83,7 @@ export const tools: ToolDefinition[] = [
   tool({ id: 'sign-visual', name: 'Visual signature', category: 'edit', description: 'Draw or type a visible signature locally. This is not a cryptographic or certificate-backed signature.', keywords: ['signature','sign','draw','handwritten'], icon: '✍', quality: 'Lossless', status: 'Migrated', multipleFiles: false }),
   tool({ id: 'metadata-edit', name: 'Edit document properties', category: 'edit', description: 'Edit or clear standard PDF Info properties only; does not guarantee XMP/hidden-data sanitisation.', keywords: ['metadata','edit','title','author','properties','remove'], icon: 'ⓘ', quality: 'Lossless', status: 'Migrated', multipleFiles: false }),
   tool({ id: 'ocr', name: 'OCR scanned PDF', category: 'convert', description: 'Recognise English or German scans locally and add an invisible, searchable text layer without replacing the scanned page images. OCR may have errors.', keywords: ['ocr','scan','searchable','recognition','english','german','text layer'], icon: '▧', quality: 'Potentially lossy', status: 'Migrated', multipleFiles: false }),
-  tool({ id: 'compare', name: 'Compare PDFs', category: 'review', description: 'Compare two PDFs locally page-by-page using selectable text, visual pixel changes and an overlay report.', keywords: ['compare','difference','diff','visual','overlay','text changes'], icon: '◧', quality: 'Inspection', status: 'Migrated', multipleFiles: true }),
+  tool({ id: 'compare', name: 'Compare PDFs', category: 'review', description: 'Match pages in two PDFs and review inserted, deleted, moved and changed content locally.', keywords: ['compare','difference','diff','visual','overlay','text changes'], icon: '◧', quality: 'Inspection', status: 'Migrated', multipleFiles: true }),
   tool({ id: 'text-search', name: 'Search & extract text', category: 'review', description: 'Find words across selectable PDF text and export extracted text. Scanned images need separate OCR.', keywords: ['search','find','extract','text','copy','selectable'], icon: '⌕', quality: 'Inspection', status: 'Migrated', multipleFiles: false }),
     tool({ id: 'page-numbers', name: 'Add page numbers', category: 'edit', description: 'Add configurable numbering to selected page ranges.', keywords: ['number','footer'], icon: '#', quality: 'Lossless', status: 'Migrated', multipleFiles: false }),
   {
@@ -92,7 +92,7 @@ export const tools: ToolDefinition[] = [
     keywords: ['stamp','text','image','logo','watermark'], icon: 'W', quality: 'Lossless', status: 'Migrated', multipleFiles: false,
     load: () => import('./watermarkWorkspace')
   },
-  tool({ id: 'images-to-pdf', name: 'Images to PDF', category: 'convert', description: 'Create a PDF from JPEG or PNG images.', keywords: ['jpg','jpeg','png'], icon: '▣', quality: 'Potentially lossy', status: 'Migrated', multipleFiles: true }),
+  tool({ id: 'images-to-pdf', name: 'Images to PDF', category: 'convert', description: 'Create a PDF from photos with optional crop, perspective correction, rotation and cleanup.', keywords: ['jpg','jpeg','png','scan','camera','photo','perspective'], icon: '▣', quality: 'Potentially lossy', status: 'Migrated', multipleFiles: true }),
   tool({ id: 'pdf-to-images', name: 'PDF to images', category: 'convert', description: 'Render selected PDF pages to PNG or JPEG.', keywords: ['png','jpg','render'], icon: '▤', quality: 'Potentially lossy', status: 'Migrated', multipleFiles: false }),
   {
     id: 'extract-images', name: 'Extract images', category: 'convert',
