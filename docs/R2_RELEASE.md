@@ -18,7 +18,7 @@ Files, signatures, added content and form values stay in memory in this tab. The
 
 ## Verification
 
-Local typecheck, lint, build, audit and 74 unit tests pass. Export fixtures are independently reopened using PDF.js and PyMuPDF 1.26.6. MuPDF checks exact red-shape pixels in display coordinates at four rotations, Unicode extraction, crop dimensions, native comment edit/save/reopen, form values and identical flattened/unflattened form pixels. The CI quality job retains artifacts/r2 beside the R0 preservation baseline.
+Local typecheck, lint, build, audit and 75 unit tests pass. Export fixtures are independently reopened using PDF.js and PyMuPDF 1.26.6. MuPDF checks exact red-shape pixels in display coordinates at four rotations, Unicode extraction, crop dimensions, native comment edit/save/reopen, form values and identical flattened/unflattened form pixels, an absent flattened form tree, valid annotation references and no MuPDF warnings. Flattening preserves unrelated comments and reports orphan widgets outside the field tree as unsupported. The CI quality job retains artifacts/r2 beside the R0 preservation baseline.
 
 The full three-browser suite includes R2 editor, reader and form journeys. Production runs reuse these export/reopen assertions. CI and deployment evidence is recorded in the release PR after the final candidate passes.
 

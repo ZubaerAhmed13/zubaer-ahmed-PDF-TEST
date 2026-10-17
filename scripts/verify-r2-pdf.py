@@ -6,12 +6,19 @@ from pathlib import Path
 root = Path('artifacts/r2')
 if len(sys.argv) > 1 and sys.argv[1] == 'forms':
     filled, flat = fitz.open(root/'filled-form.pdf'), fitz.open(root/'flat-form.pdf')
+    fitz.TOOLS.mupdf_warnings(reset=True)
     fields = {w.field_name:w.field_value for w in filled[0].widgets()}
     assert fields['Name'] == 'Ada' and fields['Locked'] == 'Original'
     # Same rendered appearance, even though widgets have become page content.
     a,b = filled[0].get_pixmap(alpha=False),flat[0].get_pixmap(alpha=False)
     assert a.samples == b.samples
-    print(json.dumps({'form_values_reopen':True,'flatten_pixel_match':True}))
+    assert list(flat[0].widgets()) == []
+    assert flat.xref_get_key(flat.pdf_catalog(), 'AcroForm')[0] == 'null'
+    for xref,kind,_ in flat[0].annot_xrefs():
+        assert kind != fitz.PDF_ANNOT_WIDGET
+        assert flat.xref_object(xref).strip()
+    assert not fitz.TOOLS.mupdf_warnings(reset=True)
+    print(json.dumps({'form_values_reopen':True,'flatten_pixel_match':True,'flatten_no_widget_refs_or_warnings':True}))
 else:
     doc = fitz.open(root/'geometry-comments-unicode.pdf')
     rotations = []

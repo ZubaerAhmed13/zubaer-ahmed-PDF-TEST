@@ -277,6 +277,8 @@ describe("R2 export contracts", () => {
     locked.setText("Original");
     locked.addToPage(page, { x: 40, y: 240, width: 200, height: 30 });
     locked.enableReadOnly();
+    const noteRef = doc.context.register(doc.context.obj({Type:'Annot',Subtype:'Text',Rect:[280,400,304,424],Contents:PDFHexString.fromText('Preserve this note')}));
+    page.node.addAnnot(noteRef);
     const bytes = await doc.save(),
       fields = JSON.parse(
         String((await inspectForms([input(bytes)], {}, () => {})).info!.fields),
@@ -308,6 +310,11 @@ describe("R2 export contracts", () => {
         () => {},
       ),
       flatDoc = await PDFDocument.load(flat.outputs[0]!.buffer);
+    expect(flatDoc.catalog.get(PDFName.of('AcroForm'))).toBeUndefined();
+    const annotations = flatDoc.getPage(0).node.Annots()!;
+    expect(annotations.size()).toBe(1);
+    expect(flatDoc.context.lookup(annotations.get(0),PDFDict).get(PDFName.of('Subtype'))?.toString()).toBe('/Text');
+    expect(annotations.get(0).toString()).toBe(noteRef.toString());
     expect(flatDoc.getForm().getFields()).toHaveLength(0);
     expect(
       flatDoc.getPage(0).node.lookup(PDFName.of("Contents"), PDFArray).size(),
@@ -320,11 +327,17 @@ describe("R2 export contracts", () => {
       "artifacts/r2/flat-form.pdf",
       new Uint8Array(flat.outputs[0]!.buffer),
     );
-    expect(
-      execFileSync("python", ["scripts/verify-r2-pdf.py", "forms"], {
-        encoding: "utf8",
-      }),
-    ).toContain("true");
+    const formEvidence = execFileSync("python", ["scripts/verify-r2-pdf.py", "forms"], {encoding:"utf8"});
+    expect(formEvidence).toContain("true");
+    await writeFile('artifacts/r2/forms-independent-verification.json',formEvidence);
+  });
+  it('rejects orphan widgets when flattening without deleting their appearance', async () => {
+    const doc=await PDFDocument.create(), page=doc.addPage([350,450]), form=doc.getForm();
+    const field=form.createTextField('Valid');field.setText('Keep');field.addToPage(page,{x:40,y:300,width:200,height:30});
+    page.node.addAnnot(doc.context.register(doc.context.obj({Type:'Annot',Subtype:'Widget',FT:'Tx',T:PDFHexString.fromText('Orphan'),Rect:[40,200,200,230]})));
+    const file=input(await doc.save());
+    await expect(fillForms([file],{values:'{}',flatten:true},()=>{})).rejects.toThrow('outside its field tree');
+    expect((await PDFDocument.load(file.buffer)).getForm().getTextField('Valid').getText()).toBe('Keep');
   });
   it("rejects unsupported shaping, missing glyphs, invalid geometry and preserves bounded command history", async () => {
     expect(() => checkText("مرحبا")).toThrow("shaping");

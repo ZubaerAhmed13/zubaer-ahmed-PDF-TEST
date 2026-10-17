@@ -1,6 +1,9 @@
 import JSZip from 'jszip';
 import {
   PDFDocument,
+  PDFDict,
+  PDFName,
+  PDFRef,
   PDFCheckBox,
   PDFDropdown,
   PDFOptionList,
@@ -325,7 +328,23 @@ export async function fillForms(files: InputFile[], options: Record<string, unkn
     else if (field instanceof PDFOptionList) field.select(Array.isArray(value) ? value.map(String) : [String(value)]);
     progress(emit, 'processing', index + 1, fields.length, `Updated field ${index + 1} of ${fields.length}`);
   });
-  if (asBoolean(options.flatten, false)) form.flatten();
+  if (asBoolean(options.flatten, false)) {
+    // pdf-lib 1.17.1 removes fields but can leave their widget references in
+    // page /Annots. Capture the actual widget refs before flatten deletes them.
+    const widgetDicts = new Set(fields.flatMap(field => field.acroField.getWidgets().map(widget => widget.dict)));
+    const widgetRefs = doc.getPages().map(page => {
+      const refs = page.node.Annots()?.asArray().filter((ref): ref is PDFRef => {
+        const value = doc.context.lookup(ref);
+        if (!(value instanceof PDFDict) || value.get(PDFName.of('Subtype'))?.toString() !== '/Widget') return false;
+        if (!(ref instanceof PDFRef) || !widgetDicts.has(value)) throw new PdfOperationError('UNSUPPORTED_FORM', 'This PDF has form widgets outside its field tree. Repair the form before flattening.');
+        return true;
+      }) ?? [];
+      return { page, refs };
+    });
+    form.flatten();
+    for (const { page, refs } of widgetRefs) for (const ref of refs) page.node.removeAnnot(ref);
+    doc.catalog.delete(PDFName.of('AcroForm'));
+  }
   return { outputs: [pdfOutput('filled-form.pdf', await savePdf(doc))] };
 }
 
