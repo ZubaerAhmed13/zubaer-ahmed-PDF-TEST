@@ -20,7 +20,7 @@ async function walk(directory) {
 const allFiles = await walk(DIST);
 const cacheable = allFiles
   .map((absolute) => relative(DIST, absolute).split(sep).join('/'))
-  .filter((path) => path !== 'sw.js' && !path.endsWith('.map') && !path.startsWith('ocr/'))
+  .filter((path) => path !== 'sw.js' && path !== 'offline-manifest.json' && !path.endsWith('.map') && !path.startsWith('ocr/'))
   .sort();
 
 const hash = createHash('sha256');
@@ -29,9 +29,29 @@ for (const path of cacheable) {
   hash.update(await readFile(join(DIST, path)));
 }
 const version = hash.digest('hex').slice(0, 16);
-const precache = ['./', ...cacheable.map((path) => `./${path}`)];
+const ocrPaths = allFiles.map(absolute => relative(DIST, absolute).split(sep).join('/'))
+  .filter(path => path.startsWith('ocr/') && /(?:worker\.min\.js|lstm\.wasm(?:\.js)?|traineddata\.gz)$/.test(path)).sort();
+async function asset(path) {
+  const data = await readFile(join(DIST, path));
+  return { path: './' + path, bytes: data.length, sha256: createHash('sha256').update(data).digest('hex') };
+}
+const coreAssets = await Promise.all(cacheable.map(asset));
+const ocrAssets = await Promise.all(ocrPaths.map(asset));
+const ocrVersion = createHash('sha256').update(JSON.stringify(ocrAssets)).digest('hex').slice(0, 16);
+const ocrCache = 'docflow-ocr-' + ocrVersion;
+const manifest = {
+  version, coreCache: 'docflow-static-' + version, ocrCache,
+  groups: {
+    core: coreAssets,
+    eng: ocrAssets.filter(a => !a.path.includes('/lang/') || a.path.endsWith('/eng.traineddata.gz')),
+    deu: ocrAssets.filter(a => !a.path.includes('/lang/') || a.path.endsWith('/deu.traineddata.gz'))
+  }
+};
+await writeFile(join(DIST, 'offline-manifest.json'), JSON.stringify(manifest));
+const precache = ['./', ...cacheable.map((path) => `./${path}`), './offline-manifest.json'];
 
 const source = `const CACHE_NAME = 'docflow-static-${version}';
+const OCR_CACHE = '${ocrCache}';
 const PRECACHE = ${JSON.stringify(precache)};
 
 self.addEventListener('install', (event) => {
@@ -94,11 +114,14 @@ self.addEventListener('fetch', (event) => {
 
   if (request.mode === 'navigate') {
     event.respondWith((async () => {
+      // Keep the running release shell until the guarded update activates.
+      const installed = await matchStatic(new URL('./', self.registration.scope));
+      if (installed) return installed;
       try {
         const response = await fetch(request);
         if (response.ok) {
           const cache = await caches.open(CACHE_NAME);
-          await cache.put(request, response.clone());
+          try { await cache.put(request, response.clone()); } catch { /* Cache eviction/quota is non-fatal online. */ }
         }
         return response;
       } catch {
@@ -109,12 +132,14 @@ self.addEventListener('fetch', (event) => {
   }
 
   event.respondWith((async () => {
-    const cached = await matchStatic(request);
-    if (cached) return cached;
+    const isOcr = url.pathname.startsWith(new URL('./ocr/', self.registration.scope).pathname);
+    const cache = await caches.open(isOcr ? OCR_CACHE : CACHE_NAME);
+    const cached = isOcr ? await cache.match(request) : await matchStatic(request);
+    if (cached && request.cache !== 'reload') return cached;
     const response = await fetch(request);
     if (response.ok) {
-      const cache = await caches.open(CACHE_NAME);
-      await cache.put(request, response.clone());
+      // A quota error must never turn a successful fetch into a broken tool.
+      try { await cache.put(request, response.clone()); } catch { /* Readiness reports missing assets. */ }
     }
     return response;
   })());

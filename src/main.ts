@@ -14,6 +14,8 @@ import './styles/editor-foundation.css';
 import './styles/essential-utilities.css';
 import './styles/phase3-documents.css';
 import './styles/document-session.css';
+import './styles/mobile-offline.css';
+import { installMobileViewport } from './app/mobileViewport';
 import { createApp } from './app/createApp';
 import { finishEmailConfirmation } from './app/cloudSync';
 import { installEditorLifecycleHardening } from './app/editorLifecycleHardening';
@@ -25,6 +27,7 @@ import { installLegacyIntegrationGuard } from './app/legacyIntegrationGuard';
 import { installLegacyScreenshotParity } from './app/legacyScreenshotParity';
 import { registerServiceWorker } from './pwa';
 
+installMobileViewport();
 createApp(document.querySelector<HTMLDivElement>('#app'));
 void finishEmailConfirmation();
 installEditorLifecycleHardening();

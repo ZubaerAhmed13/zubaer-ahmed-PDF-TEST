@@ -1,3 +1,4 @@
+import { addShareButton } from '../app/fileExport';
 import { workspaceRuntime } from '../app/workspaceRuntime';
 import '../styles/batch.css';
 import '../styles/workflows.css';
@@ -324,6 +325,7 @@ export function mountWorkspace(root: HTMLDivElement, _tool: ToolDefinition): voi
       link.download = name;
       link.textContent = 'Download ' + name + ' (' + bytes(item.output.buffer.byteLength) + ')';
       results.append(link);
+      addShareButton(link, new Blob([item.output.buffer], { type: 'application/pdf' }));
     }
     zipButton.disabled = locked || !files.some(item => item.state === 'complete' && item.output);
     retryButton.disabled = locked || !files.some(item => item.state === 'failed' || item.state === 'cancelled');
@@ -455,6 +457,7 @@ export function mountWorkspace(root: HTMLDivElement, _tool: ToolDefinition): voi
       link.href = url;
       link.textContent = 'Download workflow ZIP (' + bytes(blob.size) + ')';
       results.prepend(link);
+      addShareButton(link, blob);
       setProgress('ZIP ready · ' + completed.length + ' file(s)', 100);
     } catch (error) {
       setError(error instanceof Error ? error.message : 'ZIP preparation failed.');

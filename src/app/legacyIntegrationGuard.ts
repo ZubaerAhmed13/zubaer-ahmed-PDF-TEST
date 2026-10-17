@@ -26,7 +26,7 @@ function ensureDialogBar(): void {
   // only close control during repeated preview/open/close cycles. Every write
   // below is guarded so this function is safe when called by a MutationObserver.
   if (form.classList.contains('legacy-header-close-form')) form.classList.remove('legacy-header-close-form');
-  const nativeButton = form.querySelector<HTMLButtonElement>('button');
+  const nativeButton = form.querySelector<HTMLButtonElement>('button[aria-label="Close workspace"]');
   if (nativeButton) {
     if (nativeButton.textContent !== 'Close') nativeButton.textContent = 'Close';
     if (nativeButton.hasAttribute('title')) nativeButton.removeAttribute('title');
@@ -39,6 +39,13 @@ function ensureDialogBar(): void {
     dialog.classList.toggle('legacy-exact-active', exactActive);
   }
   if (!legacyHeaderActions) return;
+  if (!legacyHeaderActions.querySelector('[data-action="offline"]')) {
+    const help = document.createElement('button');
+    help.type = 'button'; help.className = 'legacy-favorite-button';
+    help.dataset.action = 'offline'; help.textContent = '?';
+    help.setAttribute('aria-label', 'Help & offline'); help.title = 'Help & offline';
+    legacyHeaderActions.prepend(help);
+  }
 
   // The restored legacy editor gets a presentation-only header close button.
   // It closes the same native dialog, while the real form remains a stable

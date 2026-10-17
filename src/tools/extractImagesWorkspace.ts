@@ -1,3 +1,4 @@
+import { addShareButton } from '../app/fileExport';
 import { workspaceRuntime } from '../app/workspaceRuntime';
 import * as pdfjs from 'pdfjs-dist';
 import type { PDFPageProxy } from 'pdfjs-dist';
@@ -355,6 +356,7 @@ export function mountWorkspace(container: HTMLDivElement, tool: ToolDefinition):
         if (cancelled) throw new DOMException('Operation cancelled', 'AbortError');
         objectUrl = URL.createObjectURL(blob);
         result.innerHTML = `<div class="notice"><strong>${count} embedded raster image${count === 1 ? '' : 's'} extracted</strong><p>The ZIP includes PNG files plus a manifest describing source pages and dimensions.</p></div><a class="download" href="${objectUrl}" download="embedded-images.zip">Download embedded-images.zip <span>${humanBytes(blob.size)}</span></a>`;
+        addShareButton(result.querySelector<HTMLAnchorElement>('a[download]')!, blob);
         setProgress('Complete', 100);
       })
       .catch((reason: unknown) => {

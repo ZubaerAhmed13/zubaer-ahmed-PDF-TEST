@@ -1,3 +1,4 @@
+import { addShareButton } from '../app/fileExport';
 import { workspaceRuntime } from '../app/workspaceRuntime';
 import '../styles/professional-tools.css';
 import type { ToolDefinition } from './registry';
@@ -101,6 +102,7 @@ export function mountWorkspace(container: HTMLDivElement, tool: ToolDefinition):
     link.download = cleanName(file?.name.replace(/\.pdf$/i,'') ?? 'document') + (redact ? '-redacted.pdf' : '-repaired.pdf');
     link.textContent = 'Download ' + link.download;
     output.append(link);
+    addShareButton(link, new Blob([entry.buffer], { type: entry.type }));
   };
   const drawOverlay = (draft: RedactionRect | null = null): void => {
     if (!overlay) return;

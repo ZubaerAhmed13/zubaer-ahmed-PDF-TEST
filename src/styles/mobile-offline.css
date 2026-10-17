@@ -1,0 +1,47 @@
+.offline-panel { color: #253548; line-height: 1.55; }
+.offline-panel h2 { margin-top: 0; }
+.offline-panel p { overflow-wrap: anywhere; }
+.offline-group { border: 1px solid #d7e1e9; border-radius: 10px; padding: 12px; margin: 12px 0; }
+.offline-group h3 { margin: 0; font-size: 16px; }
+.offline-group p { margin: 5px 0 10px; font-size: 13px; }
+.offline-actions { display: flex; gap: 8px; flex-wrap: wrap; margin: 12px 0; }
+.offline-panel details { border-top: 1px solid #d7e1e9; padding: 12px 0; }
+.offline-panel summary { cursor: pointer; font-weight: 700; }
+.file-share { margin: 6px 4px; }
+.file-share-status { display: block; font-size: 12px; color: #596c7d; overflow-wrap: anywhere; }
+.file-share-status:empty { display: none; }
+.direct-pan-controls { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.direct-pan-controls button[aria-pressed="true"] { background: #e8efff; border-color: #174ec3; color: #203047; }
+.direct-overlay[data-pan="true"] { touch-action: pan-x pan-y pinch-zoom; cursor: grab; }
+.direct-overlay[data-pan="true"] .direct-object,.direct-overlay[data-pan="true"] .direct-crop { pointer-events: none !important; }
+.direct-pan-help { font-size: 13px; color: #596c7d; }
+.direct-nudge { display: flex; gap: 6px; flex-wrap: wrap; margin: 8px 0; }
+.direct-nudge button { min-width: 44px; }
+.workspace :focus-visible,.offline-panel :focus-visible,.info-dialog :focus-visible { outline: 3px solid #244ec6; outline-offset: 3px; }
+.workspace input,.workspace textarea,.workspace select,.info-dialog input { scroll-margin-block: 70px; }
+.workspace a[download] { overflow-wrap: anywhere; }
+@media (max-width: 760px), (max-height: 520px) {
+  .workspace-dialog { top: var(--df-visible-top, 0px); bottom: auto; margin-block: 4px; height: calc(var(--df-visible-height, 100dvh) - 8px); max-height: calc(var(--df-visible-height, 100dvh) - 8px); padding-bottom: env(safe-area-inset-bottom); }
+  .workspace-dialog > .workspace { min-height: 0; max-height: none; height: 100%; }
+  .workspace-dialog.has-document-session > .workspace { height: auto; }
+  .workspace-dialog .document-toolbar { max-height: min(35%, 210px); }
+  .direct-editor { padding: 12px; }
+  .workspace .direct-editor input,.workspace .direct-editor select,.workspace .direct-editor textarea,.info-dialog input,.tool-options input,.tool-options select,.tool-options textarea { font-size: 16px; }
+  .workspace button:not(.form-page-input),.workspace a[download],.document-toolbar button,.document-toolbar a,.info-dialog button,.info-dialog summary { min-height: 44px; }
+  .direct-toolbar { gap: 6px; }
+  .direct-layout { grid-template-columns: minmax(0, 1fr); }
+  .direct-scroll { min-height: 200px; max-height: 56dvh; padding: 12px; overscroll-behavior: contain; touch-action: pan-x pan-y pinch-zoom; }
+  .direct-inspector { border: 1px solid #d7e1e9; border-radius: 8px; padding: 12px; }
+  .direct-inspector > summary { min-height: 44px; cursor: pointer; font-weight: 700; }
+  .direct-handle { width: 24px; height: 24px; right: -12px; bottom: -12px; }
+  .direct-handle.nw { left: -12px; top: -12px; }
+  .direct-handle.ne { top: -12px; }
+  .direct-handle.sw { left: -12px; }
+  .direct-export-actions { position: sticky; bottom: 0; background: white; z-index: 4; padding: 10px 0 max(10px, env(safe-area-inset-bottom)); }
+  .direct-editor [data-download] { padding-bottom: 24px; }
+  .keyboard-open .document-toolbar { max-height: 90px; }
+  .keyboard-open .direct-export-actions { position: static; }
+  .info-dialog { max-height: calc(var(--df-visible-height, 100dvh) - 24px); overflow: auto; }
+  .topbar-actions [data-action="offline"] { display: none; }
+}
+@media (prefers-reduced-motion: reduce) { .workspace *, .info-dialog * { scroll-behavior: auto !important; animation: none !important; transition: none !important; } }
