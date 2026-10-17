@@ -311,7 +311,8 @@ export async function fillForms(files: InputFile[], options: Record<string, unkn
   fields.forEach((field, index) => {
     const value = values[field.getName()];
     if (field.isReadOnly()) return;
-    const empty = value === undefined || value === '' || value === false || (Array.isArray(value) && value.length === 0);
+    const actual = value === undefined ? (field instanceof PDFTextField ? field.getText() : field instanceof PDFCheckBox ? field.isChecked() : field instanceof PDFRadioGroup ? field.getSelected() : field instanceof PDFDropdown || field instanceof PDFOptionList ? field.getSelected() : undefined) : value;
+    const empty = actual === undefined || actual === '' || actual === false || (Array.isArray(actual) && actual.length === 0);
     if (field.isRequired() && empty) throw new PdfOperationError('REQUIRED_FIELD', `Complete the required field: ${field.getName()}`);
     if (value === undefined) return;
     if (field instanceof PDFTextField) field.setText(String(value));

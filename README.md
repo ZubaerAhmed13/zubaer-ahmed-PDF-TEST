@@ -1,11 +1,13 @@
 # DocFlow Professional
 
-A local-first PDF workspace with 28 tools, built with TypeScript/Vite. PDF processing stays in the browser. Optional Supabase accounts synchronise favourite/recent tool IDs only.
+A local-first PDF workspace with 29 tools, built with TypeScript/Vite. PDF processing stays in the browser. Optional Supabase accounts synchronise favourite/recent tool IDs only.
 
 Production: https://zubaerahmed13.github.io/zubaer-ahmed-PDF-TEST/
 
 ## Current release
 Package version and diagnostics share one build-time source; diagnostics also shows the exact Git commit supplied by the release runner.
+
+R2 (0.4.0) adds direct page editing, visual crop handles, native sticky-note comments, Unicode added text, reader search/navigation, and on-page form controls. [R2 scope and evidence](docs/R2_RELEASE.md).
 
 R1 (0.3.0) adds an optional in-memory document session: open once, switch tools, review/apply results, undo/redo revisions and export. Use **Open a PDF**, or **Keep working with this PDF** inside a tool. [R1 scope and evidence](docs/R1_RELEASE.md).
 

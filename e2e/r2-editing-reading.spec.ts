@@ -1,42 +1,242 @@
-import { test, expect, type Page } from '@playwright/test';
-import AxeBuilder from '@axe-core/playwright';
-import { PDFDocument, PDFName, PDFDict, PDFHexString, degrees } from 'pdf-lib';
-import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs';
-import { readFile } from 'node:fs/promises';
-const path='/zubaer-ahmed-PDF-TEST/';
-async function fixture(): Promise<Buffer> { const doc=await PDFDocument.create(); for(const rotation of [0,90,180,270]) {const p=doc.addPage([460,620]);p.setCropBox(30,40,390,540);p.setRotation(degrees(rotation));p.drawText('Findable text on page '+doc.getPageCount(),{x:60,y:500,size:14});} return Buffer.from(await doc.save()); }
-async function open(page:Page,id:string,buffer:Buffer):Promise<void>{await page.goto(path);await page.locator(`[data-open-tool="${id}"]`).first().click();await page.locator('#workspace-file').setInputFiles({name:'r2.pdf',mimeType:'application/pdf',buffer});}
-async function download(page:Page,name:string):Promise<Buffer>{const waiting=page.waitForEvent('download');await page.getByRole('link',{name:new RegExp('^'+name.replace(/\./g,'\\.'))}).click();const file=await(await waiting).path();if(!file)throw Error('No download');return readFile(file);}
-async function property(page:Page,name:string,value:string):Promise<void>{await page.locator(`[data-properties] [name="${name}"]`).fill(value);}
+import { test, expect, type Page } from "@playwright/test";
+import AxeBuilder from "@axe-core/playwright";
+import { PDFDocument, PDFName, PDFDict, PDFHexString, degrees } from "pdf-lib";
+import { getDocument } from "pdfjs-dist/legacy/build/pdf.mjs";
+import { readFile } from "node:fs/promises";
+const path = "/zubaer-ahmed-PDF-TEST/";
+async function fixture(): Promise<Buffer> {
+  const doc = await PDFDocument.create();
+  for (const rotation of [0, 90, 180, 270]) {
+    const p = doc.addPage([460, 620]);
+    p.setCropBox(30, 40, 390, 540);
+    p.setRotation(degrees(rotation));
+    p.drawText("Findable text on page " + doc.getPageCount(), {
+      x: 60,
+      y: 500,
+      size: 14,
+    });
+  }
+  return Buffer.from(await doc.save());
+}
+async function open(page: Page, id: string, buffer: Buffer): Promise<void> {
+  await page.goto(path);
+  await page.locator(`[data-open-tool="${id}"]`).first().click();
+  await page
+    .locator("#workspace-file")
+    .setInputFiles({ name: "r2.pdf", mimeType: "application/pdf", buffer });
+  if (id === "preview") await page.getByRole("button", { name: "Run View PDF", exact: true }).click();
+}
+async function download(page: Page, name: string): Promise<Buffer> {
+  const waiting = page.waitForEvent("download");
+  await page
+    .getByRole("link", { name: new RegExp("^" + name.replace(/\./g, "\\.")) })
+    .click();
+  const file = await (await waiting).path();
+  if (!file) throw Error("No download");
+  return readFile(file);
+}
+async function property(
+  page: Page,
+  name: string,
+  value: string,
+): Promise<void> {
+  await page.locator(`[data-properties] [name="${name}"]`).fill(value);
+}
 
-test('direct editor exports Unicode, draggable shapes, crop and editable comments with command undo',async({page})=>{
- test.setTimeout(150_000);await open(page,'edit-pdf',await fixture());await expect(page.locator('#stage')).toContainText('Editing page 1');
- await page.getByRole('button',{name:'Add text',exact:true}).click();await property(page,'text','Grüße Ελληνικά Привет');await property(page,'width','340');await page.getByRole('button',{name:'Apply properties',exact:true}).click();
- await page.getByRole('button',{name:'Rectangle',exact:true}).click();const object=page.locator('.direct-object[data-selected]');const box=await object.boundingBox();if(!box)throw Error('No object bounds');await page.mouse.move(box.x+20,box.y+20);await page.mouse.down();await page.mouse.move(box.x+60,box.y+70,{steps:5});await page.mouse.up();
- expect(Number(await page.locator('[name=x]').inputValue())).toBeGreaterThan(36);
- await page.locator('.direct-overlay').focus();await page.keyboard.press('Shift+ArrowRight');const moved=await page.locator('[name=x]').inputValue();await page.getByRole('button',{name:'Undo edit',exact:true}).click();await page.getByRole('button',{name:'Redo edit',exact:true}).click();await page.locator('[data-objects] button').last().click();await expect(page.locator('[name=x]')).toHaveValue(moved);
- await page.getByRole('button',{name:'Duplicate selected',exact:true}).click();await expect(page.locator('.direct-object')).toHaveCount(3);await page.getByRole('button',{name:'Delete selected',exact:true}).click();await expect(page.locator('.direct-object')).toHaveCount(2);
- await page.getByRole('button',{name:'Add comment',exact:true}).click();await property(page,'text','Review in another PDF viewer ✓');await property(page,'x','240');await property(page,'y','220');await page.getByRole('button',{name:'Apply properties',exact:true}).click();
- await page.getByRole('button',{name:'Crop page',exact:true}).click();await property(page,'x','10');await property(page,'y','15');await property(page,'width','370');await property(page,'height','510');await page.getByRole('button',{name:'Apply properties',exact:true}).click();
- await page.getByRole('button',{name:'Run Edit PDF',exact:true}).click();await expect(page.locator('#stage')).toContainText('Edits ready');const bytes=await download(page,'Download edited PDF');const doc=await PDFDocument.load(bytes);expect(doc.getPage(0).getCropBox()).toEqual({x:40,y:55,width:370,height:510});const annots=doc.getPage(0).node.Annots()!;const note=doc.context.lookup(annots.get(0),PDFDict);expect(note.lookup(PDFName.of('Contents'),PDFHexString).decodeText()).toContain('Review in another');
- const pdf=await getDocument({data:new Uint8Array(bytes)}).promise;expect((await(await pdf.getPage(1)).getTextContent()).items.map(i=>'str'in i?i.str:'').join(' ')).toContain('Grüße Ελληνικά Привет');await pdf.destroy();
- const axe=await new AxeBuilder({page}).include('.direct-editor').analyze();expect(axe.violations.filter(v=>['critical','serious'].includes(v.impact??'')).map(v=>v.id)).toEqual([]);
- // A reimport recovers native comments as editable objects, not baked pixels.
- await page.locator('#workspace-file').setInputFiles({name:'edited.pdf',mimeType:'application/pdf',buffer:bytes});await expect(page.locator('#stage')).toContainText('Editing page 1');await expect(page.locator('[data-objects]')).toContainText('Review in another');await page.locator('[data-objects] button').click();await property(page,'text','Revised comment');await page.getByRole('button',{name:'Apply properties',exact:true}).click();await page.getByRole('button',{name:'Run Edit PDF',exact:true}).click();await expect(page.locator('#stage')).toContainText('Edits ready');
+test("direct editor exports Unicode, draggable shapes, crop and editable comments with command undo", async ({
+  page,
+}) => {
+  test.setTimeout(150_000);
+  await open(page, "edit-pdf", await fixture());
+  await expect(page.locator("#stage")).toContainText("Editing page 1");
+  await page.getByRole("button", { name: "Add text", exact: true }).click();
+  await property(page, "text", "Grüße Ελληνικά Привет");
+  await property(page, "width", "340");
+  await page
+    .getByRole("button", { name: "Apply properties", exact: true })
+    .click();
+  await page.getByRole("button", { name: "Rectangle", exact: true }).click();
+  const object = page.locator(".direct-object[data-selected]");
+  const box = await object.boundingBox();
+  if (!box) throw Error("No object bounds");
+  await page.mouse.move(box.x + 20, box.y + 20);
+  await page.mouse.down();
+  await page.mouse.move(box.x + 60, box.y + 70, { steps: 5 });
+  await page.mouse.up();
+  expect(Number(await page.locator("[name=x]").inputValue())).toBeGreaterThan(
+    36,
+  );
+  await page.locator(".direct-overlay").focus();
+  await page.keyboard.press("Shift+ArrowRight");
+  const moved = await page.locator("[name=x]").inputValue();
+  await page.getByRole("button", { name: "Undo edit", exact: true }).click();
+  await page.getByRole("button", { name: "Redo edit", exact: true }).click();
+  await page.locator("[data-objects] button").last().click();
+  await expect(page.locator("[name=x]")).toHaveValue(moved);
+  await page
+    .getByRole("button", { name: "Duplicate selected", exact: true })
+    .click();
+  await expect(page.locator(".direct-object")).toHaveCount(3);
+  await page
+    .getByRole("button", { name: "Delete selected", exact: true })
+    .click();
+  await expect(page.locator(".direct-object")).toHaveCount(2);
+  await page.getByRole("button", { name: "Add comment", exact: true }).click();
+  await property(page, "text", "Review in another PDF viewer ✓");
+  await property(page, "x", "240");
+  await property(page, "y", "220");
+  await page
+    .getByRole("button", { name: "Apply properties", exact: true })
+    .click();
+  await page.getByRole("button", { name: "Crop page", exact: true }).click();
+  await property(page, "x", "10");
+  await property(page, "y", "15");
+  await property(page, "width", "370");
+  await property(page, "height", "510");
+  await page
+    .getByRole("button", { name: "Apply properties", exact: true })
+    .click();
+  await page.getByRole("button", { name: "Run Edit PDF", exact: true }).click();
+  await expect(page.locator("#stage")).toContainText("Edits ready");
+  const bytes = await download(page, "Download edited PDF");
+  const doc = await PDFDocument.load(bytes);
+  expect(doc.getPage(0).getCropBox()).toEqual({
+    x: 40,
+    y: 55,
+    width: 370,
+    height: 510,
+  });
+  const annots = doc.getPage(0).node.Annots()!;
+  const note = doc.context.lookup(annots.get(0), PDFDict);
+  expect(
+    note.lookup(PDFName.of("Contents"), PDFHexString).decodeText(),
+  ).toContain("Review in another");
+  const pdf = await getDocument({ data: new Uint8Array(bytes) }).promise;
+  expect(
+    (await (await pdf.getPage(1)).getTextContent()).items
+      .map((i) => ("str" in i ? i.str : ""))
+      .join(" "),
+  ).toContain("Grüße Ελληνικά Привет");
+  await pdf.destroy();
+  const axe = await new AxeBuilder({ page })
+    .include(".direct-editor")
+    .analyze();
+  expect(
+    axe.violations
+      .filter((v) => ["critical", "serious"].includes(v.impact ?? ""))
+      .map((v) => v.id),
+  ).toEqual([]);
+  // A reimport recovers native comments as editable objects, not baked pixels.
+  await page
+    .locator("#workspace-file")
+    .setInputFiles({
+      name: "edited.pdf",
+      mimeType: "application/pdf",
+      buffer: bytes,
+    });
+  await expect(page.locator("#stage")).toContainText("Editing page 1");
+  await expect(page.locator("[data-objects]")).toContainText(
+    "Review in another",
+  );
+  await page.locator("[data-objects] button").click();
+  await property(page, "text", "Revised comment");
+  await page
+    .getByRole("button", { name: "Apply properties", exact: true })
+    .click();
+  await page.getByRole("button", { name: "Run Edit PDF", exact: true }).click();
+  await expect(page.locator("#stage")).toContainText("Edits ready");
 });
 
-test('reader selects text, finds and highlights document matches, jumps and exposes accessible text',async({page})=>{
- test.setTimeout(120_000);await open(page,'preview',await fixture());await expect(page.locator('#stage')).toHaveText('Preview ready');
- await expect(page.locator('.reader-text-layer')).toContainText('Findable text');await page.getByRole('searchbox',{name:'Search document'}).fill('Findable');await page.getByRole('button',{name:'Find',exact:true}).click();await expect(page.locator('[data-find-status]')).toContainText('Match 1 of 4');await expect(page.locator('.reader-text-layer mark')).toHaveCount(1);
- await page.getByRole('button',{name:'Next match',exact:true}).click();await expect(page.locator('#viewer-status')).toContainText('Page 2 of 4');await expect(page.locator('.reader-text-layer mark')).toHaveCount(1);
- await page.getByRole('spinbutton',{name:'Jump to page'}).fill('4');await page.getByRole('spinbutton',{name:'Jump to page'}).press('Tab');await expect(page.locator('#viewer-status')).toContainText('Page 4 of 4');
- await page.getByRole('button',{name:'Accessible text view',exact:true}).click();await expect(page.getByRole('region',{name:'Selectable page text',exact:true})).toContainText('Findable text on page 4');
- await page.getByRole('combobox',{name:'Reading mode'}).selectOption('continuous');await expect(page.locator('.reader-adjacent')).toHaveCount(1);await expect(page.getByRole('button',{name:'Read page 3',exact:true})).toBeVisible();await page.getByRole('button',{name:'Read page 3',exact:true}).click();await expect(page.locator('#viewer-status')).toContainText('Page 3 of 4');await expect(page.locator('.reader-adjacent')).toHaveCount(2);
- const axe=await new AxeBuilder({page}).include('.reader-controls').analyze();expect(axe.violations.filter(v=>['critical','serious'].includes(v.impact??'')).map(v=>v.id)).toEqual([]);
+test("reader selects text, finds and highlights document matches, jumps and exposes accessible text", async ({
+  page,
+}) => {
+  test.setTimeout(120_000);
+  await open(page, "preview", await fixture());
+  await expect(page.locator("#stage")).toHaveText("Preview ready");
+  await expect(page.locator(".reader-text-layer")).toContainText(
+    "Findable text",
+  );
+  await page
+    .getByRole("searchbox", { name: "Search document" })
+    .fill("Findable");
+  await page.getByRole("button", { name: "Find", exact: true }).click();
+  await expect(page.locator("[data-find-status]")).toContainText(
+    "Match 1 of 4",
+  );
+  await expect(page.locator(".reader-text-layer mark")).toHaveCount(1);
+  await page.getByRole("button", { name: "Next match", exact: true }).click();
+  await expect(page.locator("#viewer-status")).toContainText("Page 2 of 4");
+  await expect(page.locator(".reader-text-layer mark")).toHaveCount(1);
+  await page.getByRole("spinbutton", { name: "Jump to page" }).fill("4");
+  await page.getByRole("spinbutton", { name: "Jump to page" }).press("Tab");
+  await expect(page.locator("#viewer-status")).toContainText("Page 4 of 4");
+  await page
+    .getByRole("button", { name: "Accessible text view", exact: true })
+    .click();
+  await expect(
+    page.getByRole("region", { name: "Selectable page text", exact: true }),
+  ).toContainText("Findable text on page 4");
+  await page
+    .getByRole("combobox", { name: "Reading mode" })
+    .selectOption("continuous");
+  await expect(page.locator(".reader-adjacent")).toHaveCount(1);
+  await expect(
+    page.getByRole("button", { name: "Read page 3", exact: true }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Read page 3", exact: true }).click();
+  await expect(page.locator("#viewer-status")).toContainText("Page 3 of 4");
+  await expect(page.locator(".reader-adjacent")).toHaveCount(2);
+  const axe = await new AxeBuilder({ page })
+    .include(".reader-controls")
+    .analyze();
+  expect(
+    axe.violations
+      .filter((v) => ["critical", "serious"].includes(v.impact ?? ""))
+      .map((v) => v.id),
+  ).toEqual([]);
 });
 
-test('on-page forms sync with the field list, navigate pages, respect read-only and flatten on export',async({page})=>{
- test.setTimeout(120_000);const doc=await PDFDocument.create(),first=doc.addPage([400,500]),second=doc.addPage([400,500]),form=doc.getForm();const field=form.createTextField('Name');field.addToPage(first,{x:40,y:350,width:210,height:30});field.enableRequired();const locked=form.createTextField('Locked');locked.setText('Keep');locked.addToPage(first,{x:40,y:280,width:210,height:30});locked.enableReadOnly();const later=form.createTextField('Second');later.addToPage(second,{x:40,y:350,width:210,height:30});
- await open(page,'forms',Buffer.from(await doc.save()));await expect(page.getByRole('textbox',{name:'On page 1: Name',exact:true})).toBeVisible();await page.getByRole('textbox',{name:'On page 1: Name',exact:true}).fill('Ada');await expect(page.locator('#docflow-form-0')).toHaveValue('Ada');await expect(page.getByRole('textbox',{name:'On page 1: Locked',exact:true})).toBeDisabled();await page.getByRole('button',{name:'Next field',exact:true}).click();await page.getByRole('button',{name:'Next field',exact:true}).click();await expect(page.getByRole('textbox',{name:'On page 2: Second',exact:true})).toBeFocused();await page.keyboard.type('Lovelace');await expect(page.locator('#docflow-form-2')).toHaveValue('Lovelace');
- await page.getByRole('button',{name:'Run Fill PDF forms',exact:true}).click();await expect(page.locator('#stage')).toHaveText('Complete');const bytes=await download(page,'Download filled-form.pdf');const reopened=await PDFDocument.load(bytes);expect(reopened.getForm().getTextField('Name').getText()).toBe('Ada');expect(reopened.getForm().getTextField('Second').getText()).toBe('Lovelace');
+test("on-page forms sync with the field list, navigate pages, respect read-only and flatten on export", async ({
+  page,
+}) => {
+  test.setTimeout(120_000);
+  const doc = await PDFDocument.create(),
+    first = doc.addPage([400, 500]),
+    second = doc.addPage([400, 500]),
+    form = doc.getForm();
+  const field = form.createTextField("Name");
+  field.addToPage(first, { x: 40, y: 350, width: 210, height: 30 });
+  field.enableRequired();
+  const locked = form.createTextField("Locked");
+  locked.setText("Keep");
+  locked.addToPage(first, { x: 40, y: 280, width: 210, height: 30 });
+  locked.enableReadOnly();
+  const later = form.createTextField("Second");
+  later.addToPage(second, { x: 40, y: 350, width: 210, height: 30 });
+  await open(page, "forms", Buffer.from(await doc.save()));
+  await expect(
+    page.getByRole("textbox", { name: "On page 1: Name", exact: true }),
+  ).toBeVisible();
+  await page
+    .getByRole("textbox", { name: "On page 1: Name", exact: true })
+    .fill("Ada");
+  await expect(page.locator("#docflow-form-0")).toHaveValue("Ada");
+  await expect(
+    page.getByRole("textbox", { name: "On page 1: Locked", exact: true }),
+  ).toBeDisabled();
+  await page.getByRole("button", { name: "Next field", exact: true }).click();
+  await page.getByRole("button", { name: "Next field", exact: true }).click();
+  await expect(
+    page.getByRole("textbox", { name: "On page 2: Second", exact: true }),
+  ).toBeFocused();
+  await page.keyboard.type("Lovelace");
+  await expect(page.locator("#docflow-form-2")).toHaveValue("Lovelace");
+  await page
+    .getByRole("button", { name: "Run Fill PDF forms", exact: true })
+    .click();
+  await expect(page.locator("#stage")).toHaveText("Complete");
+  const bytes = await download(page, "Download filled-form.pdf");
+  const reopened = await PDFDocument.load(bytes);
+  expect(reopened.getForm().getTextField("Name").getText()).toBe("Ada");
+  expect(reopened.getForm().getTextField("Second").getText()).toBe("Lovelace");
 });

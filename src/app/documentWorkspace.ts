@@ -137,7 +137,7 @@ export class DocumentWorkspace {
         }
         this.render();
       },
-      changed: () => { if (this.enabled) this.draft = true; },
+      changed: () => { if (this.enabled) { this.draft = true; if (this.session.snapshot().pending?.toolId === tool.id) this.session.discardResult(); } },
       selection: pages => { if (this.enabled) this.session.select(pages); }
     });
     root.addEventListener('change', event => {
