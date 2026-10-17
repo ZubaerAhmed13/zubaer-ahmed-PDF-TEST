@@ -77,7 +77,8 @@ test('prepared mobile core reloads offline, edits with non-drag controls and exp
   await expect(page.locator('[data-properties] [name=x]')).toHaveValue(String(x + 5));
   await page.getByRole('button', { name: 'Pan page', exact: true }).click();
   await expect(page.locator('.direct-overlay')).toHaveAttribute('data-pan', 'true');
-  expect(await page.locator('.direct-overlay').evaluate(el => getComputedStyle(el).touchAction)).toContain('pinch-zoom');
+  const touchAction = await page.locator('.direct-overlay').evaluate(el => getComputedStyle(el).touchAction);
+  expect(touchAction === 'manipulation' || touchAction.includes('pinch-zoom')).toBe(true);
   await page.getByRole('button', { name: 'Run Edit PDF', exact: true }).click();
   await expect(page.locator('#stage')).toContainText('Edits ready');
   const bytes = await exported(page, 'Download edited PDF');
@@ -110,7 +111,7 @@ test('OCR prepares a language explicitly, runs a real scan offline, and reports 
   // Remove the real prepared model. Readiness and OCR must now fail honestly, even if Tesseract has an IDB copy.
   await page.evaluate(async () => {
     const m = await (await fetch('./offline-manifest.json')).json();
-    await (await caches.open(m.ocrCache)).delete(new URL('./ocr/lang/eng.traineddata.gz', location.href).href);
+    await (await caches.open(m.ocrCache)).delete(new URL('./ocr/lang/eng.traineddata', location.href).href);
   });
   await page.getByRole('button', { name: 'Run OCR scanned PDF', exact: true }).click();
   await expect(page.locator('#error')).toContainText('Offline OCR assets are missing');

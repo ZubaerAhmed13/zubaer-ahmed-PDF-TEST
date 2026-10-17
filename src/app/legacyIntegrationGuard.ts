@@ -70,7 +70,8 @@ function ensureDialogBar(): void {
   // move it to the visible header close control. Never steal focus from an
   // already-focused field/control inside the modal workspace.
   const activeElement = document.activeElement;
-  if (dialog.open && (activeElement === nativeButton || !activeElement || !dialog.contains(activeElement))) {
+  const otherModal = activeElement instanceof Element ? activeElement.closest('dialog[open]') : null;
+  if (dialog.open && (!otherModal || otherModal === dialog) && (form.contains(activeElement) || !activeElement || !dialog.contains(activeElement))) {
     visualClose.focus({ preventScroll: true });
   }
 }

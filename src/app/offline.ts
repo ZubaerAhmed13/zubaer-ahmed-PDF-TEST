@@ -131,7 +131,7 @@ export function mountOfflinePanel(host: HTMLElement): () => void {
         if (disposed) return;
         q('[data-offline-cancel]').hidden = true;
         await refresh();
-        if (!disposed) status.textContent = message;
+        if (!disposed) { status.textContent = message; status.tabIndex = -1; status.focus({ preventScroll: true }); }
       });
   }, { signal: events.signal });
   window.addEventListener('online', () => { if (!download) void refresh(); else network(); }, { signal: events.signal });

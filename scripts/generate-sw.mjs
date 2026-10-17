@@ -30,7 +30,7 @@ for (const path of cacheable) {
 }
 const version = hash.digest('hex').slice(0, 16);
 const ocrPaths = allFiles.map(absolute => relative(DIST, absolute).split(sep).join('/'))
-  .filter(path => path.startsWith('ocr/') && /(?:worker\.min\.js|lstm\.wasm(?:\.js)?|traineddata\.gz)$/.test(path)).sort();
+  .filter(path => path.startsWith('ocr/') && /(?:worker\.min\.js|lstm\.wasm(?:\.js)?|traineddata)$/.test(path)).sort();
 async function asset(path) {
   const data = await readFile(join(DIST, path));
   return { path: './' + path, bytes: data.length, sha256: createHash('sha256').update(data).digest('hex') };
@@ -43,8 +43,8 @@ const manifest = {
   version, coreCache: 'docflow-static-' + version, ocrCache,
   groups: {
     core: coreAssets,
-    eng: ocrAssets.filter(a => !a.path.includes('/lang/') || a.path.endsWith('/eng.traineddata.gz')),
-    deu: ocrAssets.filter(a => !a.path.includes('/lang/') || a.path.endsWith('/deu.traineddata.gz'))
+    eng: ocrAssets.filter(a => !a.path.includes('/lang/') || a.path.endsWith('/eng.traineddata')),
+    deu: ocrAssets.filter(a => !a.path.includes('/lang/') || a.path.endsWith('/deu.traineddata'))
   }
 };
 await writeFile(join(DIST, 'offline-manifest.json'), JSON.stringify(manifest));

@@ -96,7 +96,7 @@ export async function ocrPdf(
             workerPath: local + 'ocr/worker.min.js',
             corePath: local + 'ocr/core',
             langPath: local + 'ocr/lang',
-            gzip: true,
+            gzip: false,
             workerBlobURL: false,
             cacheMethod: 'write'
           });
