@@ -1,11 +1,18 @@
 import { test, expect, type Page } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
-import { PDFDocument, PDFName, PDFDict, PDFHexString, degrees } from "pdf-lib";
+import {
+  PDFDocument,
+  PDFName,
+  PDFDict,
+  PDFHexString,
+  PDFString,
+  degrees,
+} from "pdf-lib";
 import { getDocument } from "pdfjs-dist/legacy/build/pdf.mjs";
 import { readFile } from "node:fs/promises";
 test.use({ actionTimeout: 12_000 });
 const path = "/zubaer-ahmed-PDF-TEST/";
-async function fixture(): Promise<Buffer> {
+async function fixture(readerLinks = false): Promise<Buffer> {
   const doc = await PDFDocument.create();
   for (const rotation of [0, 90, 180, 270]) {
     const p = doc.addPage([460, 620]);
@@ -16,6 +23,54 @@ async function fixture(): Promise<Buffer> {
       y: 500,
       size: 14,
     });
+  }
+  if (readerLinks) {
+    const first = doc.getPage(0),
+      dest = doc.context.obj([doc.getPage(1).ref, PDFName.of("Fit")]);
+    first.node.addAnnot(
+      doc.context.register(
+        doc.context.obj({
+          Type: "Annot",
+          Subtype: "Link",
+          Rect: [60, 450, 200, 470],
+          Border: [0, 0, 0],
+          Dest: dest,
+        }),
+      ),
+    );
+    first.node.addAnnot(
+      doc.context.register(
+        doc.context.obj({
+          Type: "Annot",
+          Subtype: "Link",
+          Rect: [60, 420, 200, 440],
+          Border: [0, 0, 0],
+          A: { S: "URI", URI: PDFString.of("https://example.com/") },
+        }),
+      ),
+    );
+    first.node.addAnnot(
+      doc.context.register(
+        doc.context.obj({
+          Type: "Annot",
+          Subtype: "Link",
+          Rect: [60, 390, 200, 410],
+          A: { S: "URI", URI: PDFString.of("javascript:alert(1)") },
+        }),
+      ),
+    );
+    const root = doc.context.obj({ Type: "Outlines", Count: 1 }),
+      rootRef = doc.context.register(root);
+    const itemRef = doc.context.register(
+      doc.context.obj({
+        Title: PDFHexString.fromText("Section three"),
+        Parent: rootRef,
+        Dest: [doc.getPage(2).ref, PDFName.of("Fit")],
+      }),
+    );
+    root.set(PDFName.of("First"), itemRef);
+    root.set(PDFName.of("Last"), itemRef);
+    doc.catalog.set(PDFName.of("Outlines"), rootRef);
   }
   return Buffer.from(await doc.save());
 }
@@ -153,14 +208,41 @@ test("reader selects text, finds and highlights document matches, jumps and expo
   page,
 }) => {
   test.setTimeout(120_000);
-  await open(page, "preview", await fixture());
+  await open(page, "preview", await fixture(true));
   await expect(page.locator("#stage")).toHaveText("Preview ready");
-  const readerScroll = page.locator('.workspace-grid');
-  const scrollSize = await readerScroll.evaluate(el => ({ full: el.scrollHeight, visible: el.clientHeight }));
+  await page.getByText("Document outline", { exact: true }).click();
+  await page
+    .getByRole("button", { name: "Section three", exact: true })
+    .click();
+  await expect(page.locator("#viewer-status")).toContainText("Page 3 of 4");
+  await page.getByRole("spinbutton", { name: "Jump to page" }).fill("1");
+  await page.getByRole("spinbutton", { name: "Jump to page" }).press("Tab");
+  await expect(
+    page.getByRole("link", {
+      name: "Open link: https://example.com/",
+      exact: true,
+    }),
+  ).toHaveAttribute("rel", "noopener noreferrer");
+  await expect(page.locator('.reader-links [href^="javascript:"]')).toHaveCount(
+    0,
+  );
+  await page
+    .getByRole("link", { name: "Go to linked page", exact: true })
+    .click();
+  await expect(page.locator("#viewer-status")).toContainText("Page 2 of 4");
+  await page.getByRole("spinbutton", { name: "Jump to page" }).fill("1");
+  await page.getByRole("spinbutton", { name: "Jump to page" }).press("Tab");
+  const readerScroll = page.locator(".workspace-grid");
+  const scrollSize = await readerScroll.evaluate((el) => ({
+    full: el.scrollHeight,
+    visible: el.clientHeight,
+  }));
   if (scrollSize.full > scrollSize.visible + 40) {
-    await page.locator('.reader-controls').hover();
+    await page.locator(".reader-controls").hover();
     await page.mouse.wheel(0, 250);
-    await expect.poll(() => readerScroll.evaluate(el => el.scrollTop)).toBeGreaterThan(0);
+    await expect
+      .poll(() => readerScroll.evaluate((el) => el.scrollTop))
+      .toBeGreaterThan(0);
   }
   await expect(page.locator(".reader-text-layer")).toContainText(
     "Findable text",
@@ -222,6 +304,28 @@ test("on-page forms sync with the field list, navigate pages, respect read-only 
   locked.enableReadOnly();
   const later = form.createTextField("Second");
   later.addToPage(second, { x: 40, y: 350, width: 210, height: 30 });
+  const accepted = form.createCheckBox("Accepted");
+  accepted.addToPage(second, { x: 40, y: 300, width: 20, height: 20 });
+  const preference = form.createDropdown("Preference");
+  preference.setOptions(["A", "B"]);
+  preference.addToPage(second, { x: 40, y: 250, width: 150, height: 25 });
+  const decision = form.createRadioGroup("Decision");
+  decision.addOptionToPage("Yes", second, {
+    x: 40,
+    y: 200,
+    width: 20,
+    height: 20,
+  });
+  decision.addOptionToPage("No", second, {
+    x: 100,
+    y: 200,
+    width: 20,
+    height: 20,
+  });
+  const skills = form.createOptionList("Skills");
+  skills.setOptions(["One", "Two", "Three"]);
+  skills.enableMultiselect();
+  skills.addToPage(second, { x: 40, y: 100, width: 180, height: 65 });
   await open(page, "forms", Buffer.from(await doc.save()));
   await expect(
     page.getByRole("textbox", { name: "On page 1: Name", exact: true }),
@@ -241,6 +345,22 @@ test("on-page forms sync with the field list, navigate pages, respect read-only 
   await page.keyboard.type("Lovelace");
   await expect(page.locator("#docflow-form-2")).toHaveValue("Lovelace");
   await page
+    .getByRole("checkbox", { name: "On page 2: Accepted", exact: true })
+    .check();
+  await expect(page.locator("#docflow-form-3")).toBeChecked();
+  await page
+    .getByRole("combobox", { name: "On page 2: Preference", exact: true })
+    .selectOption("B");
+  await expect(page.locator("#docflow-form-4")).toHaveValue("B");
+  await page
+    .getByRole("radio", { name: "On page 2: Decision · Yes", exact: true })
+    .check();
+  await expect(page.locator("#docflow-form-5-0")).toBeChecked();
+  await page
+    .getByRole("listbox", { name: "On page 2: Skills", exact: true })
+    .selectOption(["One", "Two"]);
+
+  await page
     .getByRole("button", { name: "Review flattened appearance", exact: true })
     .click();
   await expect(page.locator("#stage")).toHaveText(
@@ -259,6 +379,17 @@ test("on-page forms sync with the field list, navigate pages, respect read-only 
   const reopened = await PDFDocument.load(bytes);
   expect(reopened.getForm().getTextField("Name").getText()).toBe("Ada");
   expect(reopened.getForm().getTextField("Second").getText()).toBe("Lovelace");
+  expect(reopened.getForm().getCheckBox("Accepted").isChecked()).toBe(true);
+  expect(reopened.getForm().getDropdown("Preference").getSelected()).toEqual([
+    "B",
+  ]);
+  expect(reopened.getForm().getRadioGroup("Decision").getSelected()).toBe(
+    "Yes",
+  );
+  expect(reopened.getForm().getOptionList("Skills").getSelected()).toEqual([
+    "One",
+    "Two",
+  ]);
 });
 
 test("direct edits join document revisions and new marks invalidate a stale pending export", async ({
@@ -267,13 +398,11 @@ test("direct edits join document revisions and new marks invalidate a stale pend
   test.setTimeout(150_000);
   await page.goto(path);
   await page.getByRole("button", { name: "Open a PDF", exact: true }).click();
-  await page
-    .locator("#workspace-file")
-    .setInputFiles({
-      name: "session.pdf",
-      mimeType: "application/pdf",
-      buffer: await fixture(),
-    });
+  await page.locator("#workspace-file").setInputFiles({
+    name: "session.pdf",
+    mimeType: "application/pdf",
+    buffer: await fixture(),
+  });
   await expect(page.locator("#stage")).toHaveText("Preview ready");
   await page
     .getByRole("combobox", { name: "Next tool", exact: true })

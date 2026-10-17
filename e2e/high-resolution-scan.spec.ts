@@ -79,9 +79,9 @@ test('previews and structurally edits a three-page A4 300-DPI raster scan withou
   await dialog.getByRole('button', { name: 'Run View PDF' }).click();
   await expect(dialog.locator('#stage')).toHaveText('Preview ready', { timeout: 60_000 });
   await expect(dialog.locator('#viewer-status')).toHaveText('Page 1 of 3');
-  await dialog.getByRole('button', { name: 'Next' }).click();
+  await dialog.getByRole('button', { name: 'Next', exact: true }).click();
   await expect(dialog.locator('#viewer-status')).toHaveText('Page 2 of 3');
-  await dialog.getByRole('button', { name: 'Next' }).click();
+  await dialog.getByRole('button', { name: 'Next', exact: true }).click();
   await expect(dialog.locator('#viewer-status')).toHaveText('Page 3 of 3');
 
   await page.keyboard.press('Escape');

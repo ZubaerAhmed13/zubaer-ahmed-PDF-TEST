@@ -215,6 +215,7 @@ export function mountReaderEnhancements(
                 throw e;
             } finally {
               tasks.delete(task);
+              adjacent.cleanup();
             }
           }
         }
@@ -254,7 +255,9 @@ export function mountReaderEnhancements(
     if (!hits.length) return;
     active = (active + direction + hits.length) % hits.length;
     const hit = hits[active]!;
-    notice(`Match ${active + 1} of ${hits.length} · page ${hit.page}`);
+    notice(
+      `Match ${active + 1} of ${hits.length}${hits.length >= 5000 ? " (first 5,000 matches)" : ""} · page ${hit.page}`,
+    );
     if (current !== hit.page) await showPage(hit.page);
     else highlight();
   };

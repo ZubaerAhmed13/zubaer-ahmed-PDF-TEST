@@ -113,7 +113,7 @@ export function mountFormPageOverlay(
         input.dataset.field = field.name;
         input.setAttribute(
           "aria-label",
-          `On page ${pageNumber}: ${field.name}${field.type === "radio" ? " · " + (widget.choice ?? "") : ""}`,
+          `On page ${pageNumber}: ${field.name}${field.type === "radio" ? " · " + (field.choices?.[(field.widgets ?? []).indexOf(widget)] ?? widget.choice ?? "") : ""}`,
         );
         input.required = field.required === true;
         input.disabled = field.readOnly === true;

@@ -14,7 +14,7 @@ R2 adds Edit PDF while retaining all 28 existing tools and the R1 document sessi
 
 ## Resource and privacy boundaries
 
-Files, signatures, added content and form values stay in memory in this tab. They are not added to recovery storage. Export before leaving. Edit history retains up to 65 states, pruned to a 32 MB serialized budget (at least the last two states); a plan is limited to 16 MB and 1,000 objects. Images are PNG/JPEG up to 10 MB. Text must fit its box to export. The existing document-session budget and leave/update protections remain active.
+Files, signatures, added content and form values stay in memory in this tab. They are not added to recovery storage. Export before leaving. Edit history retains up to 65 states, pruned to a 32 MB serialized budget (at least the last two states); a plan is limited to 16 MB and 1,000 objects. Images are PNG/JPEG up to 10 MB. Reader search reports up to the first 5,000 matches. Text must fit its box to export. The existing document-session budget and leave/update protections remain active.
 
 ## Verification
 
