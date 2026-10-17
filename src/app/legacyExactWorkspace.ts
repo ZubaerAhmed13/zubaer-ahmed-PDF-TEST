@@ -573,6 +573,10 @@ async function openOverview(root: HTMLElement): Promise<void> {
 export function installLegacyExactWorkspace(): void {
   if (installed) return;
   installed = true;
+  document.addEventListener('docflow-source-files', event => {
+    const root = event.target; if (!(root instanceof HTMLElement)) return;
+    fileState.set(root, (event as CustomEvent<TrackedSource[]>).detail); syncLegacyWorkspace(root);
+  });
 
   document.addEventListener('docflow-workspace-mounted', () => {
     enhanceAvailableWorkspaces();

@@ -165,7 +165,8 @@ export function mountWorkspace(container: HTMLDivElement, tool: ToolDefinition):
   };
   const renderFiles = (): void => {
     runtime.inputs(records.map(record => record.file));
-    list.innerHTML = records.map(({file,id}, index) => `<div class="file-row"><span><strong>${escapeHtml(file.name)}</strong><small>${humanBytes(file.size)}</small></span><button type="button" data-remove="${id}" aria-label="Remove ${escapeHtml(file.name)}">Remove</button>${tool.multipleFiles ? `<span class="order">#${index + 1}</span><button type="button" data-up="${id}" aria-label="Move ${escapeHtml(file.name)} up" ${index === 0 ? 'disabled' : ''}>↑</button><button type="button" data-down="${id}" aria-label="Move ${escapeHtml(file.name)} down" ${index === records.length - 1 ? 'disabled' : ''}>↓</button>` : ''}</div>`).join('');
+    list.innerHTML = records.map(({file,id}, index) => `<div class="file-row"><span><strong>${escapeHtml(file.name)}</strong><small>${humanBytes(file.size)}</small></span><button type="button" data-remove="${id}" aria-label="Remove ${escapeHtml(file.name)}">Remove</button>${tool.id === 'images-to-pdf' ? `<span class="order">#${index + 1}</span><button type="button" data-up="${id}" aria-label="Move ${escapeHtml(file.name)} up" ${index === 0 ? 'disabled' : ''}>↑</button><button type="button" data-down="${id}" aria-label="Move ${escapeHtml(file.name)} down" ${index === records.length - 1 ? 'disabled' : ''}>↓</button>` : ''}</div>`).join('');
+    if (tool.id === 'images-to-pdf') queueMicrotask(() => { if (!disposed) container.dispatchEvent(new CustomEvent('docflow-source-files', { bubbles: true, detail: records.slice() })); });
     const totalBytes = records.reduce((sum, record) => sum + record.file.size, 0);
     const memory = navigator as Navigator & { deviceMemory?: number };
     const risky = totalBytes > 250 * 1024 * 1024 || ((memory.deviceMemory ?? 8) <= 4 && totalBytes > 100 * 1024 * 1024);

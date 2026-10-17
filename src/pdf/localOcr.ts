@@ -108,7 +108,7 @@ export async function ocrPdf(
           continue;
         }
         if (!tesseract) {
-          onProgress(pageNumber - 1, count, 'Loading local ' + language + ' OCR engine');
+          onProgress(index, count, 'Loading local ' + language + ' OCR engine');
           for (const lang of language.split('+')) await assertOfflineOcr(lang as 'eng' | 'deu');
           const loading = createWorker(language.split('+'), 1, {
             workerPath: local + 'ocr/worker.min.js',

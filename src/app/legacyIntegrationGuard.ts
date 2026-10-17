@@ -209,6 +209,9 @@ function scheduleEnhance(): void {
 export function installLegacyIntegrationGuard(): void {
   if (installed) return;
   installed = true;
+  document.addEventListener('docflow-source-files', event => {
+    const root = event.target; if (root instanceof HTMLElement) trackedFiles.set(root, (event as CustomEvent<Array<{ file: File }>>).detail.map(r => r.file));
+  });
 
   const dialog = document.querySelector<HTMLDialogElement>('#workspace-dialog');
   dialog?.addEventListener('close', () => {

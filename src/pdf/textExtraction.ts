@@ -8,7 +8,7 @@ export interface TextSearchResult { result: OperationResult; hits: SearchHit[]; 
 
 export function markdownText(pages: string[]): string {
   // Literal content only: do not invent headings, table structure or reading order.
-  return pages.map((text, i) => '## Page ' + (i + 1) + '\n\n' + text.replace(/[\\`*_{}[\]<>()#+.!|~-]/g, '\\$&').replace(/\n/g, '  \n')).join('\n\n---\n\n');
+  return pages.map((text, i) => '## Page ' + (i + 1) + '\n\n' + text.replace(/&/g, '&amp;').replace(/[\\`*_{}[\]<>()#+.!|~-]/g, '\\$&').replace(/\n/g, '  \n')).join('\n\n---\n\n');
 }
 /** Extract selectable PDF text locally, preserving page boundaries. This is not OCR. */
 export async function extractAndSearchText(
