@@ -198,9 +198,8 @@
 .direct-editor #error {
   color: #9a2516;
 }
-.direct-editor .workspace-actions {
-  position: static;
-}
+.direct-export-actions { display: flex; justify-content: flex-end; gap: 8px; margin: 12px 0; padding: 12px 0; border-top: 1px solid #d3d9e0; }
+.direct-editor [data-download] { min-height: 32px; padding-bottom: 12px; }
 .direct-editor [data-sign-panel] {
   max-width: 720px;
   border: 1px solid #bbc5ce;

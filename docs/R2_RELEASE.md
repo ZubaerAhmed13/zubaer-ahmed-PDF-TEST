@@ -10,7 +10,7 @@ R2 adds Edit PDF while retaining all 28 existing tools and the R1 document sessi
 - Added text embeds a local font. Latin, Greek and Cyrillic are tested. Missing glyphs and unsupported shaping/bidi produce explicit export errors. Original page text replacement remains outside R2.
 - Sticky-note comments are native PDF Text annotations, imported into the editor and editable or removable. Unrelated annotations are preserved. Rectangles/highlight regions remain baked content; the existing Annotate PDF tool also remains available. Native threaded replies, rich text, ink and native text highlights are outside this supported subset.
 - View PDF has selectable text, document search with match navigation and highlighting, page jump, document outlines, internal links, external HTTP/HTTPS/mailto links, and a plain accessible text view. Continuous page group renders the current page and neighbors; select Read page to advance its bounded three-page window. This avoids rendering an entire long document at once.
-- Form widgets overlay the PDF preview and synchronize with the accessible field list and advanced JSON. Next/previous field moves between pages. Required validation, read-only values, reset and flatten guidance are included. XFA remains unsupported.
+- Form widgets overlay the PDF preview and synchronize with the accessible field list and advanced JSON. Next/previous field moves between pages. Required validation, read-only values, reset and an exact flattened PDF appearance preview are included. XFA remains unsupported.
 
 ## Resource and privacy boundaries
 
@@ -18,7 +18,7 @@ Files, signatures, added content and form values stay in memory in this tab. The
 
 ## Verification
 
-Local typecheck, lint, build, audit and 73 unit tests pass. Export fixtures are independently reopened using PDF.js and PyMuPDF 1.26.6. MuPDF checks exact red-shape pixels in display coordinates at four rotations, Unicode extraction, crop dimensions, native comment edit/save/reopen, form values and identical flattened/unflattened form pixels. The CI quality job retains artifacts/r2 beside the R0 preservation baseline.
+Local typecheck, lint, build, audit and 74 unit tests pass. Export fixtures are independently reopened using PDF.js and PyMuPDF 1.26.6. MuPDF checks exact red-shape pixels in display coordinates at four rotations, Unicode extraction, crop dimensions, native comment edit/save/reopen, form values and identical flattened/unflattened form pixels. The CI quality job retains artifacts/r2 beside the R0 preservation baseline.
 
 The full three-browser suite includes R2 editor, reader and form journeys. Production runs reuse these export/reopen assertions. CI and deployment evidence is recorded in the release PR after the final candidate passes.
 

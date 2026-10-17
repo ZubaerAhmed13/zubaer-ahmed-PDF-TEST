@@ -1,3 +1,4 @@
+import { showDerivedFormPreview } from '../app/preEditPreview';
 import { mountFormPageOverlay } from '../app/formPageOverlay';
 import { workspaceRuntime } from '../app/workspaceRuntime';
 import type { ToolDefinition } from './registry';
@@ -547,7 +548,22 @@ export function mountWorkspace(container: HTMLDivElement, tool: ToolDefinition):
           formOverlay?.dispose(); formOverlay = null;
     visualEditor?.dispose();
           visualEditor = null;
-          if (visualHost && textarea) { visualEditor = mountVisualFormEditor(visualHost, textarea, fields); formOverlay = mountFormPageOverlay(container, textarea, fields); }
+          if (visualHost && textarea) { visualEditor = mountVisualFormEditor(visualHost, textarea, fields); formOverlay = mountFormPageOverlay(container, textarea, fields, async flattened => {
+            const source = records[0]?.file;
+            if (!source) return;
+            if (!flattened) { await showDerivedFormPreview(container, source); return; }
+            mainCancelled = false; runtime.busy(true); run!.disabled = true; cancel!.disabled = false;
+            try {
+              const files = await readInputs(records);
+              if (disposed || mainCancelled || records[0]?.file !== source) return;
+              running = runWorkerOperation('forms-fill', files, { values: textarea.value, flatten: true }, () => {});
+              const result = await running.result;
+              if (disposed || mainCancelled || records[0]?.file !== source) return;
+              const output = result.outputs[0]!;
+              await showDerivedFormPreview(container, new File([output.buffer], output.name, { type: output.type }), true);
+              setProgress('Flattened appearance preview ready', 100);
+            } finally { if (!disposed) { runtime.busy(false); run!.disabled = false; cancel!.disabled = true; running = null; } }
+          }); }
         }
         setProgress('Form inspection complete', 100);
         container.dispatchEvent(new CustomEvent('docflow-form-ready'));

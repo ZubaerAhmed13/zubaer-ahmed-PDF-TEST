@@ -517,3 +517,11 @@ export function installPreEditPreview(): void {
     if (session) void disposeSession(session);
   }, true);
 }
+/** Show a local derived document without replacing the operation's source. */
+export async function showDerivedFormPreview(root: HTMLElement, file: File, flattened = false): Promise<void> {
+  const session = sessions.get(root);
+  if (!session || !session.panel.isConnected) return;
+  await renderPdfPreview(session, file);
+  const hint = session.panel.querySelector<HTMLElement>('[data-pre-edit-hint]');
+  if (hint) hint.textContent = flattened ? 'Flattened appearance preview · the source form remains unchanged. Return to editable fields to continue filling.' : 'Editable form preview · changes are applied only when you run the tool.';
+}

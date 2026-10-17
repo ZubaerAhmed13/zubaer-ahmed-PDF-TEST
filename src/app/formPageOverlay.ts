@@ -1,4 +1,4 @@
-import { workspaceRuntime } from './workspaceRuntime';
+import { workspaceRuntime } from "./workspaceRuntime";
 import { renderedPage, type RenderedPage } from "../pdf/render";
 import {
   normalizeInspectedFields,
@@ -11,6 +11,7 @@ export function mountFormPageOverlay(
   root: HTMLElement,
   advanced: HTMLTextAreaElement,
   rawFields: unknown,
+  review: (flattened: boolean) => Promise<void>,
 ): { dispose(): void } {
   const runtime = workspaceRuntime(root);
   const fields = normalizeInspectedFields(rawFields),
@@ -26,7 +27,8 @@ export function mountFormPageOverlay(
   let surface: HTMLElement | null = null,
     current: RenderedPage | undefined,
     pending = "",
-    index = -1;
+    index = -1,
+    reviewing = false;
   const controls: {
     field: InspectedFormField;
     input: HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement;
@@ -35,7 +37,7 @@ export function mountFormPageOverlay(
   const actions = document.createElement("div");
   actions.className = "form-overlay-actions";
   actions.innerHTML =
-    '<button type="button" data-field-prev>Previous field</button><button type="button" data-field-next>Next field</button><p>On-page controls and the field list share the same values. Required fields must be completed. Read-only fields stay unchanged. Review values before flattening; flattening makes the exported fields permanent.</p>';
+    '<button type="button" data-form-review>Review flattened appearance</button><span data-review-status role="status"></span><button type="button" data-field-prev>Previous field</button><button type="button" data-field-next>Next field</button><p>On-page controls and the field list share the same values. Required fields must be completed. Read-only fields stay unchanged. Review values before flattening; flattening makes the exported fields permanent.</p>';
   root
     .querySelector("[data-visual-form-editor], #visual-form-editor")
     ?.prepend(actions);
@@ -53,6 +55,7 @@ export function mountFormPageOverlay(
           option.selected =
             Array.isArray(value) && value.includes(option.value);
       else input.value = typeof value === "string" ? value : "";
+      input.hidden = reviewing;
     }
   }
   function teardown(): void {
@@ -147,7 +150,7 @@ export function mountFormPageOverlay(
             });
             advanced.value = JSON.stringify(state, null, 2);
             advanced.dispatchEvent(new Event("input", { bubbles: true }));
-          runtime.changed?.();
+            runtime.changed?.();
           },
           { signal },
         );
@@ -176,7 +179,48 @@ export function mountFormPageOverlay(
     },
     { signal },
   );
-  advanced.addEventListener("input", sync, { signal });
+  const reviewButton =
+    actions.querySelector<HTMLButtonElement>("[data-form-review]")!;
+  const reviewStatus = actions.querySelector<HTMLElement>(
+    "[data-review-status]",
+  )!;
+  reviewButton.addEventListener(
+    "click",
+    () => {
+      void (async () => {
+        reviewButton.disabled = true;
+        try {
+          await review(!reviewing);
+          if (signal.aborted) return;
+          reviewing = !reviewing;
+          sync();
+          reviewButton.textContent = reviewing
+            ? "Return to editable fields"
+            : "Review flattened appearance";
+          reviewStatus.textContent = reviewing
+            ? "Exact flattened PDF appearance. Field editing overlays are hidden."
+            : "Editable fields restored.";
+        } catch (e) {
+          if (!signal.aborted)
+            reviewStatus.textContent =
+              e instanceof Error ? e.message : "Preview failed.";
+        } finally {
+          if (!signal.aborted) reviewButton.disabled = false;
+        }
+      })();
+    },
+    { signal },
+  );
+  advanced.addEventListener(
+    "input",
+    () => {
+      sync();
+      if (reviewing)
+        reviewStatus.textContent =
+          "Values changed since this preview. Return to editable fields, then review again before flattening.";
+    },
+    { signal },
+  );
   const navigate = (direction: number): void => {
     const targets = fields.filter((f) => f.widgets?.length && !f.readOnly);
     if (!targets.length) return;

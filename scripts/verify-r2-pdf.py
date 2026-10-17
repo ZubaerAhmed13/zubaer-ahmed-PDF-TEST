@@ -19,6 +19,7 @@ else:
         pix=page.get_pixmap(alpha=False)
         # These are visual coordinates in the rotated page, independent of PDF user space.
         assert pix.pixel(60,80)[:3] == (255,0,0), (index,pix.pixel(60,80))
+        assert pix.pixel(215,70)[:3] == (0,0,255), (index,pix.pixel(215,70))
         assert pix.pixel(20,80)[:3] == (255,255,255)
         assert 'Grüße Ελληνικά Привет' in page.get_text()
         notes=list(page.annots())

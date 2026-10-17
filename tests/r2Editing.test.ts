@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { PDFDocument, PDFName, PDFArray, degrees } from "pdf-lib";
+import {
+  PDFDocument,
+  PDFName,
+  PDFArray,
+  PDFDict,
+  PDFString,
+  PDFHexString,
+  degrees,
+} from "pdf-lib";
 import { getDocument } from "pdfjs-dist/legacy/build/pdf.mjs";
 import { readFile, mkdir, writeFile } from "node:fs/promises";
 import { execFileSync } from "node:child_process";
@@ -35,6 +43,75 @@ const font = (): Promise<InputFile> =>
   }));
 
 describe("R2 export contracts", () => {
+  it("preserves native note authors and popups, and leaves hidden notes outside the CropBox untouched", async () => {
+    const doc = await PDFDocument.create(),
+      page = doc.addPage([400, 500]);
+    page.setCropBox(30, 40, 300, 400);
+    const note = doc.context.obj({
+      Type: "Annot",
+      Subtype: "Text",
+      Rect: [70, 300, 94, 324],
+      Contents: PDFHexString.fromText("Original note"),
+      T: PDFHexString.fromText("Original author"),
+      NM: PDFString.of("external-note"),
+    });
+    const ref = doc.context.register(note),
+      popup = doc.context.register(
+        doc.context.obj({
+          Type: "Annot",
+          Subtype: "Popup",
+          Parent: ref,
+          Rect: [100, 200, 200, 300],
+        }),
+      );
+    note.set(PDFName.of("Popup"), popup);
+    page.node.addAnnot(ref);
+    page.node.addAnnot(popup);
+    const hidden = doc.context.register(
+      doc.context.obj({
+        Type: "Annot",
+        Subtype: "Text",
+        Rect: [0, 0, 20, 20],
+        Contents: PDFHexString.fromText("Outside visible crop"),
+      }),
+    );
+    page.node.addAnnot(hidden);
+    const source = input(await doc.save()),
+      inspected = await inspectDirectEdit([source]);
+    const plan = emptyPlan();
+    plan.objects = JSON.parse(String(inspected.info!.comments));
+    expect(plan.objects).toHaveLength(1);
+    const same = await applyDirectEdit([source], { plan });
+    const untouched = await PDFDocument.load(same.outputs[0]!.buffer);
+    expect(
+      untouched.context
+        .lookup(ref, PDFDict)
+        .lookup(PDFName.of("T"), PDFHexString)
+        .decodeText(),
+    ).toBe("Original author");
+    plan.objects[0]!.text = "Edited note";
+    const changed = await applyDirectEdit([source], { plan });
+    const revised = await PDFDocument.load(changed.outputs[0]!.buffer);
+    expect(
+      revised.context
+        .lookup(ref, PDFDict)
+        .lookup(PDFName.of("Contents"), PDFHexString)
+        .decodeText(),
+    ).toBe("Edited note");
+    expect(
+      revised.context.lookup(ref, PDFDict).get(PDFName.of("Popup"))!.toString(),
+    ).toBe(popup.toString());
+    expect(revised.getPage(0).node.Annots()!.size()).toBe(3);
+    plan.removedComments = [plan.objects[0]!.originalId!];
+    plan.objects = [];
+    const removed = await applyDirectEdit([source], { plan });
+    const cleared = await PDFDocument.load(removed.outputs[0]!.buffer);
+    expect(cleared.getPage(0).node.Annots()!.size()).toBe(1);
+    expect(cleared.getPage(0).node.Annots()!.get(0).toString()).toBe(
+      hidden.toString(),
+    );
+  });
+
   it("maps screen coordinates exactly like PDF.js for every rotation and an offset CropBox", async () => {
     for (const rotation of [0, 90, 180, 270]) {
       const doc = await PDFDocument.create(),
@@ -128,7 +205,7 @@ describe("R2 export contracts", () => {
         height: 30,
         color: "#203047",
         size: 14,
-        data: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aVVYAAAAASUVORK5CYII=",
+        data: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGNgYPgPAAEDAQAIicLsAAAAAElFTkSuQmCC",
       });
     }
     const result = await applyDirectEdit([input(bytes), await font()], {

@@ -3,6 +3,7 @@ import AxeBuilder from "@axe-core/playwright";
 import { PDFDocument, PDFName, PDFDict, PDFHexString, degrees } from "pdf-lib";
 import { getDocument } from "pdfjs-dist/legacy/build/pdf.mjs";
 import { readFile } from "node:fs/promises";
+test.use({ actionTimeout: 12_000 });
 const path = "/zubaer-ahmed-PDF-TEST/";
 async function fixture(): Promise<Buffer> {
   const doc = await PDFDocument.create();
@@ -20,11 +21,14 @@ async function fixture(): Promise<Buffer> {
 }
 async function open(page: Page, id: string, buffer: Buffer): Promise<void> {
   await page.goto(path);
-  await page.locator(`[data-open-tool="${id}"]`).first().click();
+  await page.locator(`#tool-grid [data-open-tool="${id}"]`).click();
   await page
     .locator("#workspace-file")
     .setInputFiles({ name: "r2.pdf", mimeType: "application/pdf", buffer });
-  if (id === "preview") await page.getByRole("button", { name: "Run View PDF", exact: true }).click();
+  if (id === "preview")
+    await page
+      .getByRole("button", { name: "Run View PDF", exact: true })
+      .click();
 }
 async function download(page: Page, name: string): Promise<Buffer> {
   const waiting = page.waitForEvent("download");
@@ -127,13 +131,11 @@ test("direct editor exports Unicode, draggable shapes, crop and editable comment
       .map((v) => v.id),
   ).toEqual([]);
   // A reimport recovers native comments as editable objects, not baked pixels.
-  await page
-    .locator("#workspace-file")
-    .setInputFiles({
-      name: "edited.pdf",
-      mimeType: "application/pdf",
-      buffer: bytes,
-    });
+  await page.locator("#workspace-file").setInputFiles({
+    name: "edited.pdf",
+    mimeType: "application/pdf",
+    buffer: bytes,
+  });
   await expect(page.locator("#stage")).toContainText("Editing page 1");
   await expect(page.locator("[data-objects]")).toContainText(
     "Review in another",
@@ -232,6 +234,17 @@ test("on-page forms sync with the field list, navigate pages, respect read-only 
   await page.keyboard.type("Lovelace");
   await expect(page.locator("#docflow-form-2")).toHaveValue("Lovelace");
   await page
+    .getByRole("button", { name: "Review flattened appearance", exact: true })
+    .click();
+  await expect(page.locator("#stage")).toHaveText(
+    "Flattened appearance preview ready",
+  );
+  await expect(page.locator(".form-page-input:visible")).toHaveCount(0);
+  await page
+    .getByRole("button", { name: "Return to editable fields", exact: true })
+    .click();
+  await expect(page.locator(".form-page-input:visible")).not.toHaveCount(0);
+  await page
     .getByRole("button", { name: "Run Fill PDF forms", exact: true })
     .click();
   await expect(page.locator("#stage")).toHaveText("Complete");
@@ -239,4 +252,62 @@ test("on-page forms sync with the field list, navigate pages, respect read-only 
   const reopened = await PDFDocument.load(bytes);
   expect(reopened.getForm().getTextField("Name").getText()).toBe("Ada");
   expect(reopened.getForm().getTextField("Second").getText()).toBe("Lovelace");
+});
+
+test("direct edits join document revisions and new marks invalidate a stale pending export", async ({
+  page,
+}) => {
+  test.setTimeout(150_000);
+  await page.goto(path);
+  await page.getByRole("button", { name: "Open a PDF", exact: true }).click();
+  await page
+    .locator("#workspace-file")
+    .setInputFiles({
+      name: "session.pdf",
+      mimeType: "application/pdf",
+      buffer: await fixture(),
+    });
+  await expect(page.locator("#stage")).toHaveText("Preview ready");
+  await page
+    .getByRole("combobox", { name: "Next tool", exact: true })
+    .selectOption("edit-pdf");
+  await expect(page.locator("#stage")).toContainText("Editing page 1");
+  await page.getByRole("button", { name: "Add text", exact: true }).click();
+  await property(page, "text", "SESSION Grüße");
+  await page
+    .getByRole("button", { name: "Apply properties", exact: true })
+    .click();
+  await page.getByRole("button", { name: "Run Edit PDF", exact: true }).click();
+  await expect(
+    page.getByRole("button", { name: "Use result", exact: true }),
+  ).toBeEnabled();
+  await page.getByRole("button", { name: "Add comment", exact: true }).click();
+  await expect(
+    page.getByRole("button", { name: "Use result", exact: true }),
+  ).toHaveCount(0);
+  await page.getByRole("button", { name: "Run Edit PDF", exact: true }).click();
+  await expect(
+    page.getByRole("button", { name: "Use result", exact: true }),
+  ).toBeEnabled();
+  await page.getByRole("button", { name: "Use result", exact: true }).click();
+  await expect(page.locator("#stage")).toContainText("Editing page 1");
+  const bytes = await download(page, "Export current PDF");
+  const pdf = await getDocument({ data: new Uint8Array(bytes) }).promise;
+  const first = await pdf.getPage(1);
+  expect(
+    (await first.getTextContent()).items
+      .map((i) => ("str" in i ? i.str : ""))
+      .join(" "),
+  ).toContain("SESSION Grüße");
+  expect(
+    (await first.getAnnotations()).filter((a) => a.subtype === "Text"),
+  ).toHaveLength(1);
+  await pdf.destroy();
+  await page
+    .getByRole("button", { name: "Undo revision", exact: true })
+    .click();
+  const original = await PDFDocument.load(
+    await download(page, "Export current PDF"),
+  );
+  expect(original.getPage(0).node.Annots()?.size() ?? 0).toBe(0);
 });

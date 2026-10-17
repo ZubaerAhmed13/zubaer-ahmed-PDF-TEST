@@ -9,6 +9,7 @@ async function walk(directory) {
   const entries = await readdir(directory, { withFileTypes: true });
   const files = [];
   for (const entry of entries) {
+    if (entry.name.startsWith('.')) continue;
     const absolute = join(directory, entry.name);
     if (entry.isDirectory()) files.push(...await walk(absolute));
     else files.push(absolute);

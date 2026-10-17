@@ -39,11 +39,10 @@ function frameFor(page: ReturnType<PDFDocument["getPage"]>): PageFrame {
     rotation: ((page.getRotation().angle % 360) + 360) % 360,
   };
 }
-export async function inspectDirectEdit(
-  files: InputFile[],
-): Promise<OperationResult> {
-  if (!files[0]) throw new Error("Choose a PDF first.");
-  const doc = await PDFDocument.load(files[0]!.buffer);
+function inspectDocument(doc: PDFDocument): {
+  frames: PageFrame[];
+  objects: EditObject[];
+} {
   const objects: EditObject[] = [];
   const frames = doc.getPages().map((page, index) => {
     const frame = frameFor(page);
@@ -61,6 +60,14 @@ export async function inspectDirectEdit(
       const r = rect.asRectangle();
       const a = toDisplay(frame, r.x, r.y),
         b = toDisplay(frame, r.x + r.width, r.y + r.height);
+      const size = displaySize(frame);
+      if (
+        Math.min(a[0], b[0]) < 0 ||
+        Math.min(a[1], b[1]) < 0 ||
+        Math.max(a[0], b[0]) > size.width ||
+        Math.max(a[1], b[1]) > size.height
+      )
+        continue;
       objects.push({
         id: `existing-${index}-${i}`,
         originalId: `${index}:${ref.toString()}`,
@@ -77,6 +84,15 @@ export async function inspectDirectEdit(
     }
     return frame;
   });
+  return { frames, objects };
+}
+export async function inspectDirectEdit(
+  files: InputFile[],
+): Promise<OperationResult> {
+  if (!files[0]) throw new Error("Choose a PDF first.");
+  const { frames, objects } = inspectDocument(
+    await PDFDocument.load(files[0].buffer, { updateMetadata: false }),
+  );
   return {
     outputs: [],
     info: { frames: JSON.stringify(frames), comments: JSON.stringify(objects) },
@@ -103,7 +119,9 @@ async function applyEdits(
   files: InputFile[],
   options: Record<string, unknown>,
 ): Promise<OperationResult> {
-  const doc = await PDFDocument.load(files[0]!.buffer);
+  const doc = await PDFDocument.load(files[0]!.buffer, {
+    updateMetadata: false,
+  });
   const plan = options.plan as EditPlan;
   if (!plan || !Array.isArray(plan.objects) || plan.objects.length > 1000)
     throw new Error("The edit plan exceeds the 1,000 object limit.");
@@ -117,7 +135,21 @@ async function applyEdits(
     font = await doc.embedFont(files[1].buffer, { subset: true });
   }
   const supported = font ? new Set(font.getCharacterSet()) : undefined;
-  const frames = doc.getPages().map(frameFor);
+  const source = inspectDocument(doc),
+    frames = source.frames;
+  const originalObjects = new Map(
+    source.objects.map((o) => [o.originalId!, o]),
+  );
+  const unchanged = new Set(
+    plan.objects
+      .filter(
+        (o) =>
+          o.originalId &&
+          JSON.stringify(o) ===
+            JSON.stringify(originalObjects.get(o.originalId)),
+      )
+      .map((o) => o.originalId!),
+  );
   const color = (hex: string) => {
     if (!/^#[0-9a-f]{6}$/i.test(hex)) throw new Error("Invalid object color.");
     return rgb(
@@ -127,24 +159,29 @@ async function applyEdits(
     );
   };
   const removed = new Set(plan.removedComments);
-  const existing = new Map(
-    plan.objects.filter((o) => o.originalId).map((o) => [o.originalId!, o]),
-  );
+  const existing = new Map<string, PDFDict>();
   doc.getPages().forEach((page, index) => {
     const annots = page.node.Annots();
     for (let i = (annots?.size() ?? 0) - 1; i >= 0; i--) {
       const ref = annots!.get(i),
         id = `${index}:${ref.toString()}`,
         item = doc.context.lookup(ref);
+      if (!(item instanceof PDFDict)) continue;
+      const subtype = item.get(name("Subtype"))?.toString();
       if (
-        !(item instanceof PDFDict) ||
-        item.get(name("Subtype"))?.toString() !== "/Text"
-      )
+        subtype === "/Popup" &&
+        removed.has(`${index}:${item.get(name("Parent"))?.toString()}`)
+      ) {
+        annots!.remove(i);
         continue;
-      if (removed.has(id) || existing.has(id)) annots!.remove(i);
+      }
+      if (subtype !== "/Text") continue;
+      if (removed.has(id)) annots!.remove(i);
+      else existing.set(id, item);
     }
   });
   for (const o of plan.objects) {
+    if (o.originalId && unchanged.has(o.originalId)) continue;
     const page = doc.getPage(o.page - 1),
       frame = frames[o.page - 1];
     if (
@@ -202,6 +239,27 @@ async function applyEdits(
       page.drawImage(image, { x, y, width: o.width, height: o.height, rotate });
     } else if (o.kind === "comment") {
       const box = pdfBounds(frame, o);
+      const prior = o.originalId ? existing.get(o.originalId) : undefined;
+      if (prior) {
+        prior.set(
+          name("Rect"),
+          doc.context.obj([
+            box.x,
+            box.y,
+            box.x + box.width,
+            box.y + box.height,
+          ]),
+        );
+        prior.set(name("Contents"), PDFHexString.fromText(o.text ?? ""));
+        prior.set(name("C"), doc.context.obj([ink.red, ink.green, ink.blue]));
+        prior.set(
+          name("M"),
+          PDFString.of(
+            `D:${new Date().toISOString().replace(/[-:T]/g, "").slice(0, 14)}Z`,
+          ),
+        );
+        continue;
+      }
       const annot = doc.context.obj({
         Type: "Annot",
         Subtype: "Text",
