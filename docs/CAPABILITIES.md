@@ -1,6 +1,6 @@
 # Current capability and evidence matrix
 
-Current release: R2 / 0.4.0, 29 tool IDs; the original 28 stable IDs are retained. Test links identify coverage; passing results must be checked at the exact release SHA. Catalog preservation is not implied by a structural/lossless label.
+Current release: R3 / 0.5.0, 29 tool IDs; the original 28 stable IDs are retained. Test links identify coverage; passing results must be checked at the exact release SHA. Catalog preservation is not implied by a structural/lossless label.
 
 | Tool / ID | Coverage | Important boundary |
 |---|---|---|
@@ -35,3 +35,7 @@ Current release: R2 / 0.4.0, 29 tool IDs; the original 28 stable IDs are retaine
 | Batch process PDFs (`batch`) | [Browser coverage](../e2e/batch-workspace.spec.ts) | Sequential queue; quality follows selected operation. |
 
 All workspaces also pass through [registry loading/error checks](../e2e/r0-baseline.spec.ts). Existing-text replacement, certificate signing, Office conversion, PDF/A and PDF/UA are not advertised as implemented. [R0 release record](R0_RELEASE.md).
+
+## Offline and mobile readiness
+
+[Offline setup and system export](R3_RELEASE.md) enumerate the certified automated journey and pending physical-device/assistive-technology checks. Readiness checks actual cache entries; prepare OCR languages explicitly before disconnecting. Cache availability is not document backup or universal device certification. Downloads always remain available; system file sharing appears only where supported.

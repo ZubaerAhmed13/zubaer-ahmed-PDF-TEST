@@ -1,4 +1,5 @@
-import { copyFile, mkdir, readdir, rm, stat } from 'node:fs/promises';
+import { gunzipSync } from 'node:zlib';
+import { copyFile, mkdir, readdir, rm, stat, readFile, writeFile } from 'node:fs/promises';
 import { join, basename, resolve } from 'node:path';
 
 const root = resolve('.');
@@ -31,6 +32,7 @@ for (const language of ['eng', 'deu']) {
   const sources = await files(join(modules, '@tesseract.js-data', language));
   const gz = sources.find(p => basename(p) === language + '.traineddata.gz');
   if (!gz) throw Error('Missing packaged offline OCR language model: ' + language);
-  await copyFile(gz, join(output, 'lang', language + '.traineddata.gz'));
+  // Plain model paths avoid hosts that serve .gz as HTTP Content-Encoding and decode it implicitly.
+  await writeFile(join(output, 'lang', language + '.traineddata'), gunzipSync(await readFile(gz)));
 }
 console.log('Staged same-origin OCR worker, WebAssembly core and two language models.');

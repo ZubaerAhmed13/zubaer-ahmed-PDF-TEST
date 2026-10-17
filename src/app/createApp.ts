@@ -1,3 +1,4 @@
+import { mountOfflinePanel } from './offline';
 import { DocumentWorkspace } from './documentWorkspace';
 import { approveReload, prepareApprovedReload } from './workProtection';
 import { toolCategories, tools } from '../tools/registry';
@@ -41,7 +42,7 @@ export function createApp(root: HTMLDivElement | null): void {
           <button type="button" data-action="privacy">Privacy</button>
         </nav>
         <div class="topbar-actions">
-          <button class="secondary" type="button" data-action="diagnostics">Diagnostics</button>
+          <button class="secondary" type="button" data-action="offline">Offline & storage</button><button class="secondary" type="button" data-action="diagnostics">Diagnostics</button>
           <button class="secondary" type="button" data-action="cloud">Cloud sync</button>
           <button class="primary" type="button" data-action="open">Open PDF</button>
         </div>
@@ -139,13 +140,13 @@ export function createApp(root: HTMLDivElement | null): void {
           </div>
           <div class="trust-grid">
             <article class="trust-card"><span class="trust-icon" aria-hidden="true">✓</span><div><strong>Local processing</strong><p>Core PDF and image operations execute in the browser instead of uploading files to a processing server.</p></div></article>
-            <article class="trust-card"><span class="trust-icon" aria-hidden="true">◎</span><div><strong>Offline-ready core</strong><p>The application shell and local engines are precached for offline use where the browser permits worker execution.</p></div></article>
+            <article class="trust-card"><span class="trust-icon" aria-hidden="true">◎</span><div><strong>Offline-ready core</strong><p>The application shell and local engines are precached for offline use where the browser permits worker execution. Check stored files and prepare English/German OCR in Offline & storage.</p></div></article>
             <article class="trust-card"><span class="trust-icon" aria-hidden="true">i</span><div><strong>Clear export choices</strong><p>Review quality changes and supported features before you export.</p></div></article>
           </div>
         </section>
 
         <dialog id="workspace-dialog" class="workspace-dialog" aria-labelledby="workspace-title">
-          <form method="dialog" class="dialog-bar"><strong id="workspace-title">Workspace</strong><button aria-label="Close workspace">Close</button></form>
+          <form method="dialog" class="dialog-bar"><strong id="workspace-title">Workspace</strong><button type="button" data-action="offline">Help & offline</button><button aria-label="Close workspace">Close</button></form>
           <section class="document-toolbar" data-document-toolbar hidden aria-label="Document session"></section>
           <div id="workspace" class="workspace"></div>
         </dialog>
@@ -154,7 +155,7 @@ export function createApp(root: HTMLDivElement | null): void {
 
       <footer>
         <span class="footer-brand"><span class="mini-mark" aria-hidden="true">D</span> docflow · PDF workspace</span>
-        <span class="footer-links"><button type="button" data-action="privacy">Privacy</button><button type="button" data-action="diagnostics">Diagnostics</button><button type="button" data-action="cloud">Cloud sync</button><span>Local-first · no analytics</span></span>
+        <span class="footer-links"><button type="button" data-action="offline">Offline & storage</button><button type="button" data-action="privacy">Privacy</button><button type="button" data-action="diagnostics">Diagnostics</button><button type="button" data-action="cloud">Cloud sync</button><span>Local-first · no analytics</span></span>
       </footer>
     </div>
   `;
@@ -169,6 +170,8 @@ export function createApp(root: HTMLDivElement | null): void {
   const recentTools = root.querySelector<HTMLDivElement>('#recent-tools');
   if (!grid || !search || !workspaceDialog || !workspace || !infoDialog || !infoContent || !favoriteTools || !recentTools) return;
 
+  let disposeInfo: (() => void) | null = null;
+  infoDialog.addEventListener('close', () => { disposeInfo?.(); disposeInfo = null; });
   let category = 'all';
   let workspaceGeneration = 0;
   let workspaceTrigger: HTMLElement | null = null;
@@ -186,7 +189,7 @@ export function createApp(root: HTMLDivElement | null): void {
   // header/footer buttons and Escape. Active work is never silently cancelled.
   workspaceDialog.addEventListener('click', event => {
     const target = event.target instanceof Element ? event.target : null;
-    if (!target?.closest('[data-legacy-header-close],.legacy-footer-close,.dialog-bar button,[data-load-close]')) return;
+    if (!target?.closest('[data-legacy-header-close],.legacy-footer-close,.dialog-bar button:not([data-action]),[data-load-close]')) return;
     event.preventDefault(); event.stopImmediatePropagation(); void closeWorkspace();
   }, true);
   workspaceDialog.addEventListener('cancel', event => {
@@ -320,6 +323,8 @@ export function createApp(root: HTMLDivElement | null): void {
       search.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
     if (action === 'open') { workspaceTrigger = actionTarget ?? null; void documents.begin(); }
+    if (['offline', 'cloud', 'privacy', 'diagnostics'].includes(action ?? '')) { disposeInfo?.(); disposeInfo = null; infoDialog.setAttribute('aria-label', action === 'offline' ? 'Offline and storage' : action!); }
+    if (action === 'offline') { disposeInfo = mountOfflinePanel(infoContent); infoDialog.setAttribute('aria-label', 'Offline and storage'); infoDialog.showModal(); }
     if (action === 'cloud') {
       mountCloudPanel(infoContent, {
         allowedToolIds: new Set(tools.map((tool) => tool.id)),
@@ -338,6 +343,7 @@ export function createApp(root: HTMLDivElement | null): void {
       infoDialog.showModal();
     }
     if (action === 'diagnostics') {
+      infoDialog.setAttribute('aria-label', 'Diagnostics');
       infoContent.innerHTML = `<h2>Diagnostics</h2><dl><dt>Version</dt><dd>${__DOCFLOW_VERSION__}</dd><dt>Build</dt><dd>${__DOCFLOW_BUILD__}</dd><dt>Online</dt><dd>${navigator.onLine}</dd><dt>Worker support</dt><dd>${typeof Worker !== 'undefined'}</dd><dt>Service worker</dt><dd>${'serviceWorker' in navigator}</dd><dt>Storage estimate</dt><dd id="storage-estimate">Checking…</dd></dl>`;
       infoDialog.showModal();
       if (navigator.storage?.estimate) void navigator.storage.estimate().then(({usage, quota}) => {

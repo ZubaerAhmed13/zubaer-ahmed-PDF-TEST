@@ -1,3 +1,4 @@
+import { addOutputSharing } from '../app/fileExport';
 import { workspaceRuntime } from '../app/workspaceRuntime';
 import type { ToolDefinition } from './registry';
 import { mountWorkspace as mountBaseWorkspace } from './workspace';
@@ -106,7 +107,8 @@ export function mountWorkspace(container: HTMLDivElement, tool: ToolDefinition):
     outputUrl = URL.createObjectURL(blob);
     const status = protectMode ? 'AES-256 protection applied locally.' : 'Encryption removed locally after password validation.';
     result.innerHTML = `<div class="notice"><strong>${protectMode ? 'Protected PDF ready' : 'Unlocked PDF ready'}</strong><p>${escapeHtml(status)} Password data was not persisted by DocFlow.</p></div><a class="download" href="${outputUrl}" download="${escapeHtml(output.name)}">Download ${escapeHtml(output.name)} <span>${humanBytes(blob.size)}</span></a>`;
-  };
+
+    addOutputSharing(result, operationResult.outputs);  };
 
   const execute = async (): Promise<void> => {
     if (disposed || running) return;

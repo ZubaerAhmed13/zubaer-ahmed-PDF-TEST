@@ -1,3 +1,4 @@
+import { assertOfflineOcr } from '../app/offline';
 import * as pdfjs from 'pdfjs-dist';
 import type { PDFPageProxy } from 'pdfjs-dist';
 import { PDFDocument, StandardFonts, type PDFFont } from 'pdf-lib';
@@ -90,11 +91,12 @@ export async function ocrPdf(
         }
         if (!tesseract) {
           onProgress(pageNumber - 1, count, 'Loading local ' + language + ' OCR engine');
+          await assertOfflineOcr(language);
           const loading = createWorker(language, 1, {
             workerPath: local + 'ocr/worker.min.js',
             corePath: local + 'ocr/core',
             langPath: local + 'ocr/lang',
-            gzip: true,
+            gzip: false,
             workerBlobURL: false,
             cacheMethod: 'write'
           });

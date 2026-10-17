@@ -1,4 +1,5 @@
 import "../styles/direct-edit.css";
+import { addShareButton } from "../app/fileExport";
 import { workspaceRuntime } from "../app/workspaceRuntime";
 import { mountSignaturePad } from "../app/signaturePad";
 import { createPreview, type PreviewController } from "../pdf/render";
@@ -24,7 +25,7 @@ export function mountWorkspace(
   root.innerHTML = `<section class="direct-editor" data-direct-editor><header><h2>Edit PDF</h2><p>Add text, images, shapes, visual signatures and editable sticky-note comments. Original page text stays unchanged. All work stays in this tab.</p><label>Source PDF<input id="workspace-file" aria-label="Source files" type="file" accept="application/pdf,.pdf"></label><div data-document-invitation-slot></div></header>
   <div class="direct-toolbar" aria-label="Editor tools"><button data-add="text">Add text</button><button data-add="rectangle">Rectangle</button><button data-add="highlight">Highlight region</button><label class="direct-image-label">Add image<input data-image type="file" accept="image/png,image/jpeg"></label><button data-sign>Visual signature</button><button data-add="comment">Add comment</button><button data-crop>Crop page</button><button data-undo>Undo edit</button><button data-redo>Redo edit</button><label><input data-snap type="checkbox" checked> Snap to page</label></div>
   <div class="direct-navigation"><button data-prev>Previous page</button><label>Page<input data-page type="number" value="1" min="1"></label><span data-count></span><button data-next>Next page</button><label>Zoom<select data-zoom><option value="fit">Fit width</option><option value="0.75">75%</option><option value="1">100%</option><option value="1.5">150%</option><option value="2">200%</option></select></label></div>
-  <div class="direct-layout"><div class="direct-scroll" role="region" tabindex="0" aria-label="Editable PDF page"><div class="direct-page"><canvas></canvas><div class="direct-overlay" aria-label="Added content"></div></div></div><aside class="direct-inspector"><h3>Objects and comments</h3><p>Shift-click to select several objects. Drag to move; use the corner handle to resize. Arrow keys nudge by 1 point, Shift by 10. Delete removes selected objects.</p><div data-objects></div><form data-properties><label>Content<textarea name="text" rows="3"></textarea></label><div class="direct-numbers">${["x", "y", "width", "height", "size"].map((n) => `<label>${n === "size" ? "Font size" : n[0]!.toUpperCase() + n.slice(1)}<input type="number" step="0.5" name="${n}" min="${["x", "y"].includes(n) ? 0 : 1}"></label>`).join("")}</div><label>Color<input name="color" type="color" value="#203047"></label><button type="submit">Apply properties</button></form><div class="direct-toolbar"><button data-duplicate>Duplicate selected</button><button data-delete>Delete selected</button><button data-align="left">Align left</button><button data-align="center">Align centers</button><button data-align="top">Align top</button></div><label>Copy selected to pages<input data-copy-pages placeholder="2,3,4"></label><button data-copy>Copy to pages</button><button data-clear-crop>Reset crop</button><p data-crop-help hidden>Crop hides content; it does not securely remove it. Drag the crop frame or its four corners, or edit X, Y, Width and Height above.</p></aside></div>
+  <div class="direct-pan-controls"><button type="button" data-select-mode aria-pressed="true">Select objects</button><button type="button" data-pan-mode aria-pressed="false">Pan page</button><button type="button" data-properties-toggle>Object properties</button></div><p class="direct-pan-help" data-pan-help>Select objects to edit. Use Pan page for touch scrolling and browser pinch zoom. Properties and move buttons work without dragging.</p><div class="direct-layout"><div class="direct-scroll" role="region" tabindex="0" aria-label="Editable PDF page"><div class="direct-page"><canvas></canvas><div class="direct-overlay" aria-label="Added content"></div></div></div><details class="direct-inspector" open><summary>Objects and comments</summary><p>Shift-click to select several objects. Drag to move; use the corner handle to resize. Arrow keys nudge by 1 point, Shift by 10. Delete removes selected objects.</p><div data-objects></div><form data-properties><label>Content<textarea name="text" rows="3"></textarea></label><div class="direct-numbers">${["x", "y", "width", "height", "size"].map((n) => `<label>${n === "size" ? "Font size" : n[0]!.toUpperCase() + n.slice(1)}<input type="number" step="0.5" name="${n}" min="${["x", "y"].includes(n) ? 0 : 1}"></label>`).join("")}</div><label>Color<input name="color" type="color" value="#203047"></label><button type="submit">Apply properties</button></form><div class="direct-nudge" aria-label="Move selected objects"><button type="button" data-nudge="left">Move left</button><button type="button" data-nudge="right">Move right</button><button type="button" data-nudge="up">Move up</button><button type="button" data-nudge="down">Move down</button></div><div class="direct-toolbar"><button data-duplicate>Duplicate selected</button><button data-delete>Delete selected</button><button data-align="left">Align left</button><button data-align="center">Align centers</button><button data-align="top">Align top</button></div><label>Copy selected to pages<input data-copy-pages placeholder="2,3,4"></label><button data-copy>Copy to pages</button><button data-clear-crop>Reset crop</button><p data-crop-help hidden>Crop hides content; it does not securely remove it. Drag the crop frame or its four corners, or edit X, Y, Width and Height above.</p></details></div>
   <section data-sign-panel hidden><h3>Visual signature</h3><div data-sign-pad></div><label>Or type a signature<input data-sign-name></label><button data-sign-add>Add signature to page</button><button data-sign-close>Close signature panel</button><p>This is a visible mark, not a cryptographic signature.</p></section><p id="stage" role="status" aria-live="polite">Choose a PDF to begin.</p><p id="error" role="alert" hidden></p><div class="direct-export-actions"><button id="cancel-operation" disabled>Cancel</button><button id="run-operation" class="primary" disabled>Run Edit PDF</button></div><div data-download></div></section>`;
   const q = <T extends Element = HTMLElement>(selector: string): T =>
     root.querySelector<T>(selector)!;
@@ -43,6 +44,7 @@ export function mountWorkspace(
     plan = history.current,
     selected = new Set<string>(),
     cropMode = false;
+  let panMode = false;
   let generation = 0,
     disposed = false,
     running: RunningOperation | null = null,
@@ -437,7 +439,7 @@ export function mountWorkspace(
   overlay.addEventListener(
     "pointerdown",
     (e) => {
-      if (busy || e.button !== 0) return;
+      if (panMode || busy || e.button !== 0) return;
       const target = e.target as Element,
         objectElement = target.closest<HTMLElement>("[data-object]"),
         crop = target.closest("[data-crop-box]");
@@ -483,7 +485,7 @@ export function mountWorkspace(
   overlay.addEventListener(
     "pointermove",
     (e) => {
-      if (!drag) return;
+      if (!drag || drag.pointer !== e.pointerId) return;
       const dx = (e.clientX - drag.x) / scale,
         dy = (e.clientY - drag.y) / scale;
       for (const { target, original: o } of drag.objects) {
@@ -521,7 +523,42 @@ export function mountWorkspace(
     }
   };
   overlay.addEventListener("pointerup", endDrag, { signal });
-  overlay.addEventListener("pointercancel", endDrag, { signal });
+  const cancelDrag = (): void => {
+    if (!drag) return;
+    for (const { target, original } of drag.objects) Object.assign(target, original);
+    drag = null;
+    draw();
+  };
+  overlay.addEventListener("pointercancel", cancelDrag, { signal });
+  overlay.addEventListener("lostpointercapture", cancelDrag, { signal });
+  const setPan = (value: boolean): void => {
+    cancelDrag(); panMode = value;
+    overlay.dataset.pan = String(value);
+    q("[data-select-mode]").setAttribute("aria-pressed", String(!value));
+    q("[data-pan-mode]").setAttribute("aria-pressed", String(value));
+  };
+  listen("[data-select-mode]", () => setPan(false));
+  listen("[data-pan-mode]", () => setPan(true));
+  listen("[data-properties-toggle]", () => {
+    const inspector = q<HTMLDetailsElement>(".direct-inspector");
+    inspector.open = true; inspector.scrollIntoView({ block: "nearest" });
+    inspector.querySelector<HTMLElement>("summary")?.focus();
+  });
+  if (matchMedia("(pointer: coarse)").matches) {
+    setPan(true);
+    q<HTMLDetailsElement>(".direct-inspector").open = false;
+  }
+  root.querySelectorAll<HTMLButtonElement>("[data-nudge]").forEach(button => {
+    button.addEventListener("click", () => {
+      if (!activeFrame() || busy) return;
+      const targets = cropMode ? [plan.crops[String(currentPage)]!] : chosen().filter(o => o.page === currentPage);
+      for (const o of targets) Object.assign(o, constrain({ ...o,
+        x: o.x + (button.dataset.nudge === "right" ? 5 : button.dataset.nudge === "left" ? -5 : 0),
+        y: o.y + (button.dataset.nudge === "down" ? 5 : button.dataset.nudge === "up" ? -5 : 0)
+      }, activeFrame()!));
+      commit();
+    }, { signal });
+  });
   root.addEventListener(
     "keydown",
     (e) => {
@@ -709,6 +746,7 @@ export function mountWorkspace(
         link.download = output.name;
         link.textContent = "Download edited PDF";
         q("[data-download]").replaceChildren(link);
+        addShareButton(link, new Blob([output.buffer], { type: output.type }));
         stage.textContent =
           "Edits ready. Download the PDF or use the result to continue.";
       } catch (e) {

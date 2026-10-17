@@ -1,3 +1,4 @@
+import { addOutputSharing } from '../app/fileExport';
 import { workspaceRuntime } from '../app/workspaceRuntime';
 import type { ToolDefinition } from './registry';
 import { mountWorkspace as mountRecoveredWorkspace } from './workspaceWithRecovery';
@@ -117,7 +118,8 @@ export function mountWorkspace(container: HTMLDivElement, tool: ToolDefinition):
     const blob = new Blob([output.buffer], { type: output.type });
     outputUrl = URL.createObjectURL(blob);
     result.innerHTML = `<a class="download" href="${outputUrl}" download="${escapeHtml(output.name)}">Download ${escapeHtml(output.name)} <span>${humanBytes(blob.size)}</span></a>`;
-  };
+
+    addOutputSharing(result, operationResult.outputs);  };
 
   const toggleMode = (): void => {
     const imageMode = mode.value === 'image';

@@ -26,6 +26,28 @@ async function updateCheck(states: ('safe' | 'work' | 'unresponsive')[]): Promis
 }
 
 describe('actual generated service-worker update protocol', () => {
+  it('keeps successful online asset responses when cache storage is denied or full', async () => {
+    const generator = readFileSync('scripts/generate-sw.mjs', 'utf8');
+    const template = generator.slice(generator.indexOf('const source = `') + 16, generator.lastIndexOf('`;'));
+    const source = template.replace('${version}', 'test').replace('${JSON.stringify(precache)}', '[]');
+    for (const denied of [true, false]) {
+      const listeners = new Map<string, (event: unknown) => void>();
+      const cache = { match: async () => undefined, put: async () => { throw Error('full'); } };
+      const response = { ok: true, clone: () => response, body: 'network-engine-bytes' };
+      runInNewContext(source, {
+        self: { registration: { scope: 'https://example.test/docflow/' }, location: { origin: 'https://example.test' }, addEventListener: (name: string, callback: (event: unknown) => void) => listeners.set(name, callback) },
+        URL, MessageChannel, setTimeout, clearTimeout,
+        fetch: async () => response,
+        caches: { open: async () => { if (denied) throw Error('denied'); return cache; }, match: async () => undefined }
+      });
+      for (const mode of ['cors', 'navigate']) {
+        let result: Promise<unknown> | undefined;
+        listeners.get('fetch')!({ request: { method: 'GET', mode, url: 'https://example.test/docflow/ocr/worker.min.js' }, respondWith: (promise: Promise<unknown>) => { result = promise; } });
+        expect(await result).toBe(response);
+      }
+    }
+  });
+
   it('uses the current application shell offline while retaining older hashed assets', async () => {
     const generator = readFileSync('scripts/generate-sw.mjs', 'utf8');
     const template = generator.slice(generator.indexOf('const source = `') + 16, generator.lastIndexOf('`;'));

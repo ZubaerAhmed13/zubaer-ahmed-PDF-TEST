@@ -7,6 +7,8 @@ Production: https://zubaerahmed13.github.io/zubaer-ahmed-PDF-TEST/
 ## Current release
 Package version and diagnostics share one build-time source; diagnostics also shows the exact Git commit supplied by the release runner.
 
+R3 (0.5.0) adds verified offline-asset setup, explicit English/German OCR downloads, mobile pan/select and non-drag controls, viewport/keyboard handling and capability-detected Save/share. Open **Offline & storage** or **Help & offline** to prepare this browser. [R3 scope and device acceptance](docs/R3_RELEASE.md).
+
 R2 (0.4.0) adds direct page editing, visual crop handles, native sticky-note comments, Unicode added text, reader search/navigation, and on-page form controls. [R2 scope and evidence](docs/R2_RELEASE.md).
 
 R1 (0.3.0) adds an optional in-memory document session: open once, switch tools, review/apply results, undo/redo revisions and export. Use **Open a PDF**, or **Keep working with this PDF** inside a tool. [R1 scope and evidence](docs/R1_RELEASE.md).

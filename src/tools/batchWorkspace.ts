@@ -1,3 +1,4 @@
+import { addShareButton, addOutputSharing } from '../app/fileExport';
 import { workspaceRuntime } from '../app/workspaceRuntime';
 import '../styles/batch.css';
 import type { ToolDefinition } from './registry';
@@ -183,6 +184,7 @@ export function mountWorkspace(container: HTMLDivElement, tool: ToolDefinition):
       urls.push(url);
       return `<a class="download" href="${url}" download="${escapeHtml(output.name)}">Download ${escapeHtml(output.name)} <span>${humanBytes(blob.size)}</span></a>`;
     }).join('');
+    addOutputSharing(results, completed.map(item => item.output!));
     zipButton.disabled = locked || completed.length === 0;
   };
 
@@ -308,6 +310,7 @@ export function mountWorkspace(container: HTMLDivElement, tool: ToolDefinition):
       link.download = 'docflow-batch-results.zip';
       link.textContent = `Download docflow-batch-results.zip (${humanBytes(blob.size)})`;
       results.prepend(link);
+      addShareButton(link, blob);
       setProgress(`ZIP ready · ${completed.length} output${completed.length === 1 ? '' : 's'}`, 100);
     } catch (error) {
       setError(error instanceof Error ? error.message : 'Could not prepare the ZIP archive.');

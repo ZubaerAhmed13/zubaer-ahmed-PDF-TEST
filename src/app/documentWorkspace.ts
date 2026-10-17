@@ -1,3 +1,4 @@
+import { addShareButton } from './fileExport';
 import { tools, type ToolDefinition } from '../tools/registry';
 import { DocumentSession, pdfFilename, validateSessionPdf } from './documentSession';
 import { connectWorkspace } from './workspaceRuntime';
@@ -67,7 +68,7 @@ export class DocumentWorkspace {
       () => { this.unmount(); options.root.dispatchEvent(new CustomEvent('docflow-cleanup')); this.session.clear(); this.files = []; this.draft = false; }
     );
     window.addEventListener('beforeunload', event => {
-      if (!this.session.snapshot().current && !this.busy) return;
+      if (!this.session.snapshot().current && !this.busy && !this.files.length && !this.draft) return;
       event.preventDefault(); event.returnValue = '';
     });
     this.render();
@@ -263,6 +264,10 @@ export class DocumentWorkspace {
       ${pending ? `<div class="session-result" role="status"><div><strong>Result ready · not yet applied</strong><span>${pending.exportOnly ? 'Encrypted results are download-only. Unlock a copy before editing it again.' : pending.barrier ? 'Using this redacted result clears all earlier revisions and source previews from this session. Your file on the device stays unchanged.' : 'Review the result, then use it as your next working revision.'}</span></div>${pending.files.length > 1 ? `<label>Choose result<select data-session-output aria-label="Choose PDF result" ${disabled}>${pending.files.map((file, index) => `<option value="${index}" ${index === outputIndex ? 'selected' : ''}>${escape(file.name)}</option>`).join('')}</select></label>` : ''}<button type="button" class="secondary" data-session-action="result" ${disabled}>Review result</button><button type="button" class="primary" data-session-action="apply" ${this.busy || pending.exportOnly ? 'disabled' : ''}>${pending.barrier ? 'Use redacted result and clear history' : 'Use result'}</button><a class="secondary session-download" href="${selected ? this.url(selected) : '#'}" download="${escape(selected?.name ?? 'result.pdf')}">Download result</a><button type="button" class="secondary" data-session-action="discard" ${disabled}>Discard result</button></div>` : ''}
       ${state.selection.length && this.options.root.querySelector('#tool-options input[name=pages]') ? '<button type="button" class="secondary" data-session-action="selection">Use selected pages (' + state.selection.join(', ') + ')</button>' : ''}<details class="session-history"><summary>History (${state.history.length})${state.selection.length ? ' · ' + state.selection.length + ' pages selected' : ''}</summary><ol>${state.history.map((revision, index) => `<li ${index === state.index ? 'aria-current="step"' : ''}>${escape(revision.label)}${index === state.index ? ' · current' : index > state.index ? ' · redo available' : ''}</li>`).join('')}</ol><p>Up to 8 revisions plus the starting file, with a 128 MB history budget. Larger documents retain only the required starting/current copies. ${state.historyLimited ? 'Older undo states were released to limit memory.' : ''} Redaction clears earlier history. Nothing here is saved to disk or cloud.</p></details>
       <p class="session-notice" role="status">${escape(this.notice || (this.busy ? 'Processing locally… Your current revision stays unchanged until you use a result.' : inputDiffers ? 'This tool has a different source selected. Using its result replaces the working copy; the original stays separate.' : this.viewing === state.original?.file && state.original?.label === 'Starting point after redaction' ? 'Earlier source previews were cleared after redaction.' : ''))}</p>`;
+    const exportLink = toolbar.querySelector<HTMLAnchorElement>('[data-session-action="export"]');
+    if (exportLink) addShareButton(exportLink, state.current.file, () => { if (this.session.snapshot().current?.id === state.current!.id) this.session.markExported(); });
+    const resultLink = toolbar.querySelector<HTMLAnchorElement>('.session-result a[download]');
+    if (resultLink && selected) addShareButton(resultLink, selected);
   }
 
   private async click(event: MouseEvent): Promise<void> {
