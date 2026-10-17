@@ -384,7 +384,7 @@ export function mountWorkspace(container: HTMLDivElement, tool: ToolDefinition):
     inspectionRun?.cancel();
     if (!records.length) { setError(`Choose ${tool.multipleFiles ? 'files' : 'a file'} first.`); return; }
     if (tool.id === 'compare' && records.length !== 2) { setError('Choose exactly two PDFs to compare.'); return; }
-    if (!optionsForm.reportValidity()) return;
+    if (['ocr', 'compare', 'images-to-pdf'].includes(tool.id) && !optionsForm.reportValidity()) return;
     setError();
     clearUrls();
     resultArea.replaceChildren();

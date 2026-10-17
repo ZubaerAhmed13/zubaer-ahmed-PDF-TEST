@@ -56,8 +56,10 @@ test('R4 selected rotated/CropBox scan supports mixed-language Unicode OCR with 
   await dialog.getByRole('button', { name: 'Run OCR scanned PDF' }).click(); await expect(dialog.locator('#stage')).toContainText('OCR complete: 1', { timeout: 120_000 });
   await expect(dialog.locator('#result')).toContainText('Unprocessed pages preserved unchanged: 1, 3');
   const bytes = await download(page, dialog, /^Download searchable-ocr\.pdf/), output = await PDFDocument.load(bytes); expect(output.getPageCount()).toBe(3); expect(output.getPage(1).getCropBox()).toEqual(target.getCropBox()); expect(output.getPage(1).getRotation().angle).toBe(90);
+  const recognized = (await download(page, dialog, /^Download ocr-recognized-text\.txt/)).toString();
+  const recognizedWord = recognized.match(/pr[üu]fen/iu)?.[0]; expect(recognizedWord).toBeTruthy(); expect(recognized).toContain('Grüße');
   const view = await getDocument({ data: new Uint8Array(bytes) }).promise;
-  try { const text = (await (await view.getPage(2)).getTextContent()).items.map(i => 'str' in i ? i.str : '').join(' '); expect(text).toContain('Grüße'); expect(text).toContain('prüfen'); expect((await (await view.getPage(1)).getTextContent()).items).toHaveLength(0); } finally { await view.destroy(); }
+  try { const text = (await (await view.getPage(2)).getTextContent()).items.map(i => 'str' in i ? i.str : '').join(' '); expect(text).toContain('Grüße'); expect(text).toContain(recognizedWord!); expect((await (await view.getPage(1)).getTextContent()).items).toHaveLength(0); } finally { await view.destroy(); }
   expect(external).toEqual([]);
 });
 

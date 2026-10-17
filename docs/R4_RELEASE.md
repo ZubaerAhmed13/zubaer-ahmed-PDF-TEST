@@ -24,7 +24,7 @@ Initial local run: Tesseract.js 7.0.0, packaged LSTM models, original pixels wit
 | Difficult (5° skew; low contrast + blur) | 4 | 842 | 3 | 0.356% |
 | Mixed English/German | 1 | 149 | 0 | 0.000% |
 
-These small synthetic measurements are regression evidence, not a general accuracy claim. Handwriting, complex layouts, shadows, camera noise and additional scripts are not certified. The Node benchmark measures the same packaged recognition engine/models; browser export and geometry have separate tests.
+These small synthetic measurements are regression evidence, not a general accuracy claim. Handwriting, complex layouts, shadows, camera noise and additional scripts are not certified. The Node benchmark measures the same packaged recognition engine/models; browser export and geometry have separate tests. Browser resampling changes recognition: the rotated mixed-language browser fixture recognized some umlauts as plain vowels (for example `prufen`, `Koln`, `Munchen`) while retaining `Grüße`. The searchable layer must preserve what the engine actually recognized; users still need to review accents and important information.
 
 ## Verification and boundaries
 
