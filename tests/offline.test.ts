@@ -28,6 +28,8 @@ describe('offline files, cancellation and storage failures', () => {
     expect(progress).toHaveBeenCalledWith(bytes.length, bytes.length);
     expect(assetBytes(manifest.groups.eng)).toBe(bytes.length);
     const [url] = stored.keys();
+    stored.set(url!, new Response(new Uint8Array(bytes.length)));
+    expect(await missingAssets(manifest, 'eng')).toEqual([asset]);
     stored.set(url!, new Response('truncated'));
     expect(await missingAssets(manifest, 'eng')).toEqual([asset]);
     stored.clear();

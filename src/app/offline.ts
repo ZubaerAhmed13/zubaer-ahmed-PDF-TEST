@@ -5,6 +5,7 @@ export interface OfflineManifest {
   groups: Record<OfflineGroup, OfflineAsset[]>;
 }
 const base = (): string => new URL(import.meta.env.BASE_URL, location.origin).href;
+const digest = async (bytes: ArrayBuffer): Promise<string> => Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', bytes)), b => b.toString(16).padStart(2, '0')).join('');
 const assetUrl = (asset: OfflineAsset): string => new URL(asset.path, base()).href;
 export const assetBytes = (assets: OfflineAsset[]): number => assets.reduce((sum, asset) => sum + asset.bytes, 0);
 export const sizeLabel = (bytes: number): string => `${(bytes / 1048576).toFixed(1)} MB`;
@@ -23,8 +24,10 @@ export async function missingAssets(manifest: OfflineManifest, group: OfflineGro
   const missing: OfflineAsset[] = [];
   for (const asset of manifest.groups[group]) {
     const response = await cache.match(assetUrl(asset));
-    // Read the stored body, not just a flag: eviction and truncated entries must show as missing.
-    if (!response?.ok || (await response.blob()).size !== asset.bytes) missing.push(asset);
+    // Verify real stored bytes: eviction, truncation and same-size corruption must show as missing.
+    if (!response?.ok) { missing.push(asset); continue; }
+    const bytes = await response.arrayBuffer();
+    if (bytes.byteLength !== asset.bytes || (asset.sha256 && await digest(bytes) !== asset.sha256)) missing.push(asset);
   }
   if (group === 'core') {
     // Both shell URLs and the setup manifest are required for an offline reload.
@@ -50,17 +53,16 @@ export async function prepareOffline(
   let done = 0;
   for (const asset of assets) {
     signal.throwIfAborted();
-    const response = await fetch(assetUrl(asset), { signal, cache: 'reload' });
+    const response = await fetch(assetUrl(asset), { signal, cache: 'reload', headers: { 'X-DocFlow-Prepare': '1' } });
     if (!response.ok) throw Error('An offline asset could not be downloaded. Reconnect and retry.');
-    const bytes = await response.arrayBuffer();
+    const bytes = await response.clone().arrayBuffer();
     signal.throwIfAborted();
     if (asset.bytes && bytes.byteLength !== asset.bytes) throw Error('An offline download is incomplete. Reconnect and retry.');
     if (asset.sha256) {
-      const digest = Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', bytes)), b => b.toString(16).padStart(2, '0')).join('');
-      if (digest !== asset.sha256) throw Error('An offline download did not match this release. Reload after exporting your work.');
+      if (await digest(bytes) !== asset.sha256) throw Error('An offline download did not match this release. Reload after exporting your work.');
     }
     signal.throwIfAborted();
-    await cache.put(assetUrl(asset), new Response(bytes, { headers: response.headers }));
+    await cache.put(assetUrl(asset), response);
     done += bytes.byteLength;
     progress(done, total);
   }

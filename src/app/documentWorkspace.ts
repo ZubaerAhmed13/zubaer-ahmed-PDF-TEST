@@ -68,7 +68,7 @@ export class DocumentWorkspace {
       () => { this.unmount(); options.root.dispatchEvent(new CustomEvent('docflow-cleanup')); this.session.clear(); this.files = []; this.draft = false; }
     );
     window.addEventListener('beforeunload', event => {
-      if (!this.session.snapshot().current && !this.busy) return;
+      if (!this.session.snapshot().current && !this.busy && !this.files.length && !this.draft) return;
       event.preventDefault(); event.returnValue = '';
     });
     this.render();
@@ -265,7 +265,7 @@ export class DocumentWorkspace {
       ${state.selection.length && this.options.root.querySelector('#tool-options input[name=pages]') ? '<button type="button" class="secondary" data-session-action="selection">Use selected pages (' + state.selection.join(', ') + ')</button>' : ''}<details class="session-history"><summary>History (${state.history.length})${state.selection.length ? ' · ' + state.selection.length + ' pages selected' : ''}</summary><ol>${state.history.map((revision, index) => `<li ${index === state.index ? 'aria-current="step"' : ''}>${escape(revision.label)}${index === state.index ? ' · current' : index > state.index ? ' · redo available' : ''}</li>`).join('')}</ol><p>Up to 8 revisions plus the starting file, with a 128 MB history budget. Larger documents retain only the required starting/current copies. ${state.historyLimited ? 'Older undo states were released to limit memory.' : ''} Redaction clears earlier history. Nothing here is saved to disk or cloud.</p></details>
       <p class="session-notice" role="status">${escape(this.notice || (this.busy ? 'Processing locally… Your current revision stays unchanged until you use a result.' : inputDiffers ? 'This tool has a different source selected. Using its result replaces the working copy; the original stays separate.' : this.viewing === state.original?.file && state.original?.label === 'Starting point after redaction' ? 'Earlier source previews were cleared after redaction.' : ''))}</p>`;
     const exportLink = toolbar.querySelector<HTMLAnchorElement>('[data-session-action="export"]');
-    if (exportLink) addShareButton(exportLink, state.current.file, () => this.session.markExported());
+    if (exportLink) addShareButton(exportLink, state.current.file, () => { if (this.session.snapshot().current?.id === state.current!.id) this.session.markExported(); });
     const resultLink = toolbar.querySelector<HTMLAnchorElement>('.session-result a[download]');
     if (resultLink && selected) addShareButton(resultLink, selected);
   }

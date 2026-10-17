@@ -1,4 +1,4 @@
-import { addOutputSharing } from '../app/fileExport';
+import { addOutputSharing, addShareButton } from '../app/fileExport';
 import { showDerivedFormPreview } from '../app/preEditPreview';
 import { mountFormPageOverlay } from '../app/formPageOverlay';
 import { workspaceRuntime } from '../app/workspaceRuntime';
@@ -461,6 +461,7 @@ export function mountWorkspace(container: HTMLDivElement, tool: ToolDefinition):
         link.download = 'pdf-comparison-report.txt';
         link.textContent = 'Download comparison report';
         resultArea.replaceChildren(link);
+        addShareButton(link, summary.report);
         setProgress('Comparison complete', 100);
         return;
       }
@@ -500,6 +501,7 @@ export function mountWorkspace(container: HTMLDivElement, tool: ToolDefinition):
         if (mainCancelled) throw new DOMException('Operation cancelled', 'AbortError');
         const url = URL.createObjectURL(blob); objectUrls.push(url);
         resultArea.innerHTML = `<a class="download" href="${url}" download="pdf-images.zip">Download pdf-images.zip <span>${humanBytes(blob.size)}</span></a>`;
+        addShareButton(resultArea.querySelector<HTMLAnchorElement>('a[download]')!, blob);
         setProgress('Complete', 100);
         return;
       }

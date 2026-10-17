@@ -102,8 +102,10 @@ self.addEventListener('message', event => {
 });
 
 async function matchStatic(request) {
-  const current = await caches.open(CACHE_NAME);
-  return (await current.match(request, { ignoreVary: true })) || caches.match(request, { ignoreVary: true });
+  try {
+    const current = await caches.open(CACHE_NAME);
+    return (await current.match(request, { ignoreVary: true })) || await caches.match(request, { ignoreVary: true });
+  } catch { return undefined; }
 }
 
 self.addEventListener('fetch', (event) => {
@@ -111,6 +113,11 @@ self.addEventListener('fetch', (event) => {
   if (request.method !== 'GET') return;
   const url = new URL(request.url);
   if (url.origin !== self.location.origin) return;
+  // Setup validates exact bytes before publishing to a cache. Do not pre-cache its unverified response.
+  if (request.headers?.get('X-DocFlow-Prepare') === '1') {
+    event.respondWith(fetch(request));
+    return;
+  }
 
   if (request.mode === 'navigate') {
     event.respondWith((async () => {
@@ -120,8 +127,10 @@ self.addEventListener('fetch', (event) => {
       try {
         const response = await fetch(request);
         if (response.ok) {
-          const cache = await caches.open(CACHE_NAME);
-          try { await cache.put(request, response.clone()); } catch { /* Cache eviction/quota is non-fatal online. */ }
+          try {
+            const cache = await caches.open(CACHE_NAME);
+            await cache.put(request, response.clone());
+          } catch { /* Cache eviction/quota is non-fatal online. */ }
         }
         return response;
       } catch {
@@ -133,13 +142,13 @@ self.addEventListener('fetch', (event) => {
 
   event.respondWith((async () => {
     const isOcr = url.pathname.startsWith(new URL('./ocr/', self.registration.scope).pathname);
-    const cache = await caches.open(isOcr ? OCR_CACHE : CACHE_NAME);
-    const cached = isOcr ? await cache.match(request) : await matchStatic(request);
+    const cache = await caches.open(isOcr ? OCR_CACHE : CACHE_NAME).catch(() => null);
+    const cached = isOcr ? await cache?.match(request).catch(() => undefined) : await matchStatic(request);
     if (cached && request.cache !== 'reload') return cached;
     const response = await fetch(request);
     if (response.ok) {
       // A quota error must never turn a successful fetch into a broken tool.
-      try { await cache.put(request, response.clone()); } catch { /* Readiness reports missing assets. */ }
+      try { await cache?.put(request, response.clone()); } catch { /* Readiness reports missing assets. */ }
     }
     return response;
   })());

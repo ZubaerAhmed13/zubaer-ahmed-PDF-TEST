@@ -1,8 +1,9 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, type Page, type BrowserContext } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 import { PDFDocument } from 'pdf-lib';
 import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs';
 import { readFile } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
 
 const app = '/zubaer-ahmed-PDF-TEST/';
 test.use({ actionTimeout: 12_000 });
@@ -14,6 +15,13 @@ async function fixture(): Promise<Buffer> {
 async function start(page: Page): Promise<void> {
   await page.goto(app);
   await page.waitForFunction(() => Boolean(navigator.serviceWorker?.controller), undefined, { timeout: 30_000 });
+}
+async function disconnect(page: Page, context: BrowserContext, browserName: string): Promise<void> {
+  if (browserName !== 'webkit') { await context.setOffline(true); return; }
+  // WebKit's forced-offline shim rejects new workers before its SW can respond.
+  // Deny real network traffic instead; cached SW responses and local workers still execute.
+  await context.route('**/*', route => route.abort('internetdisconnected'));
+  await page.addInitScript(() => Object.defineProperty(navigator, 'onLine', { configurable: true, get: () => false }));
 }
 async function offlinePanel(page: Page): Promise<void> {
   await page.locator('footer [data-action="offline"]').click();
@@ -43,17 +51,22 @@ async function scanned(page: Page): Promise<Buffer> {
   return Buffer.from(await doc.save());
 }
 
-test('prepared mobile core reloads offline, edits with non-drag controls and exports a readable PDF', async ({ page, context }, info) => {
+test('prepared mobile core reloads offline, edits with non-drag controls and exports a readable PDF', async ({ page, context, browserName }, info) => {
   test.setTimeout(150_000);
   await page.setViewportSize({ width: 390, height: 844 });
   await start(page); await offlinePanel(page);
   await expect(page.locator('[data-offline-state="eng"]')).toContainText('missing');
   await page.getByRole('dialog', { name: 'Offline and storage' }).getByRole('button', { name: 'Close', exact: true }).click();
-  await context.setOffline(true);
+  await disconnect(page, context, browserName);
   await page.reload();
   await expect(page.getByRole('heading', { name: /Private PDF tools/ })).toBeVisible();
   await open(page, 'edit-pdf');
   await page.locator('#workspace-file').setInputFiles({ name: 'mobile.pdf', mimeType: 'application/pdf', buffer: await fixture() });
+  await expect(page.locator('#stage')).toContainText('Editing page 1');
+  expect(await page.evaluate(() => window.dispatchEvent(new Event('beforeunload', { cancelable: true })))).toBe(false);
+  await page.getByRole('button', { name: 'Help & offline', exact: true }).click();
+  await expect(page.locator('[data-network]')).toContainText('offline');
+  await page.getByRole('dialog', { name: 'Offline and storage' }).getByRole('button', { name: 'Close', exact: true }).click();
   await expect(page.locator('#stage')).toContainText('Editing page 1');
   await page.getByRole('button', { name: 'Add text', exact: true }).click();
   await page.getByRole('button', { name: 'Object properties', exact: true }).click();
@@ -78,14 +91,14 @@ test('prepared mobile core reloads offline, edits with non-drag controls and exp
   await context.setOffline(false);
 });
 
-test('OCR prepares a language explicitly, runs a real scan offline, and reports an evicted model', async ({ page, context }) => {
+test('OCR prepares a language explicitly, runs a real scan offline, and reports an evicted model', async ({ page, context, browserName }) => {
   test.setTimeout(180_000);
   await start(page); const scan = await scanned(page); await offlinePanel(page);
   await page.getByRole('button', { name: 'Prepare English OCR', exact: true }).click();
   await expect(page.locator('[data-offline-state="eng"]')).toHaveText('Ready in this browser', { timeout: 90_000 });
   await expect(page.locator('[data-offline-state="deu"]')).toContainText('missing');
   await page.getByRole('dialog', { name: 'Offline and storage' }).getByRole('button', { name: 'Close', exact: true }).click();
-  await context.setOffline(true); await page.reload();
+  await disconnect(page, context, browserName); await page.reload();
   await open(page, 'ocr');
   await page.locator('#workspace-file').setInputFiles({ name: 'scan.pdf', mimeType: 'application/pdf', buffer: scan });
   await page.getByRole('button', { name: 'Run OCR scanned PDF', exact: true }).click();
@@ -114,6 +127,7 @@ test('system sharing keeps user activation, shares exact export bytes, and retai
       document.documentElement.dataset.shareGesture = String(navigator.userActivation.isActive);
       document.documentElement.dataset.shareName = file.name;
       document.documentElement.dataset.shareBytes = String(file.size);
+      document.documentElement.dataset.shareHash = Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', await file.arrayBuffer())), b => b.toString(16).padStart(2, '0')).join('');
       throw new DOMException('Cancelled', 'AbortError');
     } });
   });
@@ -128,6 +142,7 @@ test('system sharing keeps user activation, shares exact export bytes, and retai
   await expect(page.locator('html')).toHaveAttribute('data-share-gesture', 'true');
   const bytes = await exported(page, 'Download edited PDF');
   await expect(page.locator('html')).toHaveAttribute('data-share-bytes', String(bytes.length));
+  await expect(page.locator('html')).toHaveAttribute('data-share-hash', createHash('sha256').update(bytes).digest('hex'));
   expect((await PDFDocument.load(bytes)).getPageCount()).toBe(1);
 });
 
