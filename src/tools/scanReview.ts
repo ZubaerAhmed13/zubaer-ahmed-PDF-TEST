@@ -65,6 +65,7 @@ export function mountScanReview(host: HTMLElement, files: () => File[], added: (
         signal.throwIfAborted(); const settings = saved.get(file);
         if (settings) { const { original, corrected } = await process(file, settings, signal); try { result.push(new File([await canvasBlob(corrected)], file.name.replace(/\.[^.]+$/, '') + '-corrected.png', { type: 'image/png' })); } finally { original.width = original.height = corrected.width = corrected.height = 1; } }
         else result.push(file);
+        signal.throwIfAborted();
         progress(i + 1, input.length);
       }
       return result;

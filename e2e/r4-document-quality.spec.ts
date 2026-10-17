@@ -39,6 +39,21 @@ test('R4 photo crop, perspective review, rotate and reorder export a reopenable 
   await expect(dialog.locator('[data-scan-preview] img')).toHaveCount(2);
   await dialog.getByRole('button', { name: 'Move photo-1.png down', exact: true }).click();
   await dialog.locator('select[name=pageSize]').selectOption('original'); await dialog.locator('input[name=margin]').fill('0');
+  // Hold the final PNG encoder to reproduce cancellation between correction and PDF conversion.
+  await page.evaluate(() => {
+    const original = HTMLCanvasElement.prototype.toBlob;
+    HTMLCanvasElement.prototype.toBlob = function(callback, type, quality) {
+      if (this.width === 480 && this.height === 800) {
+        const canvas = this;
+        (window as Window & { releaseR4Encoder?: () => void }).releaseR4Encoder = () => { HTMLCanvasElement.prototype.toBlob = original; original.call(canvas, callback, type, quality); };
+      } else original.call(this, callback, type, quality);
+    };
+  });
+  await dialog.getByRole('button', { name: 'Run Images to PDF' }).click();
+  await expect.poll(() => page.evaluate(() => typeof (window as Window & { releaseR4Encoder?: () => void }).releaseR4Encoder)).toBe('function');
+  await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await page.evaluate(() => (window as Window & { releaseR4Encoder?: () => void }).releaseR4Encoder!());
+  await expect(dialog.locator('#stage')).toHaveText('Cancelled'); await expect(dialog.locator('#result a.download')).toHaveCount(0);
   await dialog.getByRole('button', { name: 'Run Images to PDF' }).click(); await expect(dialog.locator('#stage')).toHaveText('Complete');
   const bytes = await download(page, dialog, /^Download images\.pdf/), pdf = await PDFDocument.load(bytes);
   expect(pdf.getPageCount()).toBe(2); expect(pdf.getPage(0).getSize()).toEqual({ width: 225, height: 300 }); expect(pdf.getPage(1).getWidth()).toBeCloseTo(360, 0); expect(pdf.getPage(1).getHeight()).toBeCloseTo(600, 0);

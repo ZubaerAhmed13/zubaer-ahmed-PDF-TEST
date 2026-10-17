@@ -482,6 +482,7 @@ export function mountWorkspace(container: HTMLDivElement, tool: ToolDefinition):
       if (scanReview) activeAbort = new AbortController();
       const exportFiles = scanReview ? await scanReview.inputs(activeAbort!.signal, (done, total) => setProgress('Correcting photo ' + done + ' of ' + total, done / total * 40)) : records.map(r => r.file);
       const workerFiles = await Promise.all(exportFiles.map(async file => ({ name: file.name, type: file.type, buffer: await file.arrayBuffer() })));
+      if (mainCancelled) throw new DOMException('Operation cancelled', 'AbortError');
       const selectedOptions = formOptions(optionsForm);
       if (tool.id === 'split' && runtime.sessionActive()) selectedOptions.individualPdfResults = true;
       if (tool.id === 'sign-visual') selectedOptions.signaturePng = signaturePad?.getData() ?? '';
