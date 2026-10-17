@@ -6,6 +6,10 @@ pdfjs.GlobalWorkerOptions.workerSrc = new URL('pdfjs-dist/build/pdf.worker.min.m
 export interface SearchHit { page: number; count: number; sample: string }
 export interface TextSearchResult { result: OperationResult; hits: SearchHit[]; pageCount: number; scannedPages: number }
 
+export function markdownText(pages: string[]): string {
+  // Literal content only: do not invent headings, table structure or reading order.
+  return pages.map((text, i) => '## Page ' + (i + 1) + '\n\n' + text.replace(/[\\`*_{}[\]<>()#+.!|~-]/g, '\\$&').replace(/\n/g, '  \n')).join('\n\n---\n\n');
+}
 /** Extract selectable PDF text locally, preserving page boundaries. This is not OCR. */
 export async function extractAndSearchText(
   data: ArrayBuffer, query: string, onProgress: (current: number, total: number) => void,
@@ -55,7 +59,7 @@ export async function extractAndSearchText(
   const output = new TextEncoder().encode(plain);
   return {
     result: {
-      outputs: [{ name: 'extracted-text.txt', type: 'text/plain;charset=utf-8', buffer: output.buffer as ArrayBuffer }],
+      outputs: [{ name: 'extracted-text.txt', type: 'text/plain;charset=utf-8', buffer: output.buffer as ArrayBuffer }, { name: 'extracted-text.md', type: 'text/markdown;charset=utf-8', buffer: new TextEncoder().encode(markdownText(pages)).buffer as ArrayBuffer }],
       info: {
         pageCount: pages.length, scannedOrEmptyPages: scannedPages, matchedPages: hits.length,
         totalMatches: hits.reduce((sum, hit) => sum + hit.count, 0),

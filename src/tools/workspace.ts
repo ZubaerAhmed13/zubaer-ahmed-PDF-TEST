@@ -1,3 +1,6 @@
+import { mountScanReview, scanControls } from './scanReview';
+import { scanOptions, canvasBlob } from '../pdf/scanProcessing';
+import { mountComparisonReview } from './comparisonReview';
 import { addOutputSharing, addShareButton } from '../app/fileExport';
 import { showDerivedFormPreview } from '../app/preEditPreview';
 import { mountFormPageOverlay } from '../app/formPageOverlay';
@@ -38,7 +41,7 @@ function optionMarkup(id: string): string {
     case 'rotate': return `<label>Apply to<select name="target"><option value="all">All pages</option><option value="odd">Odd pages</option><option value="even">Even pages</option><option value="selected">Selected pages</option></select></label><label>Selected pages<input name="pages" placeholder="1,3,5-8"></label><label>Rotation<select name="degrees"><option value="90">90° clockwise</option><option value="180">180°</option><option value="270">270° clockwise</option></select></label>`;
     case 'page-numbers': return `<label>Pages<input name="pages" placeholder="Blank = all pages"></label><label>Starting number<input name="start" type="number" value="1"></label><label>Format<select name="format"><option value="page-total">Page 1 of 20</option><option value="fraction">1 / 20</option><option value="page">Page 1</option><option value="number">1</option></select></label><label>Font size<input name="fontSize" type="number" min="6" max="72" value="11"></label><label>Bottom margin (pt)<input name="margin" type="number" min="4" value="24"></label>`;
     case 'watermark': return `<label>Watermark text<input name="text" value="CONFIDENTIAL"></label><label>Opacity<input name="opacity" type="number" min=".05" max="1" step=".05" value=".18"></label><label>Rotation<input name="rotation" type="number" min="-180" max="180" value="-35"></label><label>Font size<input name="fontSize" type="number" min="12" max="120" value="42"></label>`;
-    case 'images-to-pdf': return `<label>Page size<select name="pageSize"><option value="a4">A4</option><option value="letter">US Letter</option><option value="original">Fit to image dimensions</option></select></label><label>Orientation<select name="orientation"><option value="auto">Auto by image</option><option value="portrait">Portrait</option><option value="landscape">Landscape</option></select></label><label>Page margin (pt)<input name="margin" type="number" min="0" max="150" value="24"></label><label class="check"><input type="checkbox" name="upscale"> Upscale small images to fit the page</label><p class="help">Images stay embedded without re-encoding; original-size pages assume 96 pixels per inch. Change orientation and margin before export.</p>`;
+    case 'images-to-pdf': return `<section data-scan-review class="wide"></section><label>Page size<select name="pageSize"><option value="a4">A4</option><option value="letter">US Letter</option><option value="original">Fit to image dimensions</option></select></label><label>Orientation<select name="orientation"><option value="auto">Auto by image</option><option value="portrait">Portrait</option><option value="landscape">Landscape</option></select></label><label>Page margin (pt)<input name="margin" type="number" min="0" max="150" value="24"></label><label class="check"><input type="checkbox" name="upscale"> Upscale small images to fit the page</label><p class="help">Images stay embedded without re-encoding; original-size pages assume 96 pixels per inch. Change orientation and margin before export.</p>`;
     case 'pdf-to-images': return `<label>Format<select name="format"><option value="png">PNG</option><option value="jpeg">JPEG</option></select></label><label>Render scale<select name="scale"><option value="1">1×</option><option value="1.5" selected>1.5×</option><option value="2">2×</option></select></label><p class="warning-text">Image export rasterizes pages and is intentionally lossy with respect to selectable text/vector structure.</p>`;
     case 'forms': return `<div class="form-inspector"><button type="button" class="secondary" data-inspect-form>Inspect form fields</button><div id="form-field-summary" class="help" role="status" aria-live="polite">Add a PDF form to discover editable fields. XFA documents are reported as unsupported.</div></div><section id="visual-form-editor" class="visual-form-editor" aria-label="Visual PDF form editor"></section><label class="check"><input name="flatten" type="checkbox"> Flatten fields after filling (removes interactive fields)</label><details class="visual-form-advanced"><summary>Advanced JSON values (optional)</summary><label class="wide">Form values as JSON<textarea name="values" rows="7" placeholder='{"CustomerName":"Example","Accepted":true}'></textarea></label><p class="help">For advanced users and compatibility with existing form workflows. Visual fields above update these values automatically.</p></details>`;
     case 'compress': return `<div class="notice"><strong>Limited structural optimization</strong><p>This does not claim professional image compression. It rewrites PDF structure with object streams and reports the before/after size. Images are not intentionally recompressed.</p></div>`;
@@ -48,8 +51,8 @@ function optionMarkup(id: string): string {
     case 'metadata-edit': return `<p class="help">Blank fields preserve existing values. Choose Clear standard properties to empty the standard Info fields. XMP, attachments and hidden content are not sanitised.</p><label>Action<select name="action"><option value="edit">Edit properties</option><option value="clear">Clear standard properties</option></select></label><label>Title<input name="title" maxlength="512"></label><label>Author<input name="author" maxlength="512"></label><label>Subject<input name="subject" maxlength="512"></label><label>Keywords (comma separated)<input name="keywords" maxlength="1000"></label><label>Creator<input name="creator" maxlength="512"></label>`;
     case 'annotate': return `<p class="help">Adds visible marks to page content. These are NOT editable PDF comments, exact text highlights, or secure redactions.</p><label>Mark type<select name="kind"><option value="note">Text note</option><option value="highlight">Coloured highlight region</option><option value="rectangle">Outline rectangle</option></select></label><label>Text note<textarea name="text" maxlength="700" rows="3" placeholder="Review note"></textarea></label><label>Colour<input name="color" type="color" value="#efaa35"></label><label>Pages (blank = all)<input name="pages" placeholder="1,3-5"></label><label>X from left (%)<input name="posX" type="number" min="0" max="100" value="12"></label><label>Y from top (%)<input name="posY" type="number" min="0" max="100" value="12"></label><label>Width (%)<input name="markWidth" type="number" min="2" max="100" value="30"></label><label>Height (%)<input name="markHeight" type="number" min="1" max="100" value="12"></label><label>Note font (pt)<input name="fontSize" type="number" min="7" max="36" value="14"></label>`;
     case 'sign-visual': return `<p class="warning-text">A visible signature is not a certificate-backed cryptographic signature.</p><div id="signature-pad-host"></div><label>Typed signature (used if no drawing)<input name="signatureText" maxlength="150" autocomplete="off" placeholder="Your name"></label><label>Pages (blank = all)<input name="pages" placeholder="1"></label><label>X from left (%)<input name="posX" type="number" min="0" max="100" value="58"></label><label>Y from top (%)<input name="posY" type="number" min="0" max="100" value="82"></label><label>Width (%)<input name="markWidth" type="number" min="2" max="100" value="32"></label><label>Height (%)<input name="markHeight" type="number" min="1" max="100" value="10"></label><label>Typed font size (pt)<input name="fontSize" type="number" min="10" max="42" value="24"></label>`;
-    case 'ocr': return '<div class="notice"><strong>Private, same-origin OCR</strong><p>English and German recognition run on your device. Prepare English or German in Help & offline before disconnecting. Readiness checks verify stored engine files and language models; browser storage may be evicted. OCR can make mistakes; review important information.</p></div><label>Recognition language<select name="language"><option value="eng">English</option><option value="deu">German (Deutsch)</option></select></label><label>Maximum pages (1–30)<input name="maxPages" type="number" min="1" max="30" value="10"></label><label class="check"><input name="skipExistingText" type="checkbox" checked> Skip pages with existing selectable text</label><p class="warning-text">OCR adds an invisible, approximate-position text layer; the original scan remains visible. Rotated pages are skipped rather than misaligned. Searchability is not guaranteed for low-quality scans. No cloud OCR.</p>';
-    case 'compare': return '<div class="notice"><strong>Private PDF comparison</strong><p>Add exactly two PDFs: first is A (original), second is B (revised). Comparison is page-position based: moved pages are reported as differences, not automatically aligned.</p></div><label>Comparison mode<select name="mode"><option value="both">Text + visual (recommended)</option><option value="text">Selectable text only</option><option value="visual">Visual pixels only</option></select></label><label>Maximum page positions (1–50)<input name="maxPages" type="number" min="1" max="50" value="20"></label><p class="help">Visual results use a downscaled page rendering with a pixel-change threshold; antialiasing and different font renderings can cause false positives. Scan-only PDFs cannot be text-compared until OCR is applied.</p><section id="pdf-comparison-results" class="docflow-diff-results" aria-live="polite" aria-label="PDF comparison results"></section>';
+    case 'ocr': return `<div class="notice"><strong>Private, same-origin OCR</strong><p>English and German recognition run on your device. Prepare both language models in Help & offline for mixed-language offline recognition. Review important information; OCR can make mistakes.</p></div><label>Recognition language<select name="language"><option value="eng">English</option><option value="deu">German (Deutsch)</option><option value="eng+deu">English + German</option></select></label><label>Pages to recognize<input name="pages" placeholder="Blank = all; e.g. 2,4-6"></label><label>Maximum pages per run (1–30)<input name="maxPages" type="number" min="1" max="30" value="10"></label><label class="check"><input name="skipExistingText" type="checkbox" checked> Skip pages with existing selectable text</label><details class="wide"><summary>Rotation, deskew & cleanup review</summary><div class="scan-control-grid">${scanControls()}</div><label>Preview source page<input name="previewPage" type="number" min="1" value="1"></label><button type="button" class="secondary" data-ocr-preview>Review before / after</button><p data-ocr-preview-status role="status"></p><div data-ocr-preview-pair class="scan-review-pair"></div></details><p class="warning-text">The source scan remains visible. Correction settings affect recognition only; the invisible Unicode text layer is mapped back to the original scan. Preview your settings before running. The text layer is approximate and is not a tagged or accessible-document certification. Retry selected pages from your original input to avoid duplicate text layers.</p>`;
+    case 'compare': return '<div class="notice"><strong>Private PDF comparison</strong><p>Add exactly two PDFs: first is A (original), second is B (revised). Pages are matched using selectable text or scan thumbnails. Inserted, deleted and moved pages are shown separately. Ambiguous matches are marked for review.</p></div><label>Comparison mode<select name="mode"><option value="both">Text + visual (recommended)</option><option value="text">Selectable text only</option><option value="visual">Visual pixels only</option></select></label><label>Maximum pages per document (1–50)<input name="maxPages" type="number" min="1" max="50" value="20"></label><label>Pixel difference threshold (0–255)<input name="threshold" type="number" min="0" max="255" value="34"></label><label>Changed area tolerance (%)<input name="tolerance" type="number" min="0" max="100" step="0.01" value="0.05"></label><p class="help">Higher thresholds ignore more visual differences. Downscaled rendering can miss small changes. Text changes remain visible regardless of visual tolerance; image-only pages need OCR for word changes.</p><section id="pdf-comparison-results" class="docflow-diff-results" aria-live="polite" aria-label="PDF comparison results"></section>';
     case 'text-search': return `<label>Find text<input name="query" type="search" maxlength="150" placeholder="Enter a phrase (optional)"></label><p class="help">Reads selectable text using PDF.js. Empty search extracts everything. Scanned images require OCR; no OCR is performed.</p><section id="text-search-matches" aria-label="Search results" aria-live="polite"></section>`;
     default: return '';
   }
@@ -162,7 +165,7 @@ export function mountWorkspace(container: HTMLDivElement, tool: ToolDefinition):
   };
   const renderFiles = (): void => {
     runtime.inputs(records.map(record => record.file));
-    list.innerHTML = records.map(({file,id}, index) => `<div class="file-row"><span><strong>${escapeHtml(file.name)}</strong><small>${humanBytes(file.size)}</small></span><button type="button" data-remove="${id}" aria-label="Remove ${escapeHtml(file.name)}">Remove</button>${tool.multipleFiles ? `<span class="order">#${index + 1}</span>` : ''}</div>`).join('');
+    list.innerHTML = records.map(({file,id}, index) => `<div class="file-row"><span><strong>${escapeHtml(file.name)}</strong><small>${humanBytes(file.size)}</small></span><button type="button" data-remove="${id}" aria-label="Remove ${escapeHtml(file.name)}">Remove</button>${tool.multipleFiles ? `<span class="order">#${index + 1}</span><button type="button" data-up="${id}" aria-label="Move ${escapeHtml(file.name)} up" ${index === 0 ? 'disabled' : ''}>↑</button><button type="button" data-down="${id}" aria-label="Move ${escapeHtml(file.name)} down" ${index === records.length - 1 ? 'disabled' : ''}>↓</button>` : ''}</div>`).join('');
     const totalBytes = records.reduce((sum, record) => sum + record.file.size, 0);
     const memory = navigator as Navigator & { deviceMemory?: number };
     const risky = totalBytes > 250 * 1024 * 1024 || ((memory.deviceMemory ?? 8) <= 4 && totalBytes > 100 * 1024 * 1024);
@@ -177,6 +180,7 @@ export function mountWorkspace(container: HTMLDivElement, tool: ToolDefinition):
     if (!tool.multipleFiles) records = valid.slice(0, 1).map((file) => ({file,id:crypto.randomUUID()}));
     else records.push(...valid.map((file) => ({file,id:crypto.randomUUID()})));
     renderFiles();
+    scanReview?.refresh();
     if (tool.id === 'forms') {
       inspectionGeneration += 1;
       inspectionRun?.cancel();
@@ -193,6 +197,28 @@ export function mountWorkspace(container: HTMLDivElement, tool: ToolDefinition):
     }
   };
 
+  const scanHost = container.querySelector<HTMLElement>('[data-scan-review]');
+  const scanReview = scanHost ? mountScanReview(scanHost, () => records.map(r => r.file), addFiles) : null;
+  let ocrPreviewGeneration = 0;
+  let ocrPreviewUrls: string[] = [];
+  container.querySelector('[data-ocr-preview]')?.addEventListener('click', () => {
+    const file = records[0]?.file, generation = ++ocrPreviewGeneration;
+    const status = container.querySelector<HTMLElement>('[data-ocr-preview-status]')!;
+    if (!file) { status.textContent = 'Choose a PDF first.'; return; }
+    status.textContent = 'Preparing review…';
+    void (async () => {
+      const { ocrPreview } = await import('../pdf/localOcr');
+      const cfg = formOptions(optionsForm), { original, corrected } = await ocrPreview(await file.arrayBuffer(), Number(cfg.previewPage ?? 1), scanOptions(cfg));
+      try {
+        const blobs = await Promise.all([canvasBlob(original), canvasBlob(corrected)]);
+        if (disposed || generation !== ocrPreviewGeneration || records[0]?.file !== file) return;
+        const pair = container.querySelector<HTMLElement>('[data-ocr-preview-pair]')!; ocrPreviewUrls.forEach(url => URL.revokeObjectURL(url)); ocrPreviewUrls = []; pair.replaceChildren();
+        blobs.forEach((blob, i) => { const figure = document.createElement('figure'), img = document.createElement('img'), caption = document.createElement('figcaption'); img.src = URL.createObjectURL(blob); ocrPreviewUrls.push(img.src); img.alt = i ? 'After recognition preprocessing' : 'Before recognition preprocessing'; caption.textContent = i ? 'After · used for recognition' : 'Before · source remains visible in PDF'; figure.append(img, caption); pair.append(figure); });
+        status.textContent = 'Review ready. These settings apply to every selected page.';
+      } finally { original.width = original.height = corrected.width = corrected.height = 1; }
+    })().catch((error: unknown) => { if (!disposed && generation === ocrPreviewGeneration) status.textContent = error instanceof Error ? error.message : 'Preview failed.'; });
+  });
+
   input.addEventListener('change', () => { if (input.files) addFiles(input.files); input.value = ''; });
   drop.addEventListener('click', (event) => { if ((event.target as HTMLElement) !== input) input.click(); });
   drop.addEventListener('keydown', (event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); input.click(); } });
@@ -200,10 +226,14 @@ export function mountWorkspace(container: HTMLDivElement, tool: ToolDefinition):
   for (const eventName of ['dragleave','drop']) drop.addEventListener(eventName, (event) => { event.preventDefault(); drop.classList.remove('dragging'); });
   drop.addEventListener('drop', (event) => { if (event.dataTransfer?.files) addFiles(event.dataTransfer.files); });
   list.addEventListener('click', (event) => {
-    const id = (event.target as HTMLElement).closest<HTMLElement>('[data-remove]')?.dataset.remove;
+    const target = (event.target as HTMLElement).closest<HTMLElement>('button');
+    const move = target?.dataset.up ?? target?.dataset.down;
+    if (move) { const index = records.findIndex(r => r.id === move), next = index + (target?.dataset.up ? -1 : 1); if (index >= 0 && next >= 0 && next < records.length) { [records[index], records[next]] = [records[next]!, records[index]!]; renderFiles(); scanReview?.refresh(); } return; }
+    const id = target?.dataset.remove;
     if (!id) return;
     records = records.filter((record) => record.id !== id);
     renderFiles();
+    scanReview?.refresh();
     if (tool.id === 'forms') {
       inspectionGeneration += 1;
       inspectionRun?.cancel();
@@ -353,9 +383,11 @@ export function mountWorkspace(container: HTMLDivElement, tool: ToolDefinition):
     inspectionRun?.cancel();
     if (!records.length) { setError(`Choose ${tool.multipleFiles ? 'files' : 'a file'} first.`); return; }
     if (tool.id === 'compare' && records.length !== 2) { setError('Choose exactly two PDFs to compare.'); return; }
+    if (!optionsForm.reportValidity()) return;
     setError();
     clearUrls();
     resultArea.replaceChildren();
+    compareResults?.replaceChildren();
     mainCancelled = false;
     runtime.busy(true);
     run.disabled = true;
@@ -368,7 +400,8 @@ export function mountWorkspace(container: HTMLDivElement, tool: ToolDefinition):
         activeAbort = new AbortController();
         if (mainCancelled) activeAbort.abort();
         const report = await ocrPdf(await records[0]!.file.arrayBuffer(), {
-          language: cfg.language === 'deu' ? 'deu' : 'eng',
+          language: cfg.language === 'eng+deu' ? 'eng+deu' : cfg.language === 'deu' ? 'deu' : 'eng',
+          pages: String(cfg.pages ?? ''), preprocessing: scanOptions(cfg),
           maxPages: Number(cfg.maxPages ?? 10),
           skipExistingText: cfg.skipExistingText !== false
         }, (done, total, note) => {
@@ -385,74 +418,12 @@ export function mountWorkspace(container: HTMLDivElement, tool: ToolDefinition):
         const mode = cfg.mode === 'visual' ? 'visual' : cfg.mode === 'text' ? 'text' : 'both';
         const summary = await comparePdfs(
           await records[0]!.file.arrayBuffer(), await records[1]!.file.arrayBuffer(),
-          { mode, maxPages: Number(cfg.maxPages ?? 20) },
+          { mode, maxPages: Number(cfg.maxPages ?? 20), threshold: Number(cfg.threshold ?? 34), tolerance: Number(cfg.tolerance ?? .05) },
           (done, total) => { if (!mainCancelled) setProgress('Comparing page ' + done + ' of ' + total, Math.min(96, 4 + done / total * 91)); },
           () => mainCancelled
         );
         if (mainCancelled) throw new DOMException('Comparison cancelled', 'AbortError');
-        if (compareResults) {
-          compareResults.replaceChildren();
-          const headline = document.createElement('p');
-          headline.className = 'docflow-diff-headline';
-          headline.textContent = summary.changedPages + ' changed page position(s) of ' + summary.pagesCompared +
-            ' compared · A: ' + summary.leftPages + ' pages · B: ' + summary.rightPages + ' pages';
-          compareResults.append(headline);
-          if (summary.limited) {
-            const warning = document.createElement('p');
-            warning.className = 'warning-text';
-            warning.textContent = 'Incomplete comparison: increase the page limit to check the remaining pages.';
-            compareResults.append(warning);
-          }
-          if (summary.preview) {
-            const preview = document.createElement('figure');
-            preview.className = 'docflow-diff-preview';
-            const caption = document.createElement('figcaption');
-            caption.textContent = 'Visual comparison — page ' + summary.preview.page;
-            const leftImg = document.createElement('img');
-            const rightImg = document.createElement('img');
-            const maskImg = document.createElement('img');
-            leftImg.alt = 'Document A page ' + summary.preview.page;
-            rightImg.alt = 'Document B page ' + summary.preview.page;
-            maskImg.alt = 'Differences highlighted in red';
-            for (const [img, blob] of [[leftImg, summary.preview.left], [rightImg, summary.preview.right], [maskImg, summary.preview.overlay]] as const) {
-              const url = URL.createObjectURL(blob);
-              objectUrls.push(url);
-              img.src = url;
-            }
-            const sides = document.createElement('div');
-            sides.className = 'docflow-diff-side-by-side';
-            sides.append(leftImg, rightImg);
-            const reveal = document.createElement('div');
-            reveal.className = 'docflow-diff-overlay';
-            const bottomImg = leftImg.cloneNode() as HTMLImageElement;
-            bottomImg.alt = '';
-            bottomImg.setAttribute('aria-hidden', 'true');
-            reveal.append(bottomImg, maskImg);
-            const label = document.createElement('label');
-            label.textContent = 'Difference overlay opacity';
-            const slider = document.createElement('input');
-            slider.type = 'range';
-            slider.min = '0';
-            slider.max = '100';
-            slider.value = '85';
-            slider.setAttribute('aria-label', 'Difference overlay opacity');
-            maskImg.style.opacity = '.85';
-            slider.addEventListener('input', () => { maskImg.style.opacity = String(Number(slider.value) / 100); });
-            label.append(slider);
-            preview.append(caption, sides, reveal, label);
-            compareResults.append(preview);
-          }
-          const table = document.createElement('div');
-          table.className = 'docflow-diff-pages';
-          for (const page of summary.rows) {
-            const line = document.createElement('p');
-            line.textContent = 'Page ' + page.page + ': ' + page.status +
-              (page.pixelDifferencePercent === null ? '' : ' · pixels changed: ' + page.pixelDifferencePercent + '%') +
-              (page.textChanged ? ' · text changed' : '');
-            table.append(line);
-          }
-          compareResults.append(table);
-        }
+        if (compareResults) mountComparisonReview(compareResults, summary, objectUrls);
         const reportUrl = URL.createObjectURL(summary.report);
         objectUrls.push(reportUrl);
         const link = document.createElement('a');
@@ -462,6 +433,7 @@ export function mountWorkspace(container: HTMLDivElement, tool: ToolDefinition):
         link.textContent = 'Download comparison report';
         resultArea.replaceChildren(link);
         addShareButton(link, summary.report);
+        const htmlLink = document.createElement('a'); htmlLink.className = 'download'; htmlLink.href = URL.createObjectURL(summary.htmlReport); objectUrls.push(htmlLink.href); htmlLink.download = 'pdf-comparison-report.html'; htmlLink.textContent = 'Download navigable HTML report'; resultArea.append(htmlLink); addShareButton(htmlLink, summary.htmlReport);
         setProgress('Comparison complete', 100);
         return;
       }
@@ -506,7 +478,9 @@ export function mountWorkspace(container: HTMLDivElement, tool: ToolDefinition):
         return;
       }
       const operation = (tool.id === 'forms' ? 'forms-fill' : tool.id === 'compress' ? 'optimize' : tool.id) as WorkerOperation;
-      const workerFiles = await readInputs(records);
+      if (scanReview) activeAbort = new AbortController();
+      const exportFiles = scanReview ? await scanReview.inputs(activeAbort!.signal, (done, total) => setProgress('Correcting photo ' + done + ' of ' + total, done / total * 40)) : records.map(r => r.file);
+      const workerFiles = await Promise.all(exportFiles.map(async file => ({ name: file.name, type: file.type, buffer: await file.arrayBuffer() })));
       const selectedOptions = formOptions(optionsForm);
       if (tool.id === 'split' && runtime.sessionActive()) selectedOptions.individualPdfResults = true;
       if (tool.id === 'sign-visual') selectedOptions.signaturePng = signaturePad?.getData() ?? '';
@@ -591,7 +565,7 @@ export function mountWorkspace(container: HTMLDivElement, tool: ToolDefinition):
   });
 
   container.addEventListener('docflow-cleanup', () => {
-    disposed = true;
+    disposed = true; scanReview?.dispose(); ocrPreviewGeneration++; ocrPreviewUrls.forEach(url => URL.revokeObjectURL(url));
     mainCancelled = true;
     activeAbort?.abort();
     inspectionGeneration += 1;

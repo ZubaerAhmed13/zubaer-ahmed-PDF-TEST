@@ -15,6 +15,7 @@ import './styles/essential-utilities.css';
 import './styles/phase3-documents.css';
 import './styles/document-session.css';
 import './styles/mobile-offline.css';
+import './styles/document-quality.css';
 import { installMobileViewport } from './app/mobileViewport';
 import { createApp } from './app/createApp';
 import { finishEmailConfirmation } from './app/cloudSync';
