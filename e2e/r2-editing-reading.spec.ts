@@ -155,6 +155,13 @@ test("reader selects text, finds and highlights document matches, jumps and expo
   test.setTimeout(120_000);
   await open(page, "preview", await fixture());
   await expect(page.locator("#stage")).toHaveText("Preview ready");
+  const readerScroll = page.locator('.workspace-grid');
+  const scrollSize = await readerScroll.evaluate(el => ({ full: el.scrollHeight, visible: el.clientHeight }));
+  if (scrollSize.full > scrollSize.visible + 40) {
+    await page.locator('.reader-controls').hover();
+    await page.mouse.wheel(0, 250);
+    await expect.poll(() => readerScroll.evaluate(el => el.scrollTop)).toBeGreaterThan(0);
+  }
   await expect(page.locator(".reader-text-layer")).toContainText(
     "Findable text",
   );
