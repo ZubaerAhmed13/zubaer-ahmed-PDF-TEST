@@ -1,3 +1,5 @@
+import { createPreview, type PreviewController } from '../pdf/render';
+import { validateInputBudget } from '../pdf/resourceBudget';
 import * as pdfjs from 'pdfjs-dist';
 import type { PDFDocumentProxy, RenderTask } from 'pdfjs-dist';
 import { toolCategories, tools, type ToolDefinition } from '../tools/registry';
@@ -419,9 +421,16 @@ async function openOverview(root: HTMLElement): Promise<void> {
   const text = overlay.querySelector<HTMLElement>('[data-overview-text]');
   if (!canvas || !canvasShell || !thumbnails || !meta || !total || !pageCount || !input || !zoom || !textState || !text) { overlay.remove(); return; }
 
+  const loadingAbort = new AbortController();
+  let controller: PreviewController | null = null;
+  const earlyClose = (): void => {root.removeEventListener('docflow-cleanup',earlyClose);loadingAbort.abort(); void controller?.destroy(); overlay.remove();};
+  overlay.querySelector('[data-overview-close]')?.addEventListener('click',earlyClose,{once:true});
+  root.addEventListener('docflow-cleanup',earlyClose,{once:true});
   try {
-    const loadingTask = pdfjs.getDocument({ data: new Uint8Array(await file.arrayBuffer()) });
-    const pdfDocument = await loadingTask.promise;
+    validateInputBudget([file.size]);
+    controller = await createPreview(await file.arrayBuffer(),canvas,meta,loadingAbort.signal);
+    if(loadingAbort.signal.aborted||!overlay.isConnected){await controller.destroy();return;}
+    const pdfDocument = controller.document;
     const state: OverviewState = {
       overlay, pdfDocument, currentPage: 1, scale: 1, renderTask: null,
       thumbnailTasks: new Set(), thumbnailObserver: null, disposed: false
@@ -441,26 +450,20 @@ async function openOverview(root: HTMLElement): Promise<void> {
       thumbnails.append(button);
     }
 
+    const retained:HTMLCanvasElement[]=[];
     const renderThumbnail = async (button: HTMLButtonElement): Promise<void> => {
       if (button.dataset.rendered === 'true' || state.disposed) return;
       button.dataset.rendered = 'true';
       const pageNumber = Number(button.dataset.overviewThumbnail);
       const target = button.querySelector<HTMLCanvasElement>('canvas');
       if (!target) return;
-      const page = await state.pdfDocument.getPage(pageNumber);
-      const viewport = page.getViewport({ scale: 0.18 });
-      const ratio = Math.min(window.devicePixelRatio || 1, 1.5);
-      target.width = Math.max(1, Math.floor(viewport.width * ratio));
-      target.height = Math.max(1, Math.floor(viewport.height * ratio));
-      target.style.width = `${Math.max(1, Math.floor(viewport.width))}px`;
-      target.style.height = `${Math.max(1, Math.floor(viewport.height))}px`;
-      const context = target.getContext('2d', { alpha: false });
-      if (!context) { page.cleanup(); return; }
-      context.setTransform(ratio, 0, 0, ratio, 0, 0);
-      const task = page.render({ canvasContext: context, viewport });
-      state.thumbnailTasks.add(task);
-      try { await task.promise; } catch { button.dataset.rendered = 'false'; }
-      finally { state.thumbnailTasks.delete(task); page.cleanup(); }
+      try {
+        await controller!.renderThumbnail(pageNumber,target,.18);
+        retained.push(target);
+        while(retained.length>24){const old=retained.shift()!;old.width=old.height=1;const button=old.closest<HTMLButtonElement>('[data-overview-thumbnail]');if(button){button.dataset.rendered='false';state.thumbnailObserver?.observe(button);}}
+      }
+      catch {button.dataset.rendered='false';}
+
     };
 
     state.thumbnailObserver = new IntersectionObserver((entries) => {
@@ -483,23 +486,10 @@ async function openOverview(root: HTMLElement): Promise<void> {
     const renderPage = async (pageNumber: number): Promise<void> => {
       if (state.disposed) return;
       state.currentPage = Math.max(1, Math.min(state.pdfDocument.numPages, pageNumber));
-      state.renderTask?.cancel();
-      const page = await state.pdfDocument.getPage(state.currentPage);
-      const base = page.getViewport({ scale: 1 });
-      const viewport = page.getViewport({ scale: state.scale });
-      const ratio = Math.min(window.devicePixelRatio || 1, 2);
-      canvas.width = Math.max(1, Math.floor(viewport.width * ratio));
-      canvas.height = Math.max(1, Math.floor(viewport.height * ratio));
-      canvas.style.width = `${Math.round(viewport.width)}px`;
-      canvas.style.height = `${Math.round(viewport.height)}px`;
-      const context = canvas.getContext('2d', { alpha: false });
-      if (!context) { page.cleanup(); return; }
-      context.setTransform(ratio, 0, 0, ratio, 0, 0);
-      state.renderTask = page.render({ canvasContext: context, viewport });
-      try { await state.renderTask.promise; } catch (error) {
-        if (!(error instanceof Error) || error.name !== 'RenderingCancelledException') throw error;
-        return;
-      }
+      await controller!.render(state.currentPage,state.scale);
+      if(state.disposed)return;
+      const page=await state.pdfDocument.getPage(state.currentPage);
+      const base=page.getViewport({scale:1});
       const content = await page.getTextContent();
       const pageText = content.items.map((item) => 'str' in item ? item.str : '').filter(Boolean).join(' ');
       text.textContent = pageText || 'No selectable text was found on this page.';
@@ -529,7 +519,7 @@ async function openOverview(root: HTMLElement): Promise<void> {
       state.thumbnailTasks.clear();
       state.thumbnailObserver?.disconnect();
       overlay.remove();
-      await state.pdfDocument.destroy().catch(() => undefined);
+      await controller?.destroy().catch(() => undefined);
     };
 
     overlay.querySelector('[data-overview-close]')?.addEventListener('click', () => { void close(); });
@@ -564,6 +554,8 @@ async function openOverview(root: HTMLElement): Promise<void> {
     await fit('page');
     overlay.querySelector<HTMLButtonElement>('[data-overview-close]')?.focus();
   } catch (error) {
+    void controller?.destroy();
+    if(loadingAbort.signal.aborted||!overlay.isConnected)return;
     const message = error instanceof Error ? error.message : 'The PDF overview could not be opened.';
     overlay.innerHTML = `<div class="legacy-overview-error"><strong>PDF overview unavailable</strong><p>${escapeHtml(message)}</p><button type="button">Close</button></div>`;
     overlay.querySelector('button')?.addEventListener('click', () => overlay.remove());

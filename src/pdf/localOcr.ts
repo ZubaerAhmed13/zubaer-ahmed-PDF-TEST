@@ -1,3 +1,4 @@
+import { abortable, renderBoundedPage } from './pdfCancellation';
 import { openLocalPdf } from './pdfjsPolicy';
 import { assertOfflineOcr } from '../app/offline';
 import * as pdfjs from 'pdfjs-dist';
@@ -42,17 +43,8 @@ export function addOcrWords(page: PDFPage, font: PDFFont, words: RecognizedWord[
   }
   return omitted;
 }
-async function render(page: PDFPageProxy): Promise<HTMLCanvasElement> {
-  const viewport = page.getViewport({ scale: 1 });
-  const scale = Math.min(3, 2400 / Math.max(viewport.width, viewport.height), Math.sqrt(3_000_000 / (viewport.width * viewport.height)));
-  const view = page.getViewport({ scale });
-  const canvas = document.createElement('canvas');
-  canvas.width = Math.max(1, Math.floor(view.width));
-  canvas.height = Math.max(1, Math.floor(view.height));
-  const context = canvas.getContext('2d', { alpha: false });
-  if (!context) throw Error('Browser canvas rendering is unavailable.');
-  await page.render({ canvasContext: context, viewport: view }).promise;
-  return canvas;
+async function render(page: PDFPageProxy, signal = new AbortController().signal): Promise<HTMLCanvasElement> {
+  return renderBoundedPage(page,3,signal);
 }
 export async function ocrPreview(buffer: ArrayBuffer, pageNumber: number, options: ScanOptions) {
   const task = openLocalPdf(buffer);
@@ -81,7 +73,7 @@ export async function ocrPdf(
   const count = selected.length;
   let font: PDFFont | null = null;
   const preprocessing = options.preprocessing ?? defaultScanOptions;
-  const pdfjsTask = openLocalPdf(buffer);
+  const pdfjsTask = openLocalPdf(buffer, signal);
   const viewer = await pdfjsTask.promise;
   const base = import.meta.env.BASE_URL.replace(/\/?$/, '/');
   const local = new URL(base, location.origin).href;
@@ -92,7 +84,7 @@ export async function ocrPdf(
   let totalWords = 0;
   const warnings: string[] = [];
   const texts: string[] = [];
-  const abort = (): void => { if (tesseract) void tesseract.terminate(); };
+  const abort = (): void => { if (tesseract) void tesseract.terminate(); void viewer.destroy().catch(() => {}); };
   signal.addEventListener('abort', abort, { once: true });
   try {
     for (const [index, pageIndex] of selected.entries()) {
@@ -100,7 +92,7 @@ export async function ocrPdf(
       if (signal.aborted) throw new DOMException('OCR cancelled', 'AbortError');
       const page = await viewer.getPage(pageNumber);
       try {
-        const originalText = await page.getTextContent();
+        const originalText = await abortable(page.getTextContent(), signal);
         const existing = originalText.items.reduce((s, item) => s + ('str' in item ? item.str : ''), '').trim();
         if (skipExistingText && existing.length >= 12) {
           skippedPages++;
@@ -120,10 +112,11 @@ export async function ocrPdf(
             cacheMethod: 'none',
             logger: message => { if (!signal.aborted) onProgress(progressIndex, count, 'Page ' + progressPage + ': ' + message.status + ' ' + Math.round(message.progress * 100) + '%'); }
           });
-          tesseract = await loading;
+          tesseract = await abortable(loading,signal,()=>{void loading.then(worker=>worker.terminate()).catch(()=>{});});
           if (signal.aborted) throw new DOMException('OCR cancelled', 'AbortError');
         }
-        const canvas = await render(page);
+        const canvas = await render(page, signal);
+        try {
         const corrected = correctedCanvas(canvas, preprocessing);
         try {
           const result = await tesseract.recognize(corrected.canvas, {}, { tsv: true });
@@ -151,8 +144,9 @@ export async function ocrPdf(
           if (words.length) warnings.push('Page ' + pageNumber + ': overlay includes words at confidence 38 or above, up to 3000; inspect the full recognized-text report for uncertain or omitted words.');
           if (!words.length) warnings.push('Page ' + pageNumber + ': no reliable words detected; inspect the result manually.');
         } finally {
-          canvas.width = canvas.height = corrected.canvas.width = corrected.canvas.height = 1;
+          corrected.canvas.width = corrected.canvas.height = 1;
         }
+        } finally {canvas.width=canvas.height=1;}
       } finally {
         page.cleanup();
       }

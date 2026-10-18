@@ -23,3 +23,9 @@ export function acquireWorkerSlot(): () => void {
   ++active; let released=false;
   return () => { if (!released) { released=true; --active; } };
 }
+export function validateNativeRaster(width:number,height:number):void {
+  if(!Number.isInteger(width)||!Number.isInteger(height)||width<1||height<1||width>8192||height>8192||width*height>16_000_000)throw new PdfOperationError('RESOURCE_LIMIT','Embedded image exceeds the 16-million-pixel / 8,192-pixel image export limit.');
+}
+export function addEncodedBytes(current:number,next:number):number {
+  const total=current+next;if(!Number.isFinite(total)||current<0||next<0||total>150*1048576)throw new PdfOperationError('RESOURCE_LIMIT','Image export exceeds the 150 MB encoded archive budget.');return total;
+}

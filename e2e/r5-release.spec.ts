@@ -83,3 +83,62 @@ test('repeated reader open/close releases worker, URL and canvas ownership withi
   }
   await testInfo.attach('R5 owned resource lifecycle',{body:JSON.stringify({fixture:'40 blank letter pages, five cycles',tolerance:'0 workers, 0 attached canvas pixels, <=1 live URL after close',samples}),contentType:'application/json'});
 });
+test('legacy overview bounds huge pages and closes pending ownership cleanly',async({page})=>{
+  await page.addInitScript(()=>{
+    let peak=0;for(const key of ['width','height'] as const){const descriptor=Object.getOwnPropertyDescriptor(HTMLCanvasElement.prototype,key)!;
+      Object.defineProperty(HTMLCanvasElement.prototype,key,{...descriptor,set(value:number){const pixels=value*(key==='width'?this.height:this.width);peak=Math.max(peak,pixels);if(pixels>4_000_000)throw Error('Unbounded overview canvas');descriptor.set!.call(this,value);}});}
+    Object.assign(window,{r5PeakCanvas:()=>peak});
+  });
+  const pdf=await PDFDocument.create();pdf.addPage([14400,14400]);
+  const dialog=await open(page,'rotate','rotate');
+  await dialog.locator('#workspace-file').setInputFiles({name:'huge-page.pdf',mimeType:'application/pdf',buffer:Buffer.from(await pdf.save())});
+  await dialog.locator('[data-legacy-overview]').click();
+  const overview=page.locator('.legacy-overview-overlay');
+  await expect(overview.locator('[data-overview-meta]')).toContainText('14400 × 14400');
+  await overview.getByRole('button',{name:'Reset',exact:true}).click();
+  await expect.poll(()=>overview.locator('[data-overview-canvas]').evaluate(c=>(c as HTMLCanvasElement).width*(c as HTMLCanvasElement).height)).toBeLessThanOrEqual(4_000_000);
+  expect(await page.evaluate(()=>(window as unknown as {r5PeakCanvas:()=>number}).r5PeakCanvas())).toBeLessThanOrEqual(4_000_000);
+  await overview.getByRole('button',{name:'Close PDF overview'}).click();await expect(overview).toHaveCount(0);
+});
+test('embedded image export explicitly rejects dimensions outside its native canvas budget',async({page})=>{
+  const dialog=await open(page,'extract-images','extract images');
+  const png=await page.evaluate(()=>{const c=document.createElement('canvas');c.width=9000;c.height=20;const ctx=c.getContext('2d')!;ctx.fillRect(0,0,9000,20);return c.toDataURL('image/png').split(',')[1]!;});
+  const pdf=await PDFDocument.create(),image=await pdf.embedPng(Buffer.from(png,'base64'));pdf.addPage([600,400]).drawImage(image,{x:0,y:100,width:600,height:20});
+  await dialog.locator('#workspace-file').setInputFiles({name:'wide-image.pdf',mimeType:'application/pdf',buffer:Buffer.from(await pdf.save())});
+  await dialog.getByRole('button',{name:'Run Extract images'}).click();
+  await expect(dialog.locator('#error')).toContainText('8,192-pixel image export limit');
+  await expect(dialog.locator('#result a.download')).toHaveCount(0);
+});
+test('repair verification cancels a pending operator-list boundary within one second',async({page},testInfo)=>{
+  await page.addInitScript(()=>{
+    const post=Worker.prototype.postMessage;
+    Worker.prototype.postMessage=function(message:unknown,transfer?:Transferable[]){
+      if(message&&typeof message==='object'&&'action' in message&&message.action==='GetOperatorList'){document.documentElement.dataset.r5Verifier='pending';return;}
+      return post.call(this,message,transfer??[]);
+    };
+  });
+  const pdf=await PDFDocument.create();pdf.addPage([300,400]);
+  const dialog=await open(page,'repair-pdf','repair PDF');
+  await dialog.locator('#pro-pdf').setInputFiles({name:'repair-cancel.pdf',mimeType:'application/pdf',buffer:Buffer.from(await pdf.save())});
+  await dialog.getByRole('button',{name:'Attempt structural repair'}).click();
+  await expect(page.locator('html')).toHaveAttribute('data-r5-verifier','pending');
+  await page.evaluate(()=>{
+    const button=document.querySelector('#pro-cancel')!,error=document.querySelector('#pro-error')!;let start=0;
+    button.addEventListener('click',()=>{start=performance.now();},{capture:true,once:true});
+    const observer=new MutationObserver(()=>{if(start&&error.textContent?.includes('cancelled')){Object.assign(window,{r5CancelMs:performance.now()-start});observer.disconnect();}});observer.observe(error,{childList:true,subtree:true,characterData:true});
+  });
+  await dialog.getByRole('button',{name:'Cancel',exact:true}).click();
+  await expect(dialog.locator('#pro-error')).toContainText('cancelled');
+  const milliseconds=await page.evaluate(()=>(window as unknown as {r5CancelMs:number}).r5CancelMs);
+  expect(milliseconds).toBeLessThan(1000);
+  await testInfo.attach('repair cancellation boundary',{body:JSON.stringify({milliseconds,boundary:'real PDF.js operator request held before worker dispatch',targetMs:1000}),contentType:'application/json'});
+  await expect(dialog.locator('#pro-results a.download')).toHaveCount(0);
+});
+test('repair secondary validation refuses PDFs above the page admission limit',async({page})=>{
+  const pdf=await PDFDocument.create();for(let i=0;i<1001;i++)pdf.addPage([100,100]);
+  const dialog=await open(page,'repair-pdf','repair PDF');
+  await dialog.locator('#pro-pdf').setInputFiles({name:'1001-pages.pdf',mimeType:'application/pdf',buffer:Buffer.from(await pdf.save())});
+  await dialog.getByRole('button',{name:'Attempt structural repair'}).click();
+  await expect(dialog.locator('#pro-error')).toContainText('1–1000 pages',{timeout:90000});
+  await expect(dialog.locator('#pro-results a.download')).toHaveCount(0);
+});

@@ -1,3 +1,5 @@
+import { openLocalPdf } from '../pdf/pdfjsPolicy';
+import { validateInputBudget } from '../pdf/resourceBudget';
 import * as pdfjs from 'pdfjs-dist';
 
 pdfjs.GlobalWorkerOptions.workerSrc = new URL('pdfjs-dist/build/pdf.worker.min.mjs', import.meta.url).toString();
@@ -17,6 +19,7 @@ interface ParityState {
   rebuilding: boolean;
   replacementIndex: number | null;
   generation: number;
+  metadataAbort: AbortController | null;
   syncFrame: number;
   observer: MutationObserver | null;
 }
@@ -61,10 +64,12 @@ function safePdfFilename(value: string): string {
   return /\.pdf$/i.test(base) ? base : `${base}.pdf`;
 }
 
-async function readPdfMeta(file: File): Promise<PdfMeta> {
+async function readPdfMeta(file: File, signal: AbortSignal): Promise<PdfMeta> {
   if (!isPdf(file)) return { pageCount: 1, width: null, height: null, rotation: 0 };
-  const task = pdfjs.getDocument({ data: new Uint8Array(await file.arrayBuffer()) });
+  let task: ReturnType<typeof openLocalPdf> | null = null;
   try {
+    validateInputBudget([file.size]); signal.throwIfAborted();
+    task = openLocalPdf(await file.arrayBuffer(),signal);
     const pdf = await task.promise;
     const pageCount = pdf.numPages;
     let width: number | null = null;
@@ -81,7 +86,7 @@ async function readPdfMeta(file: File): Promise<PdfMeta> {
     await pdf.destroy();
     return { pageCount, width, height, rotation };
   } catch {
-    try { await task.destroy(); } catch { /* best effort */ }
+    try { await task?.destroy(); } catch { /* best effort */ }
     return { pageCount: 0, width: null, height: null, rotation: 0 };
   }
 }
@@ -105,7 +110,10 @@ function queueSync(state: ParityState): void {
 
 async function refreshMetadata(state: ParityState): Promise<void> {
   const generation = ++state.generation;
-  const metadata = await Promise.all(state.files.map((file) => readPdfMeta(file)));
+  state.metadataAbort?.abort(); const abort = new AbortController(); state.metadataAbort = abort;
+  const files=[...state.files],metadata:PdfMeta[]=new Array(files.length); let next=0;
+  const run=async():Promise<void>=>{while(next<files.length&&!abort.signal.aborted){const i=next++;metadata[i]=await readPdfMeta(files[i]!,abort.signal);}};
+  await Promise.all([run(),run()]);
   if (generation !== state.generation) return;
   state.metadata = metadata;
   state.selectedCount = Math.min(state.selectedCount, totalPages(state));
@@ -385,10 +393,12 @@ function ensureState(root: HTMLElement): ParityState {
     rebuilding: false,
     replacementIndex: null,
     generation: 0,
+    metadataAbort: null,
     syncFrame: 0,
     observer: null
   };
   states.set(root, state);
+  const bindings=new AbortController();
   const observer = new MutationObserver(() => queueSync(state));
   observer.observe(root, observerOptions);
   state.observer = observer;
@@ -423,10 +433,12 @@ function ensureState(root: HTMLElement): ParityState {
       return;
     }
     queueSync(state);
-  });
+  }, {signal:bindings.signal});
 
   root.addEventListener('docflow-cleanup', () => {
+    bindings.abort();state.files=[];state.metadata=[];
     observer.disconnect();
+    state.metadataAbort?.abort(); state.metadataAbort=null;
     if (state.syncFrame) cancelAnimationFrame(state.syncFrame);
     state.generation += 1;
     states.delete(root);

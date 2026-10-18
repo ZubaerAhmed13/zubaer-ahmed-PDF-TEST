@@ -37,3 +37,9 @@ it('terminates timed-out workers and ignores late completion after cancellation'
   workers[1]!.emit({type:'result',result:{outputs:[]}});
   expect(workers[1]!.terminated).toBe(true);
 });
+it('rejects native extraction canvases and encoded archives outside the export budget',async()=>{
+  const {validateNativeRaster,addEncodedBytes}=await import('../src/pdf/resourceBudget');
+  expect(()=>validateNativeRaster(9000,1000)).toThrow(/image/i);
+  expect(()=>validateNativeRaster(5000,5000)).toThrow(/image/i);
+  expect(()=>addEncodedBytes(149*1048576,2*1048576)).toThrow(/150 MB/i);
+});

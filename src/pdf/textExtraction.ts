@@ -1,3 +1,4 @@
+import { abortable, cancellationScope } from './pdfCancellation';
 import { openLocalPdf } from './pdfjsPolicy';
 import * as pdfjs from 'pdfjs-dist';
 import type { OperationResult } from './types';
@@ -17,8 +18,9 @@ export async function extractAndSearchText(
   cancelled: () => boolean
 ): Promise<TextSearchResult> {
   if (query.length > 150) throw new Error('Search phrase is too long (150 characters max).');
-  const task = openLocalPdf(data);
-  const doc = await task.promise;
+  const scope = cancellationScope(cancelled);
+  const task = (()=>{try{return openLocalPdf(data,scope.signal);}catch(error){scope.dispose();throw error;}})();
+  const doc = await task.promise.catch(error=>{scope.dispose();throw error;});
   const pages: string[] = [];
   const hits: SearchHit[] = [];
   let scannedPages = 0;
@@ -27,7 +29,7 @@ export async function extractAndSearchText(
       if (cancelled()) throw new DOMException('Operation cancelled', 'AbortError');
       const page = await doc.getPage(i);
       try {
-        const content = await page.getTextContent();
+        const content = await abortable(page.getTextContent(),scope.signal);
         const chunks: string[] = [];
         for (const item of content.items) {
           if ('str' in item) chunks.push(item.str + (item.hasEOL ? '\n' : ' '));
@@ -55,7 +57,7 @@ export async function extractAndSearchText(
       } finally { page.cleanup(); }
       onProgress(i, doc.numPages);
     }
-  } finally { await doc.destroy(); }
+  } finally { scope.dispose(); await doc.destroy(); }
   const plain = pages.map((value, i) => '--- Page ' + (i + 1) + ' ---\n' + value).join('\n\n');
   const output = new TextEncoder().encode(plain);
   return {

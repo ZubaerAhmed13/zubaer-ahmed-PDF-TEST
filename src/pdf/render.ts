@@ -17,8 +17,8 @@ export interface PreviewController {
   destroy: () => Promise<void>;
 }
 
-export async function createPreview(buffer: ArrayBuffer, canvas: HTMLCanvasElement, status: HTMLElement): Promise<PreviewController> {
-  const loadingTask = openLocalPdf(buffer);
+export async function createPreview(buffer: ArrayBuffer, canvas: HTMLCanvasElement, status: HTMLElement, signal?: AbortSignal): Promise<PreviewController> {
+  const loadingTask = openLocalPdf(buffer,signal);
   const doc: PDFDocumentProxy = await loadingTask.promise;
   let currentTask: RenderTask | null = null;
   let mainGeneration = 0;
@@ -105,6 +105,7 @@ export async function createPreview(buffer: ArrayBuffer, canvas: HTMLCanvasEleme
     },
     cancelThumbnails,
     async destroy(): Promise<void> {
+      if(destroyed)return;
       renderedPages.delete(canvas);
       destroyed = true;
       mainGeneration += 1;

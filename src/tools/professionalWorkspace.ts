@@ -1,4 +1,5 @@
-import { SAFE_PDF_OPTIONS } from '../pdf/resourceBudget';
+import { openLocalPdf } from '../pdf/pdfjsPolicy';
+import { abortable } from '../pdf/pdfCancellation';
 import { addShareButton } from '../app/fileExport';
 import { workspaceRuntime } from '../app/workspaceRuntime';
 import '../styles/professional-tools.css';
@@ -269,6 +270,8 @@ export function mountWorkspace(container: HTMLDivElement, tool: ToolDefinition):
     nav();
     const currentAbort = new AbortController();
     abort = currentAbort;
+    let timedOut=false;
+    const deadline=setTimeout(()=>{timedOut=true;currentAbort.abort();qpdf?.cancel();},120000);
     try {
       const source = await file.arrayBuffer();
       if (currentAbort.signal.aborted) throw new DOMException('Cancelled','AbortError');
@@ -288,11 +291,9 @@ export function mountWorkspace(container: HTMLDivElement, tool: ToolDefinition):
         const result = await qpdf.result;
         if (currentAbort.signal.aborted || disposed) return;
         // qpdf may recover structures that pdf-lib cannot parse, so PDF.js is the secondary verification engine.
-        const { getDocument, GlobalWorkerOptions } = await import('pdfjs-dist');
-        GlobalWorkerOptions.workerSrc = new URL('pdfjs-dist/build/pdf.worker.min.mjs', import.meta.url).toString();
         const bytes = result.outputs[0]?.buffer;
         if (!bytes) throw Error('qpdf returned no output.');
-        const task = getDocument({ ...SAFE_PDF_OPTIONS, data: new Uint8Array(bytes.slice(0)), stopAtErrors: true });
+        const task = openLocalPdf(bytes.slice(0),currentAbort.signal);
         const verified = await task.promise;
         try {
           if (verified.numPages < 1) throw Error('The rewritten document contains no pages.');
@@ -300,10 +301,10 @@ export function mountWorkspace(container: HTMLDivElement, tool: ToolDefinition):
             if (currentAbort.signal.aborted || disposed) throw new DOMException('Cancelled', 'AbortError');
             progressText('Validating repaired page ' + pageNumber + ' of ' + verified.numPages, 97);
             const checkedPage = await verified.getPage(pageNumber);
-            await checkedPage.getOperatorList();
-            checkedPage.cleanup();
+            try {await abortable(checkedPage.getOperatorList(),currentAbort.signal,()=>{void verified.destroy().catch(()=>{});});}
+            finally {checkedPage.cleanup();}
           }
-        } finally { await verified.destroy(); }
+        } finally { if(currentAbort.signal.aborted)void verified.destroy().catch(()=>{});else await verified.destroy(); }
         if (currentAbort.signal.aborted || disposed) return;
         renderResult(result);
       }
@@ -312,9 +313,10 @@ export function mountWorkspace(container: HTMLDivElement, tool: ToolDefinition):
       if (disposed) return;
       progressText('Failed',0);
       showError(currentAbort.signal.aborted || (e instanceof DOMException && e.name === 'AbortError')
-        ? 'Operation cancelled. No output was saved.'
+        ? (timedOut ? 'The 120-second time limit was reached. No output was saved.' : 'Operation cancelled. No output was saved.')
         : e instanceof Error ? e.message : 'Operation failed.');
     } finally {
+      clearTimeout(deadline);
       runtime.busy(false);
       qpdf = null;
       abort = null;

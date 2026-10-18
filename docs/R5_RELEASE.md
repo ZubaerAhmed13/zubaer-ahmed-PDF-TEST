@@ -36,9 +36,9 @@ Choose 72, approximately 115 (existing default), 150 or 300 requested DPI. Outpu
 | Input | 150 MiB/file, 250 MiB combined per PDF worker request; redaction retains stricter 40 MiB/15-page limits |
 | Structural inventory/worker preflight | 1–1,000 pages; 100,000 indirect objects; 250,000 visited containers; page MediaBox dimensions <=14,400 points; embedded image <=80 million pixels |
 | Workers | At most four operation/inspection workers; each operation terminates at 120 seconds; cancellation terminates immediately, late messages ignored |
-| PDF.js loading | Same byte/page bounds and 120-second loading deadline; strict failure for oversized images rather than silently omitted output |
-| Preview | Adaptive <=4 million pixels, <=3,000 pixels/dimension; thumbnails <=300,000 pixels, <=600/dimension, serial rendering; reader uses a visible window, organizer retains at most 24 decoded thumbnail canvases |
-| Image export | <=16 million pixels and <=8,192 pixels/dimension per canvas, <=150 MiB encoded images before ZIP; explicit cleanup on failure/cancel |
+| PDF.js loading | Same byte/page bounds and 120-second loading deadline; owned parser worker terminates on abort/deadline, normal cleanup acknowledgement is capped at 500 ms; strict failure for oversized images rather than silently omitted output |
+| Preview | Adaptive <=4 million pixels, <=3,000 pixels/dimension; thumbnails <=300,000 pixels, <=600/dimension, serial rendering; reader uses a visible window, organizer and overview retain at most 24 decoded thumbnail canvases; automatic metadata uses two cancellable jobs |
+| Image export | <=16 million pixels and <=8,192 pixels/dimension per canvas, <=150 MiB encoded images before ZIP; native embedded-image extraction rejects oversize images rather than silently resampling; explicit cleanup on failure/cancel |
 | OCR/compare/redaction | Existing 30 selected OCR pages/3 MP, first 50 comparison pages/bounded previews, 15 redaction pages/3.2 MP limits retained |
 
 These are admission, canvas, concurrency and deadline controls, not a hard process-memory sandbox. pdf-lib/qpdf still need full input/output buffers and parsed objects. OPFS is not advertised as a streaming solution. qpdf must handle encrypted/damaged input itself; byte, worker and time limits apply, but structural admission cannot be established before repair/unlock. Main-thread encoding and library serialization cannot always be interrupted mid-call; cancelled results are never published. Browser documents can still be unusually expensive below the declared limits.
@@ -56,3 +56,5 @@ Root application licensing is now explicitly `UNLICENSED`; this preserves the ex
 ## Verification record
 
 Local baseline: 94 unit tests. R5 local verification and browser/production outcomes are recorded in the release PR and Actions artifacts. Existing WebKit offline execution, real camera/device ergonomics and manual assistive-technology checks remain unverified; automated browser emulation is not a substitute. Do not infer arbitrary-PDF preservation or signature/PDF-A/PDF-UA certification from these fixtures.
+
+R5 review fixes cover the legacy overview/metadata loaders, pending teardown deadlines, secondary repair verification, native image-extraction budgets, OCR and comparison render/text cancellation. Browser regressions exercise huge overview pages, native 9,000-pixel images, repair operator-list cancellation and 1,001-page rejection. Unit regressions hold parser load/teardown and render promises pending to prove prompt cancellation and canvas release.
