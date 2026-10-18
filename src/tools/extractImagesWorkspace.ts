@@ -1,3 +1,4 @@
+import { openLocalPdf } from '../pdf/pdfjsPolicy';
 import { addShareButton } from '../app/fileExport';
 import { workspaceRuntime } from '../app/workspaceRuntime';
 import * as pdfjs from 'pdfjs-dist';
@@ -164,7 +165,7 @@ async function extractEmbeddedImages(
   isCancelled: () => boolean
 ): Promise<{ blob: Blob; count: number }> {
   const [{ default: JSZip }] = await Promise.all([import('jszip')]);
-  const loadingTask = pdfjs.getDocument({ data: new Uint8Array(buffer) });
+  const loadingTask = openLocalPdf(buffer);
   const document = await loadingTask.promise;
   const zip = new JSZip();
   const manifest: ExtractedImageRecord[] = [];

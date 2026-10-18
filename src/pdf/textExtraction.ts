@@ -1,3 +1,4 @@
+import { openLocalPdf } from './pdfjsPolicy';
 import * as pdfjs from 'pdfjs-dist';
 import type { OperationResult } from './types';
 
@@ -16,7 +17,7 @@ export async function extractAndSearchText(
   cancelled: () => boolean
 ): Promise<TextSearchResult> {
   if (query.length > 150) throw new Error('Search phrase is too long (150 characters max).');
-  const task = pdfjs.getDocument({ data: new Uint8Array(data) });
+  const task = openLocalPdf(data);
   const doc = await task.promise;
   const pages: string[] = [];
   const hits: SearchHit[] = [];

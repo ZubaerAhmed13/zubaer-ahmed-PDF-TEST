@@ -1,3 +1,4 @@
+import { openLocalPdf } from './pdfjsPolicy';
 import { alignPages, wordChanges, type TextChange, type PageSignature } from './pageAlignment';
 import * as pdfjs from 'pdfjs-dist';
 import type { PDFPageProxy } from 'pdfjs-dist';
@@ -114,8 +115,8 @@ export async function comparePdfs(
   options: { mode: 'text' | 'visual' | 'both'; maxPages: number; threshold?: number; tolerance?: number },
   progress: (done: number, total: number) => void, cancelled: () => boolean
 ): Promise<ComparisonResult> {
-  const leftLoading = pdfjs.getDocument({ data: new Uint8Array(leftBuffer) });
-  const rightLoading = pdfjs.getDocument({ data: new Uint8Array(rightBuffer) });
+  const leftLoading = openLocalPdf(leftBuffer);
+  const rightLoading = openLocalPdf(rightBuffer);
   let leftDoc: Awaited<typeof leftLoading.promise> | null = null;
   let rightDoc: Awaited<typeof rightLoading.promise> | null = null;
   const check = (): void => { if (cancelled()) throw new DOMException('Comparison cancelled', 'AbortError'); };

@@ -110,6 +110,7 @@ export function mountWorkspace(container: HTMLDivElement, tool: ToolDefinition):
     observer = null;
   };
 
+  const retainedThumbnails: HTMLCanvasElement[] = [];
   const renderVisibleThumbnail = async (canvas: HTMLCanvasElement, controller: PreviewController, generation: number): Promise<void> => {
     const pageNumber = Number(canvas.dataset.sourcePage);
     if (!Number.isInteger(pageNumber) || pageNumber < 1) return;
@@ -118,6 +119,14 @@ export function mountWorkspace(container: HTMLDivElement, tool: ToolDefinition):
       const complete = await controller.renderThumbnail(pageNumber, canvas, 0.22);
       if (generation !== loadGeneration || !canvas.isConnected) return;
       canvas.dataset.thumbnailState = complete ? 'rendered' : 'idle';
+      if (complete) {
+        const prior = retainedThumbnails.indexOf(canvas); if (prior >= 0) retainedThumbnails.splice(prior,1);
+        retainedThumbnails.push(canvas);
+        while (retainedThumbnails.length > 24) {
+          const old = retainedThumbnails.shift()!; old.width = old.height = 1; old.dataset.thumbnailState = 'idle';
+          if (old.isConnected) observer?.observe(old);
+        }
+      }
     } catch {
       if (canvas.isConnected) canvas.dataset.thumbnailState = 'error';
     }
@@ -125,6 +134,7 @@ export function mountWorkspace(container: HTMLDivElement, tool: ToolDefinition):
 
   const observeThumbnails = (): void => {
     disconnectObserver();
+    retainedThumbnails.splice(0).forEach(canvas => {canvas.width=canvas.height=1;});
     const controller = previewController;
     if (!controller) return;
     const generation = loadGeneration;
@@ -421,6 +431,7 @@ export function mountWorkspace(container: HTMLDivElement, tool: ToolDefinition):
     disposed = true;
     loadGeneration += 1;
     disconnectObserver();
+    retainedThumbnails.splice(0).forEach(canvas => {canvas.width=canvas.height=1;});
     const controller = previewController;
     previewController = null;
     if (controller) void controller.destroy().catch(() => undefined);

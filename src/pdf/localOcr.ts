@@ -1,3 +1,4 @@
+import { openLocalPdf } from './pdfjsPolicy';
 import { assertOfflineOcr } from '../app/offline';
 import * as pdfjs from 'pdfjs-dist';
 import type { PDFPageProxy } from 'pdfjs-dist';
@@ -54,7 +55,7 @@ async function render(page: PDFPageProxy): Promise<HTMLCanvasElement> {
   return canvas;
 }
 export async function ocrPreview(buffer: ArrayBuffer, pageNumber: number, options: ScanOptions) {
-  const task = pdfjs.getDocument({ data: new Uint8Array(buffer) });
+  const task = openLocalPdf(buffer);
   const viewer = await task.promise;
   try {
     if (!Number.isInteger(pageNumber) || pageNumber < 1 || pageNumber > viewer.numPages) throw Error('Choose a page inside the document.');
@@ -80,7 +81,7 @@ export async function ocrPdf(
   const count = selected.length;
   let font: PDFFont | null = null;
   const preprocessing = options.preprocessing ?? defaultScanOptions;
-  const pdfjsTask = pdfjs.getDocument({ data: new Uint8Array(buffer) });
+  const pdfjsTask = openLocalPdf(buffer);
   const viewer = await pdfjsTask.promise;
   const base = import.meta.env.BASE_URL.replace(/\/?$/, '/');
   const local = new URL(base, location.origin).href;

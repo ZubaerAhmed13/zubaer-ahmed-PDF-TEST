@@ -1,0 +1,8 @@
+{
+  "src/vendor/qpdf/qpdf.wasm": "48a6044e2b5abb32295fa1682e26f20338181bb2423b2ab6e8456b7c4a8c9756",
+  "src/vendor/qpdf/qpdf.js": "30f0a3407e6f6058def17d6080f94a797a53c03afd6b93f2e9ebf29881dce037",
+  "src/vendor/qpdf/qpdf.d.ts": "d4110a11d0bcf3bbd2d6160c01e33c54add84b3cd1b39ae63f41ed04bd7a7b4e",
+  "src/vendor/qpdf/LICENSE.txt": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+  "public/fonts/DocFlowSans.woff": "201114f2202e74f0be95e693c4ca05c9e9c144a63f5657844a995bbd1a0aa288",
+  "public/fonts/DejaVu-LICENSE.txt": "63d3ba759d12804c5b31a9d5940d855c1820d1f5999e6b0872eb1c7ff045fbc9"
+}

@@ -26,6 +26,7 @@ export interface OperationResult {
 }
 
 export type WorkerOperation =
+  | 'document-inspect'
   | 'direct-edit'
   | 'direct-edit-inspect'
   | 'merge'

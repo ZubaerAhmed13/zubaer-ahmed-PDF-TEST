@@ -28,3 +28,13 @@ describe('permanent raster redaction input security', () => {
     expect(REDACTION_MAX_BYTES).toBe(40 * 1024 * 1024);
   });
 });
+
+describe('R5 requested redaction resolution', () => {
+  it('uses requested DPI while preserving hard pixel/dimension caps', () => {
+    expect(chooseRasterScale(612,792,72)).toBe(1);
+    expect(chooseRasterScale(612,792,144)).toBe(2);
+    expect(chooseRasterScale(612,792,300)).toBeLessThanOrEqual(2200/792);
+    expect(() => chooseRasterScale(612,792,NaN)).toThrow(/resolution/i);
+    expect(() => chooseRasterScale(612,792,10)).toThrow(/resolution/i);
+  });
+});

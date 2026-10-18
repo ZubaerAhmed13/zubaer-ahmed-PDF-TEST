@@ -49,3 +49,7 @@ The release pipeline builds only dist, runs quality and Chromium/Firefox/WebKit,
 [Architecture](ARCHITECTURE.md) · [Privacy](PRIVACY.md) · [Security](SECURITY.md) · [Testing](TESTING.md) · [Release gates](RELEASE_CHECKLIST.md) · [Cloud preferences](docs/SUPABASE_CLOUD_SYNC.md)
 
 The September completion/parity documents are historical migration records. The locally vendored qpdf 12.3.2 runtime has licence/integrity provenance in src/vendor/qpdf. Structural paths do not intentionally rasterise source pages; optimisation/raster exports disclose their representation changes.
+
+## R5 preservation and safety
+
+Version 0.7.0 adds local document/signature/action inspection, per-tool export consequences, redaction resolution and exact-size preview, bounded rendering/workers and reproducible release artifacts. See [R5 evidence and limits](docs/R5_RELEASE.md) and [application licensing status](LICENSE_STATUS.md). All 29 tools and prior offline/local-processing boundaries remain.

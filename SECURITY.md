@@ -51,7 +51,7 @@ PDF operations validate the `%PDF-` signature in addition to UI file-type filter
 
 ## Capability boundaries
 
-The current release-candidate branch still does **not** implement OCR or cryptographic digital-signature creation/validation. UI and documentation must not describe visual marks, typed names, ordinary watermarks or metadata inspection as cryptographic signatures. Those future capabilities require dedicated engines, threat-model review, fixtures and executed certification.
+Local English/German OCR is implemented. Cryptographic digital-signature creation/validation is not implemented. UI and documentation must not describe visual marks, typed names, ordinary watermarks or metadata inspection as cryptographic signatures. Those future capabilities require dedicated engines, threat-model review, fixtures and executed certification.
 
 ## Sensitive data
 
@@ -66,3 +66,17 @@ Application logs must not contain document text, passwords or form values. Favor
 The browser-authenticated role has only SELECT, INSERT, UPDATE and DELETE on docflow_preferences. RLS does not constrain TRUNCATE, so default extra privileges were explicitly revoked. No anonymous grants. Reproducible migration and rollback-only ownership tests are in supabase/.
 
 Response inspection on 16 October 2026 found HTTPS/HSTS but no CSP HTTP response header or X-Frame-Options. Meta CSP enforces its supported directives, but frame-ancestors cannot be delivered through meta; the ignored directive was removed. Effective anti-framing protection requires response-header support from the serving infrastructure. It remains an explicit limitation; this release does not change hosting or add JavaScript frame-busting.
+
+## R5 untrusted PDF and export policy
+
+Document inspection is structural and never opens attachment bytes or executes actions. Detection is not malware scanning or cryptographic validation. Every rewrite can invalidate a signed/certified source. Whole-document edits may preserve scripts, actions and attachments; page-copy tools have documented catalog/reference losses. Full raster redaction creates new image-only pages and discards original PDF objects. The per-workspace preservation panel explains these consequences before export. Encrypted/damaged input that cannot be inventoried stays explicitly uninspected.
+
+The pinned PDF.js 4.10.38 API is configured with `isEvalSupported: false`, `enableXfa: false`, `stopAtErrors: true`, a decoded-image limit and `useWorkerFetch: false`; DocFlow configures no scripting sandbox. Strict image errors prevent silently missing image content. Rendering and operation limits are documented in docs/R5_RELEASE.md. Admission and deadline controls do not provide a hard JavaScript/WASM memory sandbox.
+
+## Security maintenance and reproducibility
+
+Before each release, run `npm ci`, `npm audit --audit-level=high`, `npm run verify:provenance`, typecheck/lint/unit/build and the full browser matrix. Review upstream security advisories for the pinned PDF.js, pdf-lib, fontkit, Tesseract and qpdf versions; npm audit cannot assess vendored WASM. For a vendor update, verify the immutable upstream commit/license and upstream Git blob or signed release, update SHA-256 pins and provenance together, and repeat malformed/signature/action/preservation/cancellation tests. A changed hash is a release blocker until explained and reviewed, not a pin to replace blindly.
+
+A security report should identify the affected release, operation and a synthetic or privately shareable reproduction. Never post confidential PDFs, passwords or form values in a public issue. Use GitHub private vulnerability reporting when enabled; no private contact address is asserted here. Triage active-content execution, remote document transmission and recoverable redaction leaks as release-blocking issues. Publish a reviewed corrective release and its affected-version/mitigation notes; retain the prior exact artifact for rollback review, including data/schema compatibility if applicable.
+
+CI retains a deterministic ZIP, content manifest and archive SHA-256 for the exact build revision and compares repeat builds. These checks prove reproducibility/integrity, not author authenticity or absence of vulnerabilities. Application license status is explicit in LICENSE_STATUS.md; dependency licenses remain separate.
