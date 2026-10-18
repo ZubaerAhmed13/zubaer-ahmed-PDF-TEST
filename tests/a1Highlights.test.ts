@@ -6,6 +6,7 @@ import { execFileSync } from 'node:child_process';
 import { applyDirectEdit, inspectDirectEdit } from '../src/pdf/directEdit';
 import { emptyPlan, type EditObject } from '../src/pdf/editModel';
 import type { InputFile } from '../src/pdf/types';
+import { normalizePdfError } from '../src/pdf/errors';
 const n = PDFName.of;
 const input = (bytes: Uint8Array | ArrayBuffer): InputFile => ({ name: 'synthetic.pdf', type: 'application/pdf', buffer: new Uint8Array(bytes instanceof ArrayBuffer ? bytes : bytes.slice()).buffer });
 const highlight = (page = 1): EditObject => ({ id: `review-${page}`, page, kind: 'native-highlight', x: 40, y: 65, width: 100, height: 35, color: '#ffcc33', size: 16, text: 'Review this region ✓' });
@@ -175,6 +176,9 @@ it('refuses custom page units before offering or exporting inaccurately scaled e
     doc.getPage(0).node.set(n('UserUnit'), doc.context.obj(2));
     const source = input(await doc.save());
     await expect(inspectDirectEdit([source])).rejects.toThrow('custom page scale');
+    expect(await inspectDirectEdit([source]).catch(normalizePdfError)).toMatchObject({
+        code: 'UNSUPPORTED_PAGE_SCALE', message: expect.stringContaining('custom page scale')
+    });
     const plan = emptyPlan();
     plan.objects = [highlight()];
     await expect(applyDirectEdit([source], { plan })).rejects.toThrow('custom page scale');

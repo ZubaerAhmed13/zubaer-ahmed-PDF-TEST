@@ -31,7 +31,7 @@ const decode = (value: unknown): string =>
 function frameFor(page: ReturnType<PDFDocument["getPage"]>): PageFrame {
   const unit = page.node.lookup(name('UserUnit'));
   if (unit !== undefined && (!(unit instanceof PDFNumber) || unit.asNumber() !== 1))
-    throw new Error('This PDF uses a custom page scale that Edit PDF cannot position accurately yet. Use another tool or keep the original unchanged.');
+    throw new PdfOperationError('UNSUPPORTED_PAGE_SCALE', 'This PDF uses a custom page scale that Edit PDF cannot position accurately yet. Use another tool or keep the original unchanged.');
   const crop = page.getCropBox(),
     media = page.getMediaBox();
   const x = Math.max(crop.x, media.x),
