@@ -33,3 +33,7 @@ describe('R5 document inspection and export consequences', () => {
     await expect(inspectDocument((await doc.save()).buffer as ArrayBuffer)).rejects.toThrow(/dimensions/i);
   });
 });
+it('retains the INVALID_PDF category when parsing succeeds before lazy page-tree traversal fails',async()=>{
+  const bytes=new TextEncoder().encode('%PDF-1.7\nthis is deliberately malformed').buffer;
+  await expect(inspectDocument(bytes)).rejects.toMatchObject({name:'PdfOperationError',code:'INVALID_PDF'});
+});

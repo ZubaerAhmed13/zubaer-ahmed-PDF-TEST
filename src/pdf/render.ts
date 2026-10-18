@@ -45,14 +45,16 @@ export async function createPreview(buffer: ArrayBuffer, canvas: HTMLCanvasEleme
       const base = page.getViewport({ scale: 1 });
       const pixelRatio = Math.min(window.devicePixelRatio || 1, 2);
       const size = fitRaster(base.width, base.height, scale * pixelRatio, 4_000_000, 3000);
-      const viewport = page.getViewport({ scale: size.scale / pixelRatio });
+      // Keep the requested logical viewport for zoom, text layers and editor overlays; cap backing pixels only.
+      const viewport = page.getViewport({ scale });
+      const backingRatio = size.scale / scale;
       canvas.width = size.width;
       canvas.height = size.height;
       canvas.style.width = `${Math.floor(viewport.width)}px`;
       canvas.style.height = `${Math.floor(viewport.height)}px`;
       const context = canvas.getContext('2d', { alpha: false });
       if (!context) { page.cleanup(); throw new Error('CANVAS_CONTEXT_UNAVAILABLE'); }
-      context.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
+      context.setTransform(backingRatio, 0, 0, backingRatio, 0, 0);
       status.textContent = `Rendering page ${pageNumber} of ${doc.numPages}`;
       currentTask = page.render({ canvasContext: context, viewport });
       try {

@@ -9,7 +9,7 @@ const text = (value: unknown): string => value instanceof PDFString || value ins
 /** Structural inventory only: no action execution, attachment decoding, URI opening or signature validation. */
 export async function inspectDocument(buffer: ArrayBuffer): Promise<DocumentInspection> {
   validateInputBudget([buffer.byteLength]);
-  const doc = await PDFDocument.load(buffer, { updateMetadata: false, throwOnInvalidObject: true }).catch(error => {
+  const doc = await PDFDocument.load(buffer, { updateMetadata: false, throwOnInvalidObject: true }).then(doc=>{doc.getPages();return doc;}).catch(error => {
     throw new PdfOperationError(/encrypt|password/i.test(String(error)) ? 'PASSWORD_REQUIRED' : 'INVALID_PDF', /encrypt|password/i.test(String(error)) ? 'This PDF is encrypted or requires a password.' : 'This PDF could not be parsed.');
   });
   const pages = doc.getPages();
