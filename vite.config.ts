@@ -9,6 +9,9 @@ const commit = process.env.GITHUB_SHA || (() => {
 })();
 
 export default defineConfig({
+  plugins: [{ name: 'docflow-release-identity', generateBundle() {
+    this.emitFile({ type: 'asset', fileName: 'release.json', source: JSON.stringify({ format: 'docflow-release', schema: 1, version: packageInfo.version, build: commit }) });
+  } }],
   define: {
     __DOCFLOW_VERSION__: JSON.stringify(packageInfo.version),
     __DOCFLOW_BUILD__: JSON.stringify(commit)
