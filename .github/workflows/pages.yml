@@ -118,6 +118,8 @@ jobs:
       - run: npx playwright install --with-deps chromium
       - name: Verify deployed DocFlow with real PDF operations
         run: npm run test:production
+      - name: Independently verify published identity and assets
+        run: node scripts/check-availability.mjs "$DOCFLOW_PRODUCTION_BASE_URL" "$GITHUB_SHA"
       - uses: actions/upload-artifact@v4
         if: always()
         with:

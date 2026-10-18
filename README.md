@@ -5,17 +5,15 @@ A local-first PDF workspace with 29 tools, built with TypeScript/Vite. PDF proce
 Production: https://zubaerahmed13.github.io/zubaer-ahmed-PDF-TEST/
 
 ## Current release
-Package version and diagnostics share one build-time source; diagnostics also shows the exact Git commit supplied by the release runner.
 
-R4 (0.6.0) adds OCR page ranges, mixed English/German recognition, rotation/deskew review and Unicode overlays; photo crop/perspective cleanup; matched-page comparison and navigable change reports; literal Markdown extraction. [R4 scope, measured OCR results and limits](docs/R4_RELEASE.md).
+**R7 / v0.9.0** is the product-finish engineering release. The [release record](docs/R7_RELEASE.md) separates automated evidence from pending device, assistive-technology, cloud and moderated usability acceptance. Diagnostics and `release.json` identify the exact package version and Git build.
 
-R3 (0.5.0) adds verified offline-asset setup, explicit English/German OCR downloads, mobile pan/select and non-drag controls, viewport/keyboard handling and capability-detected Save/share. Open **Offline & storage** or **Help & offline** to prepare this browser. [R3 scope and device acceptance](docs/R3_RELEASE.md).
+- Task examples, intent search (for example “make PDF smaller”), and a searchable Help & capabilities centre, also available inside workspaces with Ctrl/Cmd+K.
+- Reviewed local diagnostics: explicit allowlist, optional field groups, preview and confirmation before download; no automatic telemetry.
+- Separate local preference/recovery controls, capability limits, account help and release notes.
+- A small independent availability check and an isolated failed-install/forward-recovery drill using the built application and generated worker.
 
-R2 (0.4.0) adds direct page editing, visual crop handles, native sticky-note comments, Unicode added text, reader search/navigation, and on-page form controls. [R2 scope and evidence](docs/R2_RELEASE.md).
-
-R1 (0.3.0) adds an optional in-memory document session: open once, switch tools, review/apply results, undo/redo revisions and export. Use **Open a PDF**, or **Keep working with this PDF** inside a tool. [R1 scope and evidence](docs/R1_RELEASE.md).
-
-R0 (0.2.0) established current capability documentation, synthetic preservation/repair/redaction fixtures, all-page repair verification, broader production tests and least-privilege preferences. [R0 evidence](docs/R0_RELEASE.md) separates executed checks from pending acceptance.
+Earlier releases: [R6 repeat work and exports](docs/R6_RELEASE.md), [R5 preservation/safety](docs/R5_RELEASE.md), [R4 OCR/photos/comparison](docs/R4_RELEASE.md), [R3 mobile/offline](docs/R3_RELEASE.md), [R2 editing/reader/forms](docs/R2_RELEASE.md), [R1 document session](docs/R1_RELEASE.md), [R0 baseline](docs/R0_RELEASE.md).
 
 ## Tools
 - View, merge, split, remove/extract/organise/rotate and crop pages.

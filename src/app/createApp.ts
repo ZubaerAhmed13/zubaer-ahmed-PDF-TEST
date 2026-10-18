@@ -4,6 +4,11 @@ import { approveReload, prepareApprovedReload } from './workProtection';
 import { toolCategories, tools } from '../tools/registry';
 import { getFavorites, setFavorite, subscribeFavorites, replaceFavorites } from './favoriteStore';
 import { mountCloudPanel } from './cloudSync';
+import { findTools } from './toolDiscovery';
+import { mountHelpCenter } from './helpCenter';
+import { mountDiagnostics } from './diagnostics';
+import { mountPrivacyPanel } from './privacyPanel';
+import { productCopy } from '../content/en';
 
 const RECENT_KEY = 'docflow.recent-tools.v1';
 
@@ -40,6 +45,7 @@ export function createApp(root: HTMLDivElement | null): void {
           <a href="#tools">All tools</a>
           <a href="#how-it-works">How it works</a>
           <button type="button" data-action="privacy">Privacy</button>
+          <button type="button" data-action="help">Help & capabilities</button>
         </nav>
         <div class="topbar-actions">
           <button class="secondary" type="button" data-action="offline">Offline & storage</button><button class="secondary" type="button" data-action="diagnostics">Diagnostics</button>
@@ -67,7 +73,7 @@ export function createApp(root: HTMLDivElement | null): void {
 
           <div class="hero-art" aria-label="DocFlow local workspace capabilities">
             <div class="workspace-window">
-              <div class="window-bar"><span>Local workspace</span><span class="window-dots" aria-hidden="true"><span></span><span></span><span></span></span></div>
+              <div class="window-bar"><span>Workspace overview · illustrative</span><span class="window-dots" aria-hidden="true"><span></span><span></span><span></span></span></div>
               <div class="window-content">
                 <div class="window-feature">
                   <div class="window-feature-icon" aria-hidden="true">PDF</div>
@@ -94,6 +100,8 @@ export function createApp(root: HTMLDivElement | null): void {
           </div>
         </section>
 
+        <section class="product-section task-examples" aria-labelledby="task-examples-title"><div class="product-section-head"><div><p class="eyebrow">Everyday tasks</p><h2 id="task-examples-title">Start with what you need to do</h2><p>Open a task, review its limits and keep your original file.</p></div></div><div class="task-example-grid">${productCopy.examples.map(example => `<article><h3>${example.title}</h3><p>${example.detail}</p><button type="button" class="secondary" data-example-tool="${example.tool}">Start task</button></article>`).join('')}</div><p class="product-scope-note">Add text and visual signatures, fill supported forms or organise pages. Original page-text replacement and Office conversion are not available. <button type="button" data-action="help">Explore capabilities and limits</button></p></section>
+
         <section class="document-resume" data-document-home hidden aria-label="Current document"></section>
         <section class="quick-access" aria-label="Quick access">
           <article class="quick-panel">
@@ -119,7 +127,7 @@ export function createApp(root: HTMLDivElement | null): void {
             <button role="tab" aria-selected="true" data-category="all">All tools</button>
             ${toolCategories.map((category) => `<button role="tab" aria-selected="false" data-category="${category.id}">${category.label}</button>`).join('')}
           </div>
-          <div id="tool-grid" class="tool-grid"></div>
+          <p class="discovery-count" role="status" data-discovery-count></p><div id="tool-grid" class="tool-grid"></div>
         </section>
 
         <section class="product-section" id="how-it-works" aria-labelledby="how-title">
@@ -146,7 +154,7 @@ export function createApp(root: HTMLDivElement | null): void {
         </section>
 
         <dialog id="workspace-dialog" class="workspace-dialog" aria-labelledby="workspace-title">
-          <form method="dialog" class="dialog-bar"><strong id="workspace-title">Workspace</strong><button type="button" data-action="offline">Help & offline</button><button aria-label="Close workspace">Close</button></form>
+          <form method="dialog" class="dialog-bar"><strong id="workspace-title">Workspace</strong><button type="button" data-action="help">Find tools and help</button><button type="button" data-action="offline">Help & offline</button><button aria-label="Close workspace">Close</button></form>
           <section class="document-toolbar" data-document-toolbar hidden aria-label="Document session"></section>
           <div id="workspace" class="workspace"></div>
         </dialog>
@@ -154,7 +162,7 @@ export function createApp(root: HTMLDivElement | null): void {
       </main>
 
       <footer>
-        <span class="footer-brand"><span class="mini-mark" aria-hidden="true">D</span> docflow · PDF workspace</span>
+        <span class="footer-brand"><span class="mini-mark" aria-hidden="true">D</span> docflow · v${__DOCFLOW_VERSION__}</span><button type="button" data-action="help">Help & release notes</button>
         <span class="footer-links"><button type="button" data-action="offline">Offline & storage</button><button type="button" data-action="privacy">Privacy</button><button type="button" data-action="diagnostics">Diagnostics</button><button type="button" data-action="cloud">Cloud sync</button><span>Local-first · no analytics</span></span>
       </footer>
     </div>
@@ -171,6 +179,12 @@ export function createApp(root: HTMLDivElement | null): void {
   if (!grid || !search || !workspaceDialog || !workspace || !infoDialog || !infoContent || !favoriteTools || !recentTools) return;
 
   let disposeInfo: (() => void) | null = null;
+  // A search input consumes native Escape to clear its value. In this modal,
+  // Escape consistently dismisses help instead of leaving an invisible blocker.
+  infoDialog.addEventListener('keydown', event => {
+    if (event.key !== 'Escape') return;
+    event.preventDefault(); event.stopPropagation(); infoDialog.close();
+  }, true);
   infoDialog.addEventListener('close', () => { disposeInfo?.(); disposeInfo = null; });
   let category = 'all';
   let workspaceGeneration = 0;
@@ -209,11 +223,8 @@ export function createApp(root: HTMLDivElement | null): void {
   };
 
   const render = (): void => {
-    const query = search.value.trim().toLowerCase();
-    const visible = tools.filter((tool) =>
-      (category === 'all' || tool.category === category) &&
-      (!query || `${tool.name} ${tool.description} ${tool.keywords.join(' ')}`.toLowerCase().includes(query))
-    );
+    const visible = findTools(search.value, category);
+    root.querySelector('[data-discovery-count]')!.textContent = `${visible.length} of ${tools.length} tools`;
     grid.innerHTML = visible.map((tool) => `
       <article class="tool-card" data-tool="${tool.id}" data-category="${tool.category}">
         <div class="tool-card-top">
@@ -226,7 +237,7 @@ export function createApp(root: HTMLDivElement | null): void {
         <div class="tool-meta"><span>${tool.quality}</span><span>On-device</span></div>
         <button class="card-action" data-open-tool="${tool.id}">Open tool</button>
       </article>
-    `).join('') || `<div class="empty-state"><strong>No tools found</strong><p>Try another search or category.</p></div>`;
+    `).join('') || `<div class="empty-state"><strong>No tools found</strong><p>Try another search or category. Office conversion and original page-text replacement are not available.</p><button type="button" class="secondary" data-reset-search>Reset search and category</button><button type="button" class="secondary" data-action="help">Check capabilities</button></div>`;
   };
 
   subscribeFavorites((nextFavorites) => {
@@ -290,6 +301,11 @@ export function createApp(root: HTMLDivElement | null): void {
 
   grid.addEventListener('click', (event) => {
     const target = event.target as HTMLElement;
+    if (target.closest('[data-reset-search]')) {
+      search.value = ''; category = 'all';
+      root.querySelectorAll<HTMLButtonElement>('[role="tab"]').forEach(tab => tab.setAttribute('aria-selected', String(tab.dataset.category === 'all')));
+      render(); search.focus(); return;
+    }
     const fav = target.closest<HTMLButtonElement>('[data-favorite]');
     if (fav) {
       const id = fav.dataset.favorite;
@@ -305,6 +321,18 @@ export function createApp(root: HTMLDivElement | null): void {
     const open = (event.target as HTMLElement).closest<HTMLButtonElement>('[data-open-tool]');
     if (open?.dataset.openTool) void openTool(open.dataset.openTool, open);
   });
+  root.querySelector('.task-examples')?.addEventListener('click', event => {
+    const button = (event.target as HTMLElement).closest<HTMLButtonElement>('[data-example-tool]');
+    if (button?.dataset.exampleTool) void openTool(button.dataset.exampleTool, button);
+  });
+
+  const openHelp = (): void => {
+    disposeInfo?.(); disposeInfo = null;
+    infoDialog.setAttribute('aria-label', 'Help & capabilities');
+    mountHelpCenter(infoContent, async id => { infoDialog.close(); await openTool(id); });
+    infoDialog.showModal();
+    infoContent.querySelector<HTMLInputElement>('[data-help-search]')?.focus();
+  };
 
   search.addEventListener('input', render);
   root.querySelector('.category-tabs')?.addEventListener('click', (event) => {
@@ -323,6 +351,7 @@ export function createApp(root: HTMLDivElement | null): void {
       search.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
     if (action === 'open') { workspaceTrigger = actionTarget ?? null; void documents.begin(); }
+    if (action === 'help') openHelp();
     if (['offline', 'cloud', 'privacy', 'diagnostics'].includes(action ?? '')) { disposeInfo?.(); disposeInfo = null; infoDialog.setAttribute('aria-label', action === 'offline' ? 'Offline and storage' : action!); }
     if (action === 'offline') { disposeInfo = mountOfflinePanel(infoContent); infoDialog.setAttribute('aria-label', 'Offline and storage'); infoDialog.showModal(); }
     if (action === 'cloud') {
@@ -339,24 +368,25 @@ export function createApp(root: HTMLDivElement | null): void {
       infoDialog.showModal();
     }
     if (action === 'privacy') {
-      infoContent.innerHTML = '<h2>Privacy</h2><p>DocFlow processes PDF documents in your browser. No analytics, telemetry, crash reporting, trackers, or remote document-processing APIs are configured.</p><p>Favorites and recent-tool IDs are stored in localStorage. Optional account-linked Cloud Sync sends only those tool IDs to the dedicated DocFlow Supabase project when Save is selected; no PDF content is uploaded. Lightweight project recovery stores the selected tool, settings, and file metadata (name, size, type, and last-modified time) in IndexedDB. An optional document session keeps revisions and results in this tab’s memory only. Export before closing or reloading the tab. PDF/image contents and encryption passwords are not stored in localStorage or the recovery database; original files must be reselected after recovery.</p>';
+      mountPrivacyPanel(infoContent, { workspaceOpen: workspaceDialog.open, clearPreferences: () => {
+        localStorage.removeItem('docflow.favorites.v1'); localStorage.removeItem(RECENT_KEY);
+        recent = []; replaceFavorites([]); renderQuickAccess();
+      } });
       infoDialog.showModal();
     }
     if (action === 'diagnostics') {
       infoDialog.setAttribute('aria-label', 'Diagnostics');
-      infoContent.innerHTML = `<h2>Diagnostics</h2><dl><dt>Version</dt><dd>${__DOCFLOW_VERSION__}</dd><dt>Build</dt><dd>${__DOCFLOW_BUILD__}</dd><dt>Online</dt><dd>${navigator.onLine}</dd><dt>Worker support</dt><dd>${typeof Worker !== 'undefined'}</dd><dt>Service worker</dt><dd>${'serviceWorker' in navigator}</dd><dt>Storage estimate</dt><dd id="storage-estimate">Checking…</dd></dl>`;
+      disposeInfo = mountDiagnostics(infoContent);
       infoDialog.showModal();
-      if (navigator.storage?.estimate) void navigator.storage.estimate().then(({usage, quota}) => {
-        const field = document.querySelector<HTMLElement>('#storage-estimate');
-        if (field) field.textContent = `${Math.round((usage ?? 0) / 1048576)} MB used / ${Math.round((quota ?? 0) / 1048576)} MB available`;
-      });
     }
   });
 
   document.addEventListener('keydown', (event) => {
     if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
       event.preventDefault();
-      search.focus();
+      if (document.querySelector('dialog[open]:not(#workspace-dialog):not(#info-dialog)')) return;
+      if (workspaceDialog.open || infoDialog.open) openHelp();
+      else search.focus();
     }
   });
 

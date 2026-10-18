@@ -1,6 +1,6 @@
 # Current capability and evidence matrix
 
-Current release: R4 / 0.6.0, 29 tool IDs; the original 28 stable IDs are retained. Test links identify coverage; passing results must be checked at the exact release SHA. Catalog preservation is not implied by a structural/lossless label.
+Current release: R7 / 0.9.0, 29 tool IDs; the original 28 stable IDs are retained. Test links identify coverage; passing results must be checked at the exact release SHA. Catalog preservation is not implied by a structural/lossless label.
 
 | Tool / ID | Coverage | Important boundary |
 |---|---|---|
@@ -47,3 +47,11 @@ All PDF workspaces show export consequences and a cancellable local structural i
 ## R6 recipes and output review
 
 Versioned local recipe import/export, sequential page-aware preflight, keep-selected-pages and ranged watermark steps, configurable names, original-source selected retries and retained successes. Common export panels expose exact size/format, rename, source-bound comparison, preview and one-time adoption into the shared session. Encrypted results remain download-only; redaction clears prior session history. See [R6_RELEASE.md](R6_RELEASE.md) for budgets, review coverage and the conditional OCR/navigation-editing boundaries.
+
+## R7 discovery, support and release identity
+
+Homepage examples and task search open the existing tools. Help & capabilities uses the same registry and preservation policies, with explicit unsupported features. Workspace discovery follows the existing session leave guards; dismissal retains the current tool. English product content lives in `src/content/en.ts`; no unreviewed translations are included.
+
+Diagnostics exports only validated version/build and selected boolean browser features. It never captures documents, filenames, text, settings, account details, URLs, user agent or logs. A readonly preview, field-group redaction and explicit review precede a local JSON download; panel disposal revokes its object URL. Local preference/recovery controls are scoped separately and do not delete cloud records or recipes. Recovery clearing is unavailable while a workspace is open.
+
+[R7 browser coverage](../e2e/r7-product-finish.spec.ts), [update recovery drill](../e2e/update-recovery.spec.ts), [release scope](R7_RELEASE.md) and [predeclared acceptance protocol](R7_ACCEPTANCE.md). No complete physical-device, manual accessibility, authenticated cloud or 30-attempt human usability certification is claimed.

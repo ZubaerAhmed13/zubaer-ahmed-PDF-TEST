@@ -39,6 +39,12 @@ function ensureDialogBar(): void {
     dialog.classList.toggle('legacy-exact-active', exactActive);
   }
   if (!legacyHeaderActions) return;
+  if (!legacyHeaderActions.querySelector('[data-action="help"]')) {
+    const finder = document.createElement('button');
+    finder.type = 'button'; finder.className = 'legacy-favorite-button'; finder.dataset.action = 'help';
+    finder.textContent = '⌕'; finder.setAttribute('aria-label', 'Find tools and help'); finder.title = 'Find tools and help (Ctrl/Cmd+K)';
+    legacyHeaderActions.prepend(finder);
+  }
   if (!legacyHeaderActions.querySelector('[data-action="offline"]')) {
     const help = document.createElement('button');
     help.type = 'button'; help.className = 'legacy-favorite-button';

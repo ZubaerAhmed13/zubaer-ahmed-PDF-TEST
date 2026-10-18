@@ -1,6 +1,6 @@
 {
   "name": "docflow-professional",
-  "version": "0.8.0",
+  "version": "0.9.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -15,7 +15,8 @@
     "preview": "vite preview",
     "benchmark:ocr": "node scripts/stage-ocr-assets.mjs && node scripts/benchmark-ocr.mjs",
     "verify:provenance": "node scripts/verify-provenance.mjs",
-    "release:artifact": "node scripts/release-artifact.mjs"
+    "release:artifact": "node scripts/release-artifact.mjs",
+    "check:availability": "node scripts/check-availability.mjs"
   },
   "dependencies": {
     "@pdf-lib/fontkit": "1.1.1",
