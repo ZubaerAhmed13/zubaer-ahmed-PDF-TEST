@@ -42,8 +42,8 @@ test('runs a real worker-backed merge workflow and reopens the downloaded export
     { name: 'one.pdf', mimeType: 'application/pdf', buffer: await pdfFixture(1) },
     { name: 'two.pdf', mimeType: 'application/pdf', buffer: await pdfFixture(2) }
   ]);
-  await expect(dialog.getByText('one.pdf')).toBeVisible();
-  await expect(dialog.getByText('two.pdf')).toBeVisible();
+  await expect(dialog.getByText('one.pdf',{exact:true})).toBeVisible();
+  await expect(dialog.getByText('two.pdf',{exact:true})).toBeVisible();
   await dialog.getByRole('button', { name: 'Run Merge PDF' }).click();
   await expect(dialog.locator('#stage')).toHaveText('Complete');
   const link = dialog.getByRole('link', { name: /Download merged\.pdf/ });

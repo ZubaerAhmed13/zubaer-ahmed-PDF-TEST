@@ -37,5 +37,5 @@ export function openLocalPdf(buffer:ArrayBuffer,signal?:AbortSignal) {
       resolve(doc);
     },stop);
   });
-  return {promise,destroy:()=>teardown(true)};
+  return {promise,destroy:()=>{stop(new DOMException('Operation cancelled','AbortError'));return Promise.resolve();}};
 }

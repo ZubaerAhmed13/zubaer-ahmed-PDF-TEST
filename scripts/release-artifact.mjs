@@ -19,6 +19,7 @@ async function walk(root,prefix='') {
 const files=[],zip=new JSZip(),prefix=`docflow-${pkg.version}/`;
 const options={date:new Date('1980-01-01T00:00:00Z'),unixPermissions:0o100644,createFolders:false};
 for(const path of await walk('dist')) {
+  if(/\.tsx?$/.test(path))throw Error('Uncompiled TypeScript in release artifact: '+path);
   const bytes=await readFile(join('dist',path));files.push({path,bytes:bytes.length,sha256:hash(bytes)});zip.file(prefix+path,bytes,options);
 }
 const manifest=JSON.stringify({version:pkg.version,commit,files},null,2)+'\n';

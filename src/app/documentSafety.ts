@@ -6,6 +6,7 @@ import { preservationConsequences } from '../pdf/preservationPolicy';
 export class DocumentSafety {
   private readonly panel = document.createElement('section');
   private generation = 0;
+  private readonly observer: MutationObserver;
   private running: RunningOperation | null = null;
   private files: readonly File[] = [];
   private disposed = false;
@@ -14,11 +15,19 @@ export class DocumentSafety {
     this.panel.className = 'document-safety'; this.panel.dataset.documentSafety = 'true';
     this.panel.setAttribute('aria-label', 'PDF preservation and safety');
     this.panel.hidden = true;
-    root.prepend(this.panel);
+    this.place();
+    this.observer=new MutationObserver(()=>this.place());
+    this.observer.observe(root,{childList:true,subtree:true});
+  }
+  private place():void {
+    if(this.disposed)return;
+    const host=this.root.querySelector<HTMLElement>('.legacy-settings-pane') ?? this.root.querySelector<HTMLElement>('.direct-editor,.pro-body,.batch-main,.workspace-main') ?? this.root;
+    if(this.panel.parentElement!==host)host.prepend(this.panel);
   }
   setFiles(files: readonly File[]): void {
     const pdfs = files.filter(file => file.type === 'application/pdf' || /\.pdf$/i.test(file.name));
     if (pdfs.length === this.files.length && pdfs.every((file,i) => file === this.files[i])) return;
+    this.place();
     this.files = pdfs; const generation = ++this.generation;
     this.running?.cancel(); this.running = null;
     this.panel.replaceChildren(); this.panel.hidden = !pdfs.length;
@@ -57,5 +66,5 @@ export class DocumentSafety {
     })();
   }
   private add(message: string): void { const p = document.createElement('p'); p.textContent = message; this.panel.append(p); }
-  destroy(): void { this.disposed = true; ++this.generation; this.running?.cancel(); this.running = null; this.files = []; this.panel.remove(); }
+  destroy(): void { this.observer.disconnect(); this.disposed = true; ++this.generation; this.running?.cancel(); this.running = null; this.files = []; this.panel.remove(); }
 }

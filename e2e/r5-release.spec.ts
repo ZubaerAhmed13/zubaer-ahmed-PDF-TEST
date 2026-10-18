@@ -21,6 +21,7 @@ test('local inspection surfaces signature, active-content and page-copy conseque
   await expect(panel).toContainText('1 non-HTTPS or unsafe link');
   await panel.getByText('Local document inspection',{exact:true}).click();
   await expect(panel).toContainText('2 pages');
+  expect(await dialog.getByRole('button',{name:'Run Extract pages',exact:true}).evaluate(button=>{const r=button.getBoundingClientRect();return r.top>=0&&r.bottom<=innerHeight;})).toBe(true);
   expect((await new AxeBuilder({page}).include('[data-document-safety]').analyze()).violations).toEqual([]);
   const origin=new URL(page.url()).origin;
   expect(requests.filter(url=>new URL(url).origin!==origin)).toEqual([]);

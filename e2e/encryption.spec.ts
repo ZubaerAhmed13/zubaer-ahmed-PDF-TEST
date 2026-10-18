@@ -35,7 +35,7 @@ test('protects with AES-256, rejects a wrong password, and unlocks to a reopenab
   const dialog = page.getByRole('dialog', { name: 'Workspace' });
   await expect(dialog).toBeVisible();
   await dialog.locator('#workspace-file').setInputFiles({ name: 'security-fixture.pdf', mimeType: 'application/pdf', buffer: source });
-  await expect(dialog.getByText('security-fixture.pdf')).toBeVisible();
+  await expect(dialog.getByText('security-fixture.pdf',{exact:true})).toBeVisible();
   await dialog.locator('#encryption-password').fill(PASSWORD);
   await dialog.locator('#encryption-password-confirm').fill(PASSWORD);
   await dialog.getByRole('button', { name: 'Run Protect PDF' }).click();

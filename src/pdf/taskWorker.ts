@@ -1,11 +1,11 @@
 import type { OperationProgress, OperationResult } from './types';
 import { acquireWorkerSlot, WORKER_TIME_LIMIT_MS } from './resourceBudget';
 /** Owns one worker, one transfer and one deadline; every exit releases the slot. */
-export function taskWorker(url:URL,name:string,request:{requestId:string},transfers:ArrayBuffer[],onProgress:(p:OperationProgress)=>void) {
+export function taskWorker(createWorker:()=>Worker,request:{requestId:string},transfers:ArrayBuffer[],onProgress:(p:OperationProgress)=>void) {
   const requestId = request.requestId;
   const release = acquireWorkerSlot();
   let worker: Worker;
-  try { worker = new Worker(url,{type:'module',name}); } catch(error) {release();throw error;}
+  try { worker = createWorker(); } catch(error) {release();throw error;}
   let settled=false;
   let rejectPending:(reason:unknown)=>void=()=>{};
   let timer:ReturnType<typeof setTimeout>;

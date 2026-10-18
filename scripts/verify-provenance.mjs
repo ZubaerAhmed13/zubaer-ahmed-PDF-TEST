@@ -6,6 +6,7 @@ for(const [path,hash] of Object.entries(expected)) {
   const actual=createHash('sha256').update(await readFile(path)).digest('hex');
   if(actual!==hash)throw Error('Vendor integrity mismatch: '+path);
 }
+if((await readFile('public/licenses/qpdf-Apache-2.0.txt','utf8'))!==(await readFile('src/vendor/qpdf/LICENSE.txt','utf8')))throw Error('Packaged qpdf license mismatch');
 const pkg=await json('package.json'),lock=await json('package-lock.json');
 const packages=[];
 for(const [path,entry] of Object.entries(lock.packages)) {

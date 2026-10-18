@@ -16,3 +16,8 @@ it('rejects promptly on abort while parsing or teardown is pending',async()=>{
   abort.abort();await Promise.resolve();await Promise.resolve();
   expect(outcome).toBe('AbortError');
 });
+it('explicitly destroying a pending load rejects its public promise',async()=>{
+  loader.task={promise:new Promise(()=>{}),destroy:()=>new Promise(()=>{})};let outcome='pending';
+  const task=openLocalPdf(new ArrayBuffer(1));void task.promise.catch(error=>{outcome=error.name;});
+  await task.destroy();await Promise.resolve();expect(outcome).toBe('AbortError');
+});

@@ -5,5 +5,5 @@ export interface RunningOperation { result:Promise<OperationResult>; cancel:()=>
 export function runWorkerOperation(operation:WorkerOperation,files:InputFile[],options:Record<string,unknown>,onProgress:(p:OperationProgress)=>void):RunningOperation {
   validateInputBudget(files.map(file=>file.buffer.byteLength));
   const request:WorkerRequest={requestId:crypto.randomUUID(),operation,files,options};
-  return taskWorker(new URL('../workers/pdf.worker.ts',import.meta.url),`docflow-${operation}`,request,files.map(file=>file.buffer),onProgress);
+  return taskWorker(()=>new Worker(new URL('../workers/pdf.worker.ts',import.meta.url),{type:'module',name:`docflow-${operation}`}),request,files.map(file=>file.buffer),onProgress);
 }
