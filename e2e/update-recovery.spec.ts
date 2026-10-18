@@ -56,13 +56,17 @@ test('production worker rejects a broken install and safely forward-recovers a s
     const downloading = page.waitForEvent('download');
     await page.getByRole('link', { name: 'Export current PDF', exact: true }).click();
     const exported = await downloading; expect(await readFile((await exported.path())!)).toEqual(source);
+    // Update controls live outside the modal workspace; closing retains the session.
+    await page.getByRole('button', { name: 'Close workspace', exact: true }).click();
     revision = 'recovered';
     await page.evaluate(async () => { const registration = await navigator.serviceWorker.ready; await registration.update(); });
     await expect(page.locator('[data-apply-update]')).toBeVisible({ timeout: 45000 });
     await page.locator('[data-apply-update]').click();
     const guard = page.getByRole('dialog', { name: 'Clear this tab’s work?' });
     await guard.getByRole('button', { name: 'Keep working', exact: true }).click();
+    await page.getByRole('button', { name: 'Resume document', exact: true }).click();
     await expect(page.locator('#stage')).toHaveText('Preview ready');
+    await page.getByRole('button', { name: 'Close workspace', exact: true }).click();
     await page.locator('[data-apply-update]').click();
     await guard.getByRole('button', { name: 'Update and clear session', exact: true }).click();
     await expect(page.locator('body')).toHaveAttribute('data-recovery-release', 'recovered', { timeout: 45000 });
