@@ -17,6 +17,9 @@ describe('task discovery', () => {
     expect(findTools('')).toEqual(tools);
     for (const tool of tools) expect(findTools(tool.name).map(t => t.id)).toContain(tool.id);
   });
+  it('keeps an exact task phrase ahead of incidental words in other descriptions', () => {
+    expect(findTools('extract images').map(t => t.id)).toEqual(['extract-images']);
+  });
 });
 
 describe('reviewable diagnostic allowlist', () => {

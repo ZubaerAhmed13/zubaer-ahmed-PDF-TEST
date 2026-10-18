@@ -179,6 +179,12 @@ export function createApp(root: HTMLDivElement | null): void {
   if (!grid || !search || !workspaceDialog || !workspace || !infoDialog || !infoContent || !favoriteTools || !recentTools) return;
 
   let disposeInfo: (() => void) | null = null;
+  // A search input consumes native Escape to clear its value. In this modal,
+  // Escape consistently dismisses help instead of leaving an invisible blocker.
+  infoDialog.addEventListener('keydown', event => {
+    if (event.key !== 'Escape') return;
+    event.preventDefault(); event.stopPropagation(); infoDialog.close();
+  }, true);
   infoDialog.addEventListener('close', () => { disposeInfo?.(); disposeInfo = null; });
   let category = 'all';
   let workspaceGeneration = 0;

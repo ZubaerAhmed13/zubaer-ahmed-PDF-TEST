@@ -63,6 +63,7 @@ test('workspace finder preserves the captured document on dismissal and exports 
   await info.getByLabel('Find a tool or task').fill('rotate pages');
   await expect(info.locator('[data-help-count]')).toContainText('tools');
   await page.keyboard.press('Escape');
+  await expect(info).toBeHidden();
   await expect(workspace.locator('#file-list')).toContainText('private-source.pdf');
   await workspace.locator('#run-operation').click();
   const link = workspace.locator('#result a.download').first();
@@ -80,7 +81,8 @@ test('finder tool handoff respects unapplied session changes and preserves the w
   await workspace.locator('#workspace-file').setInputFiles({ name: 'session-private.pdf', mimeType: 'application/pdf', buffer: Buffer.from(await doc.save()) });
   await expect(workspace.locator('#stage')).toHaveText('Preview ready');
   await workspace.getByRole('combobox', { name: 'Next tool', exact: true }).selectOption('rotate');
-  await workspace.locator('select[name=degrees]').selectOption('180');
+  await workspace.locator('select[name=target]').selectOption('selected');
+  await workspace.locator('input[name=pages]').fill('1');
   await page.keyboard.press(process.platform === 'darwin' ? 'Meta+K' : 'Control+K');
   const info = page.locator('#info-dialog');
   await info.getByLabel('Find a tool or task').fill('page numbers');
@@ -89,7 +91,7 @@ test('finder tool handoff respects unapplied session changes and preserves the w
   const guard = page.getByRole('dialog', { name: 'Leave unapplied tool changes?' });
   await expect(guard).toBeVisible();
   await guard.getByRole('button', { name: 'Keep working', exact: true }).click();
-  await expect(workspace.locator('select[name=degrees]')).toHaveValue('180');
+  await expect(workspace.locator('input[name=pages]')).toHaveValue('1');
   await expect(workspace.locator('#file-list')).toContainText('session-private.pdf');
 });
 
@@ -124,6 +126,7 @@ test('help and diagnostics remain accessible at narrow width with reduced motion
   const helpAxe = await new AxeBuilder({ page }).include('#info-dialog').analyze();
   expect(helpAxe.violations.filter(v => v.impact === 'serious' || v.impact === 'critical')).toEqual([]);
   await page.keyboard.press('Escape');
+  await expect(info).toBeHidden();
   await page.getByRole('button', { name: 'Diagnostics', exact: true }).last().click();
   const diagnosticAxe = await new AxeBuilder({ page }).include('#info-dialog').analyze();
   expect(diagnosticAxe.violations.filter(v => v.impact === 'serious' || v.impact === 'critical')).toEqual([]);

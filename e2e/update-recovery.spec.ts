@@ -27,7 +27,7 @@ test('production worker rejects a broken install and safely forward-recovers a s
       }
       if (local === 'index.html') body = body.toString().replace('<body', `<body data-recovery-release="${revision}"`);
       const extension = local.split('.').pop()!;
-      const types: Record<string, string> = { html: 'text/html', js: 'application/javascript', css: 'text/css', json: 'application/json', webmanifest: 'application/manifest+json', wasm: 'application/wasm', svg: 'image/svg+xml', png: 'image/png', woff: 'font/woff' };
+      const types: Record<string, string> = { html: 'text/html', js: 'application/javascript', mjs: 'application/javascript', css: 'text/css', json: 'application/json', webmanifest: 'application/manifest+json', wasm: 'application/wasm', svg: 'image/svg+xml', png: 'image/png', woff: 'font/woff' };
       response.writeHead(200, { 'Content-Type': types[extension] ?? 'application/octet-stream', 'Cache-Control': 'no-store' }); response.end(body);
     } catch { response.writeHead(404).end(); }
   });
