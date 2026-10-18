@@ -145,6 +145,8 @@ export function mountWorkspace(container: HTMLDivElement, tool: ToolDefinition):
   const formInspector = container.querySelector<HTMLButtonElement>('[data-inspect-form]');
   const visualHost = container.querySelector<HTMLElement>('#visual-form-editor');
   const advancedFormValues = optionsForm.querySelector<HTMLTextAreaElement>('textarea[name=values]');
+  let formValuesTouched = false;
+  advancedFormValues?.addEventListener('input', () => { formValuesTouched = true; });
 
   const beforeUnload = (event: BeforeUnloadEvent): void => {
     if (!records.length && !running) return;
@@ -190,6 +192,7 @@ export function mountWorkspace(container: HTMLDivElement, tool: ToolDefinition):
     visualEditor?.dispose();
       visualEditor = null;
       if (advancedFormValues) advancedFormValues.value = '{}';
+      formValuesTouched = false;
       if (formSummary) formSummary.textContent = records.length ? 'Discovering form fields locally…' : 'Add a PDF form to discover editable fields.';
       if (records.length) inspectionTimer = window.setTimeout(() => {
         inspectionTimer = null;
@@ -528,7 +531,7 @@ export function mountWorkspace(container: HTMLDivElement, tool: ToolDefinition):
           formOverlay?.dispose(); formOverlay = null;
     visualEditor?.dispose();
           visualEditor = null;
-          if (visualHost && textarea) { visualEditor = mountVisualFormEditor(visualHost, textarea, fields); formOverlay = mountFormPageOverlay(container, textarea, fields, async flattened => {
+          if (visualHost && textarea) { visualEditor = mountVisualFormEditor(visualHost, textarea, fields, !formValuesTouched); formOverlay = mountFormPageOverlay(container, textarea, fields, async flattened => {
             const source = records[0]?.file;
             if (!source) return;
             if (!flattened) { await showDerivedFormPreview(container, source); return; }

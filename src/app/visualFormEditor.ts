@@ -61,7 +61,8 @@ export function normalizeInspectedFields(source: unknown): InspectedFormField[] 
 export function mountVisualFormEditor(
   host: HTMLElement,
   advanced: HTMLTextAreaElement,
-  rawFields: unknown
+  rawFields: unknown,
+  initialize = true
 ): VisualFormEditor {
   const fields = normalizeInspectedFields(rawFields);
   host.replaceChildren();
@@ -277,7 +278,10 @@ export function mountVisualFormEditor(
   });
   advanced.addEventListener('input', onAdvancedInput);
   host.append(title, help, actions, list, notices);
-  writeValues({ ...originals });
+  // Discovery is asynchronous. Never reset a focused text selection or replace
+  // JSON entered while inspection was pending (including deliberate empty JSON).
+  if (initialize && document.activeElement !== advanced && (!advanced.value.trim() || advanced.value.trim() === '{}')) writeValues({ ...originals });
+  else onAdvancedInput();
 
   return {
     dispose: () => {

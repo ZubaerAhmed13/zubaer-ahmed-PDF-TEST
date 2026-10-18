@@ -110,6 +110,44 @@ test('flattening applies values and removes interactive AcroForm fields from the
   expect(output.getForm().getFields()).toHaveLength(0);
 });
 
+test('delayed form discovery never replaces an active advanced JSON selection', async ({ page }) => {
+  await page.addInitScript(() => {
+    const NativeWorker = window.Worker;
+    window.Worker = class extends NativeWorker {
+      private hold: boolean;
+      constructor(url: string | URL, options?: WorkerOptions) { super(url, options); this.hold = options?.name === 'docflow-forms-inspect'; }
+      addEventListener(type: string, listener: EventListenerOrEventListenerObject | null, options?: boolean | AddEventListenerOptions): void {
+        if (type !== 'message' || !this.hold || !listener) { super.addEventListener(type, listener, options); return; }
+        super.addEventListener(type, event => {
+          const emit = (): void => { if (typeof listener === 'function') listener.call(this, event); else listener.handleEvent(event); };
+          if ((event as MessageEvent).data.type === 'result') {
+            const state = window as unknown as { inspectionHeld: boolean; releaseInspection: () => void };
+            state.inspectionHeld = true; state.releaseInspection = emit;
+          } else emit();
+        }, options);
+      }
+    };
+  });
+  // Init scripts apply on navigation; beforeEach has already opened the page.
+  await page.reload();
+  const dialog = await openForms(page);
+  await dialog.locator('#workspace-file').setInputFiles({ name: 'delayed-form.pdf', mimeType: 'application/pdf', buffer: await supportedFormsFixture() });
+  await expect.poll(() => page.evaluate(() => Boolean((window as unknown as { inspectionHeld: boolean }).inspectionHeld))).toBe(true);
+  await dialog.locator('.visual-form-advanced summary').click();
+  const advanced = dialog.locator('textarea[name="values"]');
+  await advanced.focus(); await advanced.press('ControlOrMeta+a');
+  await page.evaluate(() => (window as unknown as { releaseInspection: () => void }).releaseInspection());
+  await expect(dialog.locator('#form-field-summary')).toContainText('5 supported field(s)');
+  const values = JSON.stringify({ CustomerName: 'Preserved edit', Country: 'NL' });
+  await advanced.pressSequentially(values);
+  await expect(advanced).toHaveValue(values);
+  await dialog.locator('input[name="flatten"]').check();
+  await dialog.getByRole('button', { name: 'Run Fill PDF forms' }).click();
+  await expect(dialog.locator('#stage')).toHaveText('Complete');
+  const output = await PDFDocument.load(await downloadFilled(dialog, page));
+  expect(output.getForm().getFields()).toHaveLength(0);
+});
+
 
 test('automatically discovers fields and exports a form filled using visual controls', async ({ page }) => {
   const dialog = await openForms(page);
