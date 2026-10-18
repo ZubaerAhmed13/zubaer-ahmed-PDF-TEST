@@ -60,6 +60,9 @@ test('redaction reviews individual areas and previews exact export bytes at the 
   await expect(dialog.locator('#pro-results a.download')).toHaveCount(0);
 });
 test('repeated reader open/close releases worker, URL and canvas ownership within declared bounds',async({page},testInfo)=>{
+  // Five 40-page cycles approach 45 s on the hosted WebKit runner. Keep each
+  // resource assertion/deadline intact while allowing the whole sequence time.
+  if(testInfo.project.name==='webkit')test.setTimeout(90_000);
   await page.addInitScript(()=>{
     const NativeWorker=window.Worker,active=new Set<Worker>(),urls=new Set<string>();
     window.Worker=class extends NativeWorker {constructor(url:string|URL,options?:WorkerOptions){super(url,options);active.add(this);}terminate(){active.delete(this);return super.terminate();}};
