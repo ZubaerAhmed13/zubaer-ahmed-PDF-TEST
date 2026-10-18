@@ -4,6 +4,7 @@ export interface WorkspaceRuntime {
   sessionActive(): boolean;
   busy(value: boolean): void;
   inputs(files: readonly File[]): void;
+  sources?(): readonly File[];
   result(value: OperationResult): void;
   changed?(): void;
   selection(pages: readonly number[]): void;
@@ -17,14 +18,16 @@ export function workspaceRuntime(root: HTMLElement): WorkspaceRuntime { return r
 
 export function connectWorkspace(root: HTMLElement, callbacks: WorkspaceRuntime): () => void {
   let active = true;
+  let sources: readonly File[] = [];
   const runtime: WorkspaceRuntime = {
     sessionActive() { return active && callbacks.sessionActive(); },
     busy(value) { if (active) callbacks.busy(value); },
-    inputs(files) { if (active) callbacks.inputs(files); },
+    inputs(files) { if (active) { sources = [...files]; callbacks.inputs(files); } },
+    sources() { return active ? [...sources] : []; },
     result(value) { if (active) callbacks.result(value); },
     changed() { if (active) callbacks.changed?.(); },
     selection(pages) { if (active) callbacks.selection(pages); }
   };
   runtimes.set(root, runtime);
-  return () => { active = false; if (runtimes.get(root) === runtime) runtimes.delete(root); };
+  return () => { active = false; sources = []; if (runtimes.get(root) === runtime) runtimes.delete(root); };
 }

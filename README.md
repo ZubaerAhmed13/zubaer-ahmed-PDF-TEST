@@ -53,3 +53,7 @@ The September completion/parity documents are historical migration records. The 
 ## R5 preservation and safety
 
 Version 0.7.0 adds local document/signature/action inspection, per-tool export consequences, redaction resolution and exact-size preview, bounded rendering/workers and reproducible release artifacts. See [R5 evidence and limits](docs/R5_RELEASE.md) and [application licensing status](LICENSE_STATUS.md). All 29 tools and prior offline/local-processing boundaries remain.
+
+## R6 repeat jobs and exports
+
+Version 0.8.0 adds portable local workflow recipes, page-aware preflight, selected retries using executed settings, naming patterns and common export review. Preview, compare or continue with an exact result in the shared document session. [R6 behavior and verification boundaries](docs/R6_RELEASE.md).

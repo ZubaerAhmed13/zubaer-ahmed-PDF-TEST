@@ -212,10 +212,12 @@ export async function addWatermark(files: InputFile[], options: Record<string, u
   const doc = await loadPdf(file);
   const font = await doc.embedFont(StandardFonts.HelveticaBold);
   const pages = doc.getPages();
+  const selected = new Set(parsePageSelection(asString(options.pages), pages.length));
   const opacity = Math.max(0.05, Math.min(1, asNumber(options.opacity, 0.18)));
   const rotation = asNumber(options.rotation, -35);
   const fontSize = Math.max(12, Math.min(120, asNumber(options.fontSize, 42)));
   pages.forEach((page, index) => {
+    if (!selected.has(index)) return;
     const textWidth = font.widthOfTextAtSize(text, fontSize);
     page.drawText(text, { x: (page.getWidth() - textWidth) / 2, y: page.getHeight() / 2, size: fontSize, font, rotate: degrees(rotation), opacity, color: rgb(0.25, 0.25, 0.25) });
     progress(emit, 'processing', index + 1, pages.length, `Watermarked page ${index + 1} of ${pages.length}`);

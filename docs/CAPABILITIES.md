@@ -43,3 +43,7 @@ All workspaces also pass through [registry loading/error checks](../e2e/r0-basel
 ## R5 preservation, safety and budgets
 
 All PDF workspaces show export consequences and a cancellable local structural inventory, including signature/certification, actions, attachment and link flags. No signature validation or malware-scanning claim. Raster redaction adds requested DPI, effective canvas sizing, individual area review and an exact-size draft before download. Shared worker/input/loading/canvas budgets and bounded thumbnails apply as documented in [R5_RELEASE.md](R5_RELEASE.md). Reproducible CI ZIPs include content checksums and a pinned vendor/dependency provenance report; root application license choice remains with the owner.
+
+## R6 recipes and output review
+
+Versioned local recipe import/export, sequential page-aware preflight, keep-selected-pages and ranged watermark steps, configurable names, original-source selected retries and retained successes. Common export panels expose exact size/format, rename, source-bound comparison, preview and one-time adoption into the shared session. Encrypted results remain download-only; redaction clears prior session history. See [R6_RELEASE.md](R6_RELEASE.md) for budgets, review coverage and the conditional OCR/navigation-editing boundaries.
