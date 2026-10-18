@@ -136,7 +136,7 @@ test('help and diagnostics remain accessible at narrow width with reduced motion
 test('published release identity agrees with running diagnostics', async ({ page }) => {
   await page.goto(app);
   const metadata = await page.evaluate(async () => (await fetch('./release.json', { cache: 'no-store' })).json());
-  expect(metadata).toMatchObject({ format: 'docflow-release', schema: 1, version: '0.9.0' });
+  expect(metadata).toMatchObject({ format: 'docflow-release', schema: 1, version: JSON.parse(await readFile('package.json', 'utf8')).version });
   await page.getByRole('button', { name: 'Diagnostics', exact: true }).first().click();
   const report = JSON.parse(await page.getByLabel('Report preview').inputValue());
   expect(report.release).toEqual({ version: metadata.version, build: metadata.build });

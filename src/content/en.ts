@@ -13,12 +13,13 @@ export const productCopy = {
     ocr: ['searchable scan', 'scan to text', 'recognize text'],
     workflow: ['repeat a job', 'recipe'],
     forms: ['fill in form'],
-    merge: ['combine documents']
+    merge: ['combine documents'],
+    'edit-pdf': ['editable highlights', 'review comments']
   } as Record<string, string[]>,
   limits: 'Existing page-text replacement, Office conversion, certificate signing, PDF/A and PDF/UA export are not available. Added text and visual signatures have their own tools.',
   release: {
-    title: 'R7 · Product finish',
-    changes: ['Task examples, intent search and a searchable capability/help centre.', 'Local diagnostics with field-group redaction, preview and explicit review before download.', 'Separate local data controls, exact release identity and update-recovery checks.']
+    title: 'A1.1 · Editable PDF highlights',
+    changes: ['Editable region highlights with review comments in Edit PDF.', 'Reopen supported highlights to move, resize, recolor, duplicate or delete them, with undo/redo.', 'Unsupported highlights are kept unchanged. Original page text stays searchable; highlights do not remove content.']
   },
   acceptance: 'Automated browser checks cover declared scenarios. Physical-device, manual screen-reader, Safari offline execution, real-account cloud and moderated usability acceptance remain unverified.'
 } as const;

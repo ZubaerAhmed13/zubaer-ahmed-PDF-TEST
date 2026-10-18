@@ -22,8 +22,9 @@ export function mountWorkspace(
   const runtime = workspaceRuntime(root),
     events = new AbortController(),
     signal = events.signal;
-  root.innerHTML = `<section class="direct-editor" data-direct-editor><header><h2>Edit PDF</h2><p>Add text, images, shapes, visual signatures and editable sticky-note comments. Original page text stays unchanged. All work stays in this tab.</p><label>Source PDF<input id="workspace-file" aria-label="Source files" type="file" accept="application/pdf,.pdf"></label><div data-document-invitation-slot></div></header>
-  <div class="direct-toolbar" aria-label="Editor tools"><button data-add="text">Add text</button><button data-add="rectangle">Rectangle</button><button data-add="highlight">Highlight region</button><label class="direct-image-label">Add image<input data-image type="file" accept="image/png,image/jpeg"></label><button data-sign>Visual signature</button><button data-add="comment">Add comment</button><button data-crop>Crop page</button><button data-undo>Undo edit</button><button data-redo>Redo edit</button><label><input data-snap type="checkbox" checked> Snap to page</label></div>
+  root.innerHTML = `<section class="direct-editor" data-direct-editor><header><h2>Edit PDF</h2><p>Add text, images, shapes, visual signatures and editable region highlights and sticky-note comments. Original page text stays unchanged. All work stays in this tab.</p><label>Source PDF<input id="workspace-file" aria-label="Source files" type="file" accept="application/pdf,.pdf"></label><div data-document-invitation-slot></div></header>
+  <div class="direct-toolbar" aria-label="Editor tools"><button data-add="text">Add text</button><button data-add="rectangle">Rectangle</button><button data-add="highlight">Highlight region</button><button data-add="native-highlight">Editable highlight</button><label class="direct-image-label">Add image<input data-image type="file" accept="image/png,image/jpeg"></label><button data-sign>Visual signature</button><button data-add="comment">Add comment</button><button data-crop>Crop page</button><button data-undo>Undo edit</button><button data-redo>Redo edit</button><label><input data-snap type="checkbox" checked> Snap to page</label></div>
+  <p data-highlight-help>Editable highlights are review marks with comments. Reopen them to move, resize, recolor or delete. Highlight region stays baked in. Neither removes original content.</p><p data-highlight-notice role="status" hidden></p>
   <div class="direct-navigation"><button data-prev>Previous page</button><label>Page<input data-page type="number" value="1" min="1"></label><span data-count></span><button data-next>Next page</button><label>Zoom<select data-zoom><option value="fit">Fit width</option><option value="0.75">75%</option><option value="1">100%</option><option value="1.5">150%</option><option value="2">200%</option></select></label></div>
   <div class="direct-pan-controls"><button type="button" data-select-mode aria-pressed="true">Select objects</button><button type="button" data-pan-mode aria-pressed="false">Pan page</button><button type="button" data-properties-toggle>Object properties</button></div><p class="direct-pan-help" data-pan-help>Select objects to edit. Use Pan page for touch scrolling and browser pinch zoom. Properties and move buttons work without dragging.</p><div class="direct-layout"><div class="direct-scroll" role="region" tabindex="0" aria-label="Editable PDF page"><div class="direct-page"><canvas></canvas><div class="direct-overlay" aria-label="Added content"></div></div></div><details class="direct-inspector" open><summary>Objects and comments</summary><p>Shift-click to select several objects. Drag to move; use the corner handle to resize. Arrow keys nudge by 1 point, Shift by 10. Delete removes selected objects.</p><div data-objects></div><form data-properties><label>Content<textarea name="text" rows="3"></textarea></label><div class="direct-numbers">${["x", "y", "width", "height", "size"].map((n) => `<label>${n === "size" ? "Font size" : n[0]!.toUpperCase() + n.slice(1)}<input type="number" step="0.5" name="${n}" min="${["x", "y"].includes(n) ? 0 : 1}"></label>`).join("")}</div><label>Color<input name="color" type="color" value="#203047"></label><button type="submit">Apply properties</button></form><div class="direct-nudge" aria-label="Move selected objects"><button type="button" data-nudge="left">Move left</button><button type="button" data-nudge="right">Move right</button><button type="button" data-nudge="up">Move up</button><button type="button" data-nudge="down">Move down</button></div><div class="direct-toolbar"><button data-duplicate>Duplicate selected</button><button data-delete>Delete selected</button><button data-align="left">Align left</button><button data-align="center">Align centers</button><button data-align="top">Align top</button></div><label>Copy selected to pages<input data-copy-pages placeholder="2,3,4"></label><button data-copy>Copy to pages</button><button data-clear-crop>Reset crop</button><p data-crop-help hidden>Crop hides content; it does not securely remove it. Drag the crop frame or its four corners, or edit X, Y, Width and Height above.</p></details></div>
   <section data-sign-panel hidden><h3>Visual signature</h3><div data-sign-pad></div><label>Or type a signature<input data-sign-name></label><button data-sign-add>Add signature to page</button><button data-sign-close>Close signature panel</button><p>This is a visible mark, not a cryptographic signature.</p></section><p id="stage" role="status" aria-live="polite">Choose a PDF to begin.</p><p id="error" role="alert" hidden></p><div class="direct-export-actions"><button id="cancel-operation" disabled>Cancel</button><button id="run-operation" class="primary" disabled>Run Edit PDF</button></div><div data-download></div></section>`;
@@ -74,13 +75,14 @@ export function mountWorkspace(
   const activeFrame = (): PageFrame | undefined => frames[currentPage - 1];
   const chosen = (): EditObject[] =>
     plan.objects.filter((o) => selected.has(o.id));
+  const objectLabel = (o: EditObject): string => o.kind === "native-highlight" ? "editable highlight" : o.kind;
   function properties(): void {
     const object = cropMode ? plan.crops[String(currentPage)] : chosen()[0];
     for (const input of form.querySelectorAll<
       HTMLInputElement | HTMLTextAreaElement
     >("input,textarea")) {
       input.disabled =
-        !object || (cropMode && ["text", "size", "color"].includes(input.name));
+        !object || (cropMode && ["text", "size", "color"].includes(input.name)) || (!cropMode && chosen()[0]?.kind === "native-highlight" && input.name === "size");
       input.value = object
         ? String(
             (object as unknown as Record<string, unknown>)[input.name] ??
@@ -109,7 +111,7 @@ export function mountWorkspace(
       button.setAttribute("role", "button");
       button.setAttribute(
         "aria-label",
-        `${o.kind}: ${o.text || "added content"}`,
+        `${objectLabel(o)}: ${o.text || "added content"}`,
       );
       button.setAttribute("aria-pressed", String(selected.has(o.id)));
       Object.assign(button.style, {
@@ -126,6 +128,9 @@ export function mountWorkspace(
         image.alt = o.kind;
         image.draggable = false;
         button.append(image);
+      } else if (o.kind === "native-highlight") {
+        button.style.background = `${o.color}${Math.round((o.opacity ?? 0.28) * 255).toString(16).padStart(2, "0")}`;
+        button.style.mixBlendMode = "multiply";
       } else if (o.kind === "rectangle" || o.kind === "highlight") {
         button.style.background = o.color;
         button.style.opacity = o.kind === "highlight" ? "0.28" : "1";
@@ -163,7 +168,7 @@ export function mountWorkspace(
     for (const o of plan.objects) {
       const b = document.createElement("button");
       b.type = "button";
-      b.textContent = `Page ${o.page} · ${o.kind} · ${(o.text ?? o.kind).slice(0, 50)}`;
+      b.textContent = `Page ${o.page} · ${objectLabel(o)} · ${(o.text || objectLabel(o)).slice(0, 50)}`;
       b.setAttribute("aria-pressed", String(selected.has(o.id)));
       b.addEventListener("click", () => {
         cropMode = false;
@@ -225,7 +230,8 @@ export function mountWorkspace(
           : kind === "comment"
             ? "Your comment"
             : ""),
-      color: kind === "highlight" ? "#ffcf33" : "#203047",
+      color: kind === "highlight" || kind === "native-highlight" ? "#ffcf33" : "#203047",
+      ...(kind === "native-highlight" ? { opacity: 0.28 } : {}),
       size: 16,
       data,
     };
@@ -656,6 +662,13 @@ export function mountWorkspace(
       source = file;
       runtime.inputs([file]);
       error.hidden = true;
+      q("[data-highlight-notice]").hidden = true;
+      q("[data-download]").replaceChildren();
+      urls.forEach(URL.revokeObjectURL);
+      urls = [];
+      overlay.replaceChildren();
+      q("[data-objects]").replaceChildren();
+      canvas.width = canvas.height = 1;
       selected.clear();
       frames = [];
       plan = emptyPlan();
@@ -682,7 +695,10 @@ export function mountWorkspace(
           String(result.info?.comments),
         ) as EditObject[];
         history = new EditHistory(plan);
-        const next = await createPreview(bytes, canvas, stage);
+        const preserved = Number(result.info?.preservedHighlights) || 0;
+        q("[data-highlight-notice]").hidden = preserved === 0;
+        q("[data-highlight-notice]").textContent = `${preserved} existing highlight${preserved === 1 ? " is" : "s are"} kept unchanged. Multi-region, locked or otherwise unsupported highlights cannot be edited here.`;
+        const next = await createPreview(result.outputs[0]?.buffer ?? bytes, canvas, stage);
         if (disposed || ticket !== generation) {
           await next.destroy();
           return;
