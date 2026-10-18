@@ -9,3 +9,5 @@ artifacts/
 .env.*.local
 supabase/.temp/
 supabase/.branches/
+
+.superpowers/

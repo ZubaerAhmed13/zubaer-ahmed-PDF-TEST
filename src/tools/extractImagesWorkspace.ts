@@ -1,3 +1,6 @@
+import { validateNativeRaster, addEncodedBytes } from '../pdf/resourceBudget';
+import { abortable, cancellationScope } from '../pdf/pdfCancellation';
+import { openLocalPdf } from '../pdf/pdfjsPolicy';
 import { addShareButton } from '../app/fileExport';
 import { workspaceRuntime } from '../app/workspaceRuntime';
 import * as pdfjs from 'pdfjs-dist';
@@ -92,14 +95,14 @@ function normalizeRasterSource(value: unknown): RasterImageSource | ImageBitmap 
 }
 
 function canvasFromRaster(source: RasterImageSource | ImageBitmap): HTMLCanvasElement | null {
-  const canvas = document.createElement('canvas');
   const width = source instanceof ImageBitmap ? source.width : source.width;
   const height = source instanceof ImageBitmap ? source.height : source.height;
-  if (!Number.isFinite(width) || !Number.isFinite(height) || width < 1 || height < 1 || width * height > 100_000_000) return null;
+  validateNativeRaster(width,height);
+  const canvas = document.createElement('canvas');
   canvas.width = width;
   canvas.height = height;
   const context = canvas.getContext('2d');
-  if (!context) return null;
+  if (!context) {canvas.width=canvas.height=1;return null;}
 
   if (isImageBitmap(source)) {
     context.drawImage(source, 0, 0);
@@ -107,7 +110,7 @@ function canvasFromRaster(source: RasterImageSource | ImageBitmap): HTMLCanvasEl
   }
 
   const bytes = source.data;
-  if (!bytes) return null;
+  if (!bytes) {canvas.width=canvas.height=1;return null;}
   const pixels = width * height;
   const rgba = new Uint8ClampedArray(pixels * 4);
 
@@ -145,7 +148,7 @@ function canvasFromRaster(source: RasterImageSource | ImageBitmap): HTMLCanvasEl
       }
     }
   } else {
-    return null;
+    canvas.width=canvas.height=1;return null;
   }
 
   context.putImageData(new ImageData(rgba, width, height), 0, 0);
@@ -164,18 +167,20 @@ async function extractEmbeddedImages(
   isCancelled: () => boolean
 ): Promise<{ blob: Blob; count: number }> {
   const [{ default: JSZip }] = await Promise.all([import('jszip')]);
-  const loadingTask = pdfjs.getDocument({ data: new Uint8Array(buffer) });
-  const document = await loadingTask.promise;
+  const scope=cancellationScope(isCancelled);
+  const loadingTask = (()=>{try{return openLocalPdf(buffer,scope.signal);}catch(error){scope.dispose();throw error;}})();
+  const document = await loadingTask.promise.catch(error=>{scope.dispose();throw error;});
   const zip = new JSZip();
   const manifest: ExtractedImageRecord[] = [];
   let extracted = 0;
+  let encodedBytes=0;
 
   try {
     for (let pageNumber = 1; pageNumber <= document.numPages; pageNumber += 1) {
       if (isCancelled()) throw new DOMException('Operation cancelled', 'AbortError');
       const page = await document.getPage(pageNumber);
       try {
-        const operatorList = await page.getOperatorList();
+        const operatorList = await abortable(page.getOperatorList(),scope.signal,()=>{void document.destroy().catch(()=>{});});
         const seenPageObjects = new Set<string>();
         let pageImageIndex = 0;
 
@@ -203,7 +208,10 @@ async function extractEmbeddedImages(
           if (!normalized) continue;
           const canvas = canvasFromRaster(normalized);
           if (!canvas) continue;
-          const png = await canvasToPng(canvas);
+          try {
+          const png = await abortable(canvasToPng(canvas),scope.signal);
+          scope.signal.throwIfAborted();
+          encodedBytes=addEncodedBytes(encodedBytes,png.size);
           pageImageIndex += 1;
           extracted += 1;
           const filename = `page-${String(pageNumber).padStart(3, '0')}-image-${String(pageImageIndex).padStart(3, '0')}.png`;
@@ -219,6 +227,7 @@ async function extractEmbeddedImages(
           });
           canvas.width = 1;
           canvas.height = 1;
+          } finally {canvas.width=canvas.height=1;}
         }
       } finally {
         page.cleanup();
@@ -226,7 +235,7 @@ async function extractEmbeddedImages(
       onProgress(`Scanned page ${pageNumber} of ${document.numPages}`, (pageNumber / document.numPages) * 90);
     }
   } finally {
-    await document.destroy();
+    scope.dispose(); await document.destroy();
   }
 
   if (extracted === 0) throw new Error('No decoded embedded raster images were found. Image masks, vector graphics, and whole-page rendering are intentionally not treated as embedded-image extraction.');
@@ -239,6 +248,7 @@ async function extractEmbeddedImages(
   }, null, 2));
   onProgress('Packaging extracted images', 95);
   const blob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE', compressionOptions: { level: 6 } });
+  if(isCancelled())throw new DOMException('Operation cancelled','AbortError');
   return { blob, count: extracted };
 }
 

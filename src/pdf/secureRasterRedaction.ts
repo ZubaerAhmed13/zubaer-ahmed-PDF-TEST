@@ -1,3 +1,4 @@
+import { openLocalPdf } from './pdfjsPolicy';
 import * as pdfjs from 'pdfjs-dist';
 import { PDFDocument } from 'pdf-lib';
 import type { PDFDocumentProxy, PDFPageProxy } from 'pdfjs-dist';
@@ -34,16 +35,17 @@ export function rectangleFromDrag(page: number, ax: number, ay: number, bx: numb
   const d = Math.max(0, Math.min(1, by));
   return { page, x: Math.min(a,c), y: Math.min(b,d), width: Math.abs(c-a), height: Math.abs(d-b) };
 }
-export function chooseRasterScale(width: number, height: number): number {
+export function chooseRasterScale(width: number, height: number, dpi = 115.2): number {
   if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) throw Error('Invalid PDF page dimensions.');
+  if (!Number.isFinite(dpi) || dpi < 72 || dpi > 300) throw Error('Choose a redaction resolution from 72 to 300 DPI.');
   const pixels = width * height;
-  return Math.min(1.6, MAX_DIMENSION / Math.max(width,height), Math.sqrt(MAX_PIXELS / pixels));
+  return Math.min(dpi / 72, MAX_DIMENSION / Math.max(width,height), Math.sqrt(MAX_PIXELS / pixels));
 }
 function assertNotCancelled(signal: AbortSignal): void {
   if (signal.aborted) throw new DOMException('Redaction cancelled', 'AbortError');
 }
 /** Render PDF visible content, including annotation appearances, without forwarding PDF objects to the output. */
-export async function renderPageImage(page: PDFPageProxy, scale = 1.2): Promise<HTMLCanvasElement> {
+export async function renderPageImage(page: PDFPageProxy, scale = 1.2, signal?: AbortSignal): Promise<HTMLCanvasElement> {
   const viewport = page.getViewport({ scale });
   if (!Number.isFinite(viewport.width) || !Number.isFinite(viewport.height) ||
       viewport.width < 10 || viewport.height < 10 || viewport.width * viewport.height > MAX_PIXELS + 5000)
@@ -56,7 +58,11 @@ export async function renderPageImage(page: PDFPageProxy, scale = 1.2): Promise<
   context.fillStyle = '#fff';
   context.fillRect(0, 0, canvas.width, canvas.height);
   try {
-    await page.render({ canvasContext: context, viewport, annotationMode: pdfjs.AnnotationMode.ENABLE }).promise;
+    signal?.throwIfAborted();
+    const task = page.render({ canvasContext: context, viewport, annotationMode: pdfjs.AnnotationMode.ENABLE });
+    const cancel = (): void => task.cancel();
+    signal?.addEventListener('abort', cancel, { once: true });
+    try { await task.promise; signal?.throwIfAborted(); } finally { signal?.removeEventListener('abort', cancel); }
     return canvas;
   } catch (error) {
     canvas.width = 1; canvas.height = 1;
@@ -81,9 +87,9 @@ async function pngBytes(canvas: HTMLCanvasElement): Promise<ArrayBuffer> {
     canvas.toBlob(value => value ? resolve(value) : reject(Error('Cannot encode rasterized page.')), 'image/png'));
   return blob.arrayBuffer();
 }
-export async function loadRedactionDocument(input: ArrayBuffer): Promise<PDFDocumentProxy> {
+export async function loadRedactionDocument(input: ArrayBuffer, signal?: AbortSignal): Promise<PDFDocumentProxy> {
   if (input.byteLength > REDACTION_MAX_BYTES) throw Error('The maximum file size for privacy-safe redaction is 40 MB.');
-  const document = await pdfjs.getDocument({ data: new Uint8Array(input) }).promise;
+  const document = await openLocalPdf(input, signal).promise;
   if (document.numPages < 1 || document.numPages > REDACTION_MAX_PAGES) {
     await document.destroy();
     throw Error('Redaction supports 1–15 pages per PDF; split larger documents first.');
@@ -97,10 +103,10 @@ export async function loadRedactionDocument(input: ArrayBuffer): Promise<PDFDocu
  */
 export async function redactPdf(
   bytes: ArrayBuffer, marks: readonly RedactionRect[],
-  progress: (event: RedactionProgress) => void, signal: AbortSignal
+  progress: (event: RedactionProgress) => void, signal: AbortSignal, dpi = 115.2
 ): Promise<OperationResult> {
   assertNotCancelled(signal);
-  const pdf = await loadRedactionDocument(bytes);
+  const pdf = await loadRedactionDocument(bytes, signal);
   try {
     const validated = validateRedactions(marks, pdf.numPages);
     const out = await PDFDocument.create();
@@ -116,7 +122,7 @@ export async function redactPdf(
       let canvas: HTMLCanvasElement | null = null;
       try {
         const originalViewport = page.getViewport({ scale: 1 });
-        canvas = await renderPageImage(page, chooseRasterScale(originalViewport.width, originalViewport.height));
+        canvas = await renderPageImage(page, chooseRasterScale(originalViewport.width, originalViewport.height, dpi), signal);
         assertNotCancelled(signal);
         paintRedactions(canvas, validated.filter(mark => mark.page === index));
         const png = await pngBytes(canvas);

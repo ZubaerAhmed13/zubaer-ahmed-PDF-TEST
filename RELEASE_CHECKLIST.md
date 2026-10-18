@@ -37,3 +37,5 @@ Local PDF tools remain usable without login. Temporary adversarial PR #5 is not 
 - Pass independent Unicode/invisibility/rotation tests and R4 browser export/reopen journeys.
 - Review uncertainty, range/chunk limits, correction review and model removal. Record exact release SHA and production result in the PR.
 - Keep physical-camera acceptance and Safari offline execution explicitly unverified until performed.
+
+R5: verify provenance; inspect preservation JSON and all pre-export policies; run repeat-build artifact checksum comparison; retain ZIP/manifest; verify redaction size preview and stale-draft invalidation, owned-resource lifecycle, strict oversized input behavior and existing 300-page/300-DPI suites. Record application licensing decision status and device/AT/offline limitations.

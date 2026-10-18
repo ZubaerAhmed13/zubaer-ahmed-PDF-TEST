@@ -1,8 +1,10 @@
+import { openLocalPdf } from '../pdf/pdfjsPolicy';
+import { abortable } from '../pdf/pdfCancellation';
 import { addShareButton } from '../app/fileExport';
 import { workspaceRuntime } from '../app/workspaceRuntime';
 import '../styles/professional-tools.css';
 import type { ToolDefinition } from './registry';
-import { rectangleFromDrag, validateRedactions, redactPdf, renderPageImage, loadRedactionDocument, type RedactionRect, REDACTION_MAX_BYTES } from '../pdf/secureRasterRedaction';
+import { rectangleFromDrag, validateRedactions, redactPdf, renderPageImage, loadRedactionDocument, type RedactionRect, REDACTION_MAX_BYTES, chooseRasterScale } from '../pdf/secureRasterRedaction';
 import { runQpdfOperation, type RunningQpdfOperation } from '../pdf/qpdfWorkerClient';
 import type { OperationResult } from '../pdf/types';
 import type { PDFDocumentProxy } from 'pdfjs-dist';
@@ -31,6 +33,10 @@ export function mountWorkspace(container: HTMLDivElement, tool: ToolDefinition):
       '<button type="submit" class="secondary">Add area using coordinates</button></form>' +
       '<div class="pro-mask-actions"><strong id="pro-mark-count" aria-live="polite">0 redaction areas</strong>' +
       '<button type="button" id="pro-undo" class="secondary" disabled>Undo last area</button><button type="button" id="pro-clear" class="secondary" disabled>Clear all areas</button></div>' +
+      '<div id="pro-region-list" aria-label="Redaction area review"></div>' +
+      '<label>Export resolution<select id="pro-dpi"><option value="72">72 DPI · smaller</option><option value="115.2" selected>115 DPI · balanced</option><option value="150">150 DPI</option><option value="300">300 DPI · capped for large pages</option></select></label>' +
+      '<p id="pro-raster-estimate" class="pro-help">Resolution is capped at 2,200 pixels per dimension and 3.2 million pixels per page.</p>' +
+      '<button type="button" id="pro-size-preview" class="secondary">Build export size preview</button><p id="pro-size-result" role="status"></p>' +
       '<label class="pro-confirm"><input id="pro-confirm" type="checkbox"> I understand this will permanently rasterise the entire document, remove selectable text and document structure, and I will visually review the export.</label>'
       : '<p class="pro-help">Your original PDF is never overwritten. Recovery rewrites cross-references and compatible streams to a newly downloaded file. It does not intentionally flatten or rasterise the document.</p>') +
     '<div class="pro-progress" role="status" aria-live="polite"><span id="pro-stage">Ready</span><progress id="pro-progress" value="0" max="100"></progress><p id="pro-error" role="alert" hidden></p></div>' +
@@ -55,6 +61,11 @@ export function mountWorkspace(container: HTMLDivElement, tool: ToolDefinition):
   const undo = container.querySelector<HTMLButtonElement>('#pro-undo');
   const clear = container.querySelector<HTMLButtonElement>('#pro-clear');
   const confirm = container.querySelector<HTMLInputElement>('#pro-confirm');
+  const dpi = container.querySelector<HTMLSelectElement>('#pro-dpi');
+  const sizePreview = container.querySelector<HTMLButtonElement>('#pro-size-preview');
+  const sizeResult = container.querySelector<HTMLElement>('#pro-size-result');
+  const regionList = container.querySelector<HTMLElement>('#pro-region-list');
+  let prepared: OperationResult | null = null;
   const coordForm = container.querySelector<HTMLFormElement>('#pro-coordinates');
 
   let file: File | null = null;
@@ -73,7 +84,8 @@ export function mountWorkspace(container: HTMLDivElement, tool: ToolDefinition):
   const progressText = (message: string, percent: number): void => {
     status.textContent = message; progress.value = Math.min(100, Math.max(0, percent));
   };
-  const resetDownload = (): void => {
+  const resetDownload = (invalidate = true): void => {
+    if (invalidate) { prepared = null; if (sizeResult) sizeResult.textContent = ''; }
     if (url) { URL.revokeObjectURL(url); url = null; }
     output.replaceChildren();
   };
@@ -119,6 +131,18 @@ export function mountWorkspace(container: HTMLDivElement, tool: ToolDefinition):
       context.fillRect(x, y, w, h);
       context.strokeRect(x, y, w, h);
     }
+    if (regionList) {
+      regionList.replaceChildren();
+      marks.forEach((mark, index) => {
+        const row = document.createElement('div'); row.className = 'pro-region-row';
+        const jump = document.createElement('button'); jump.type = 'button'; jump.className = 'secondary'; jump.disabled = active;
+        jump.textContent = `Area ${index+1} · page ${mark.page} · X ${(mark.x*100).toFixed(1)}%, Y ${(mark.y*100).toFixed(1)}%, ${(mark.width*100).toFixed(1)}% × ${(mark.height*100).toFixed(1)}%`;
+        jump.addEventListener('click', () => { if (!active) { page = mark.page; void renderPreview().catch(e => showError(String(e))); } });
+        const remove = document.createElement('button'); remove.type = 'button'; remove.className = 'secondary'; remove.disabled = active; remove.textContent = 'Remove area '+(index+1);
+        remove.addEventListener('click', () => { if (!active) { marks.splice(index,1); resetDownload(); drawOverlay(); } });
+        row.append(jump,remove); regionList.append(row);
+      });
+    }
     if (markLabel) markLabel.textContent = marks.length + ' redaction area(s) · ' + marks.filter(m => m.page === page).length + ' on page ' + page;
     if (undo) undo.disabled = !marks.length || active;
     if (clear) clear.disabled = !marks.length || active;
@@ -137,6 +161,9 @@ export function mountWorkspace(container: HTMLDivElement, tool: ToolDefinition):
     let rendered: HTMLCanvasElement | null = null;
     try {
       const view = proxy.getViewport({ scale: 1 });
+      const exportScale = chooseRasterScale(view.width, view.height, Number(dpi?.value ?? 115.2));
+      const estimate = container.querySelector<HTMLElement>('#pro-raster-estimate');
+      if (estimate) estimate.textContent = `Current page: ${Math.floor(view.width*exportScale)} × ${Math.floor(view.height*exportScale)} pixels, ${Math.round(exportScale*72)} effective DPI; about ${(view.width*view.height*exportScale*exportScale*4/1048576).toFixed(1)} MB per RGBA canvas. Export caps: 2,200 pixels per dimension, 3.2 million pixels/page. Build a size preview for the exact PDF byte size.`;
       const scale = Math.min(1.25, 1500 / Math.max(view.width, view.height), Math.sqrt(2_000_000 / (view.width * view.height)));
       rendered = await renderPageImage(proxy, scale);
       if (disposed || epoch !== generation) return;
@@ -232,26 +259,31 @@ export function mountWorkspace(container: HTMLDivElement, tool: ToolDefinition):
     }
   };
   input.addEventListener('change', () => { void chooseFile(); });
-  const runJob = async (): Promise<void> => {
+  const runJob = async (previewOnly = false): Promise<void> => {
     if (active || disposed) return;
     if (!file) { showError('Choose a PDF first.'); return; }
     if (redact && (!pdf || !confirm?.checked)) { showError('Load the PDF and confirm the raster redaction warning before continuing.'); return; }
     if (redact && !marks.length) { showError('Mark at least one area on the PDF.'); return; }
-    showError(); resetDownload();
+    showError(); resetDownload(false);
     runtime.busy(true);
-    active = true; input.disabled = true; run.disabled = true; cancel.disabled = false;
+    active = true; if (dpi) dpi.disabled = true; if (sizePreview) sizePreview.disabled = true; drawOverlay(); input.disabled = true; run.disabled = true; cancel.disabled = false;
     nav();
     const currentAbort = new AbortController();
     abort = currentAbort;
+    let timedOut=false;
+    const deadline=setTimeout(()=>{timedOut=true;currentAbort.abort();qpdf?.cancel();},120000);
     try {
       const source = await file.arrayBuffer();
       if (currentAbort.signal.aborted) throw new DOMException('Cancelled','AbortError');
       if (redact) {
-        const result = await redactPdf(source, marks, statusEvent => {
+        const result = prepared ?? await redactPdf(source, marks, statusEvent => {
           if (!disposed) progressText(statusEvent.message, Math.min(97, Math.round(statusEvent.current / statusEvent.total * 97)));
-        }, currentAbort.signal);
+        }, currentAbort.signal, Number(dpi?.value ?? 115.2));
         if (currentAbort.signal.aborted || disposed) return;
-        renderResult(result);
+        if (previewOnly) {
+          prepared = result;
+          if (sizeResult) sizeResult.textContent = 'Export preview ready: ' + result.outputs[0]!.buffer.byteLength.toLocaleString() + ' bytes (' + (result.outputs[0]!.buffer.byteLength/1048576).toFixed(2) + ' MB). Apply permanent redactions to download this exact PDF. Changing areas or resolution discards the preview.';
+        } else renderResult(result);
       } else {
         qpdf = runQpdfOperation('repair', { name: file.name, type: 'application/pdf', buffer: source }, '', update => {
           if (!disposed) progressText(update.message, update.percent);
@@ -259,11 +291,9 @@ export function mountWorkspace(container: HTMLDivElement, tool: ToolDefinition):
         const result = await qpdf.result;
         if (currentAbort.signal.aborted || disposed) return;
         // qpdf may recover structures that pdf-lib cannot parse, so PDF.js is the secondary verification engine.
-        const { getDocument, GlobalWorkerOptions } = await import('pdfjs-dist');
-        GlobalWorkerOptions.workerSrc = new URL('pdfjs-dist/build/pdf.worker.min.mjs', import.meta.url).toString();
         const bytes = result.outputs[0]?.buffer;
         if (!bytes) throw Error('qpdf returned no output.');
-        const task = getDocument({ data: new Uint8Array(bytes.slice(0)), stopAtErrors: true });
+        const task = openLocalPdf(bytes.slice(0),currentAbort.signal);
         const verified = await task.promise;
         try {
           if (verified.numPages < 1) throw Error('The rewritten document contains no pages.');
@@ -271,10 +301,10 @@ export function mountWorkspace(container: HTMLDivElement, tool: ToolDefinition):
             if (currentAbort.signal.aborted || disposed) throw new DOMException('Cancelled', 'AbortError');
             progressText('Validating repaired page ' + pageNumber + ' of ' + verified.numPages, 97);
             const checkedPage = await verified.getPage(pageNumber);
-            await checkedPage.getOperatorList();
-            checkedPage.cleanup();
+            try {await abortable(checkedPage.getOperatorList(),currentAbort.signal,()=>{void verified.destroy().catch(()=>{});});}
+            finally {checkedPage.cleanup();}
           }
-        } finally { await verified.destroy(); }
+        } finally { if(currentAbort.signal.aborted)void verified.destroy().catch(()=>{});else await verified.destroy(); }
         if (currentAbort.signal.aborted || disposed) return;
         renderResult(result);
       }
@@ -283,16 +313,19 @@ export function mountWorkspace(container: HTMLDivElement, tool: ToolDefinition):
       if (disposed) return;
       progressText('Failed',0);
       showError(currentAbort.signal.aborted || (e instanceof DOMException && e.name === 'AbortError')
-        ? 'Operation cancelled. No output was saved.'
+        ? (timedOut ? 'The 120-second time limit was reached. No output was saved.' : 'Operation cancelled. No output was saved.')
         : e instanceof Error ? e.message : 'Operation failed.');
     } finally {
+      clearTimeout(deadline);
       runtime.busy(false);
       qpdf = null;
       abort = null;
       active = false;
-      if (!disposed) { run.disabled = false; input.disabled = false; cancel.disabled = true; nav(); }
+      if (!disposed) { if (dpi) dpi.disabled = false; if (sizePreview) sizePreview.disabled = false; drawOverlay(); run.disabled = false; input.disabled = false; cancel.disabled = true; nav(); }
     }
   };
+  dpi?.addEventListener('change', () => { resetDownload(); void renderPreview().catch(e => showError(String(e))); });
+  sizePreview?.addEventListener('click', () => { void runJob(true); });
   run.addEventListener('click', () => { void runJob(); });
   cancel.addEventListener('click', () => { abort?.abort(); qpdf?.cancel(); });
   container.addEventListener('docflow-cleanup', () => {

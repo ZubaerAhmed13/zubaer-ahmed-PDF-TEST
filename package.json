@@ -1,6 +1,6 @@
 {
   "name": "docflow-professional",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -13,7 +13,9 @@
     "test:e2e:chromium": "playwright test --project=chromium",
     "test:production": "playwright test --config=playwright.production.config.ts --project=chromium",
     "preview": "vite preview",
-    "benchmark:ocr": "node scripts/stage-ocr-assets.mjs && node scripts/benchmark-ocr.mjs"
+    "benchmark:ocr": "node scripts/stage-ocr-assets.mjs && node scripts/benchmark-ocr.mjs",
+    "verify:provenance": "node scripts/verify-provenance.mjs",
+    "release:artifact": "node scripts/release-artifact.mjs"
   },
   "dependencies": {
     "@pdf-lib/fontkit": "1.1.1",
@@ -36,5 +38,6 @@
     "typescript-eslint": "8.71.2",
     "vite": "6.4.3",
     "vitest": "4.1.11"
-  }
+  },
+  "license": "UNLICENSED"
 }

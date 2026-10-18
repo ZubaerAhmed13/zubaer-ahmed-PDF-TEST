@@ -1,3 +1,5 @@
+import { fitRaster } from './resourceBudget';
+import { openLocalPdf } from './pdfjsPolicy';
 import * as pdfjs from 'pdfjs-dist';
 import type { PDFDocumentProxy, RenderTask } from 'pdfjs-dist';
 
@@ -15,15 +17,18 @@ export interface PreviewController {
   destroy: () => Promise<void>;
 }
 
-export async function createPreview(buffer: ArrayBuffer, canvas: HTMLCanvasElement, status: HTMLElement): Promise<PreviewController> {
-  const loadingTask = pdfjs.getDocument({ data: new Uint8Array(buffer) });
+export async function createPreview(buffer: ArrayBuffer, canvas: HTMLCanvasElement, status: HTMLElement, signal?: AbortSignal): Promise<PreviewController> {
+  const loadingTask = openLocalPdf(buffer,signal);
   const doc: PDFDocumentProxy = await loadingTask.promise;
   let currentTask: RenderTask | null = null;
   let mainGeneration = 0;
   let destroyed = false;
+  let thumbnailQueue = Promise.resolve();
+  let thumbnailGeneration = 0;
   const thumbnailTasks = new Set<RenderTask>();
 
   const cancelThumbnails = (): void => {
+    ++thumbnailGeneration;
     thumbnailTasks.forEach((task) => task.cancel());
     thumbnailTasks.clear();
   };
@@ -33,18 +38,23 @@ export async function createPreview(buffer: ArrayBuffer, canvas: HTMLCanvasEleme
     document: doc,
     async render(pageNumber: number, scale = 1.25): Promise<void> {
       const generation = ++mainGeneration;
-      currentTask?.cancel();
+      const previousTask = currentTask; previousTask?.cancel();
+      await previousTask?.promise.catch(() => {});
       const page = await doc.getPage(pageNumber);
       if (destroyed || generation !== mainGeneration) { page.cleanup(); return; }
-      const viewport = page.getViewport({ scale });
+      const base = page.getViewport({ scale: 1 });
       const pixelRatio = Math.min(window.devicePixelRatio || 1, 2);
-      canvas.width = Math.floor(viewport.width * pixelRatio);
-      canvas.height = Math.floor(viewport.height * pixelRatio);
+      const size = fitRaster(base.width, base.height, scale * pixelRatio, 4_000_000, 3000);
+      // Keep the requested logical viewport for zoom, text layers and editor overlays; cap backing pixels only.
+      const viewport = page.getViewport({ scale });
+      const backingRatio = size.scale / scale;
+      canvas.width = size.width;
+      canvas.height = size.height;
       canvas.style.width = `${Math.floor(viewport.width)}px`;
       canvas.style.height = `${Math.floor(viewport.height)}px`;
       const context = canvas.getContext('2d', { alpha: false });
       if (!context) { page.cleanup(); throw new Error('CANVAS_CONTEXT_UNAVAILABLE'); }
-      context.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
+      context.setTransform(backingRatio, 0, 0, backingRatio, 0, 0);
       status.textContent = `Rendering page ${pageNumber} of ${doc.numPages}`;
       currentTask = page.render({ canvasContext: context, viewport });
       try {
@@ -63,11 +73,17 @@ export async function createPreview(buffer: ArrayBuffer, canvas: HTMLCanvasEleme
       }
     },
     async renderThumbnail(pageNumber: number, target: HTMLCanvasElement, scale = 0.22): Promise<boolean> {
-      if (destroyed) return false;
+      const generation = thumbnailGeneration;
+      const previous = thumbnailQueue; let release!: () => void; thumbnailQueue = new Promise<void>(resolve => {release=resolve;});
+      await previous;
+      try {
+      if (destroyed || generation !== thumbnailGeneration) return false;
       const page = await doc.getPage(pageNumber);
       if (destroyed) { page.cleanup(); return false; }
-      const viewport = page.getViewport({ scale });
+      const base = page.getViewport({scale:1});
       const pixelRatio = Math.min(window.devicePixelRatio || 1, 1.5);
+      const size = fitRaster(base.width,base.height,scale*pixelRatio,300_000,600);
+      const viewport = page.getViewport({scale:size.scale/pixelRatio});
       target.width = Math.max(1, Math.floor(viewport.width * pixelRatio));
       target.height = Math.max(1, Math.floor(viewport.height * pixelRatio));
       target.style.width = `${Math.max(1, Math.floor(viewport.width))}px`;
@@ -87,9 +103,11 @@ export async function createPreview(buffer: ArrayBuffer, canvas: HTMLCanvasEleme
         thumbnailTasks.delete(task);
         page.cleanup();
       }
+      } finally { release(); }
     },
     cancelThumbnails,
     async destroy(): Promise<void> {
+      if(destroyed)return;
       renderedPages.delete(canvas);
       destroyed = true;
       mainGeneration += 1;
@@ -110,27 +128,36 @@ export async function pdfToImages(
   isCancelled: () => boolean
 ): Promise<Blob> {
   const [{ default: JSZip }] = await Promise.all([import('jszip')]);
-  const task = pdfjs.getDocument({ data: new Uint8Array(buffer) });
+  const task = openLocalPdf(buffer);
   const doc = await task.promise;
   const zip = new JSZip();
-  for (let pageNumber = 1; pageNumber <= doc.numPages; pageNumber += 1) {
-    if (isCancelled()) { await doc.destroy(); throw new DOMException('Operation cancelled', 'AbortError'); }
-    const page = await doc.getPage(pageNumber);
-    const viewport = page.getViewport({ scale });
-    const canvas = document.createElement('canvas');
-    canvas.width = Math.floor(viewport.width);
-    canvas.height = Math.floor(viewport.height);
-    const context = canvas.getContext('2d', { alpha: format === 'png' });
-    if (!context) throw new Error('CANVAS_CONTEXT_UNAVAILABLE');
-    const renderTask = page.render({ canvasContext: context, viewport });
-    await renderTask.promise;
-    const blob = await new Promise<Blob>((resolve, reject) => canvas.toBlob((value) => value ? resolve(value) : reject(new Error('IMAGE_ENCODING_FAILED')), `image/${format}`, format === 'jpeg' ? 0.92 : undefined));
-    zip.file(`page-${String(pageNumber).padStart(3, '0')}.${format === 'jpeg' ? 'jpg' : 'png'}`, blob);
-    canvas.width = 1;
-    canvas.height = 1;
-    page.cleanup();
-    onProgress(pageNumber, doc.numPages);
-  }
-  await doc.destroy();
-  return zip.generateAsync({ type: 'blob', compression: 'DEFLATE', compressionOptions: { level: 6 } });
+  let encodedBytes = 0;
+  try {
+    for (let pageNumber = 1; pageNumber <= doc.numPages; pageNumber += 1) {
+      if (isCancelled()) throw new DOMException('Operation cancelled', 'AbortError');
+      const page = await doc.getPage(pageNumber);
+      const canvas = document.createElement('canvas');
+      let cancellation: ReturnType<typeof setInterval> | undefined;
+      try {
+        const base = page.getViewport({scale:1});
+        const size = fitRaster(base.width,base.height,scale);
+        const viewport = page.getViewport({ scale: size.scale });
+        canvas.width = size.width; canvas.height = size.height;
+        const context = canvas.getContext('2d', { alpha: format === 'png' });
+        if (!context) throw new Error('CANVAS_CONTEXT_UNAVAILABLE');
+        const renderTask = page.render({ canvasContext: context, viewport });
+        cancellation = setInterval(() => { if (isCancelled()) renderTask.cancel(); }, 100);
+        await renderTask.promise;
+        const blob = await new Promise<Blob>((resolve, reject) => canvas.toBlob((value) => value ? resolve(value) : reject(new Error('IMAGE_ENCODING_FAILED')), `image/${format}`, format === 'jpeg' ? 0.92 : undefined));
+        if (isCancelled()) throw new DOMException('Operation cancelled','AbortError');
+        encodedBytes += blob.size;
+        if (encodedBytes > 150*1048576) throw Error('Image export exceeds the 150 MB archive budget; export a smaller document.');
+        zip.file(`page-${String(pageNumber).padStart(3, '0')}.${format === 'jpeg' ? 'jpg' : 'png'}`, blob);
+        onProgress(pageNumber, doc.numPages);
+      } finally { clearInterval(cancellation); canvas.width=canvas.height=1; page.cleanup(); }
+    }
+    const output = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE', compressionOptions: { level: 6 } });
+    if (isCancelled()) throw new DOMException('Operation cancelled','AbortError');
+    return output;
+  } finally { await doc.destroy(); }
 }

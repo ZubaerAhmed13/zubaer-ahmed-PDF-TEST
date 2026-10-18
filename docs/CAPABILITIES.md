@@ -39,3 +39,7 @@ All workspaces also pass through [registry loading/error checks](../e2e/r0-basel
 ## Offline and mobile readiness
 
 [Offline setup and system export](R3_RELEASE.md) enumerate the certified automated journey and pending physical-device/assistive-technology checks. Readiness checks actual cache entries; prepare OCR languages explicitly before disconnecting. Cache availability is not document backup or universal device certification. Downloads always remain available; system file sharing appears only where supported.
+
+## R5 preservation, safety and budgets
+
+All PDF workspaces show export consequences and a cancellable local structural inventory, including signature/certification, actions, attachment and link flags. No signature validation or malware-scanning claim. Raster redaction adds requested DPI, effective canvas sizing, individual area review and an exact-size draft before download. Shared worker/input/loading/canvas budgets and bounded thumbnails apply as documented in [R5_RELEASE.md](R5_RELEASE.md). Reproducible CI ZIPs include content checksums and a pinned vendor/dependency provenance report; root application license choice remains with the owner.

@@ -7,9 +7,11 @@ import { metadata } from '../pdf/metadata';
 import { normalizePdfError } from '../pdf/errors';
 import type { OperationResult, WorkerRequest, WorkerResponse } from '../pdf/types';
 
+import { inspectDocument } from '../pdf/documentInspection';
 import { applyDirectEdit, inspectDirectEdit } from '../pdf/directEdit';
 
 const handlers = {
+  'document-inspect': async (files: import('../pdf/types').InputFile[]): Promise<OperationResult> => ({ outputs: [], info: { inspection: JSON.stringify(await inspectDocument(files[0]!.buffer)) } }),
   'direct-edit': applyDirectEdit,
   'direct-edit-inspect': inspectDirectEdit,
   merge: mergePdf,
@@ -35,10 +37,13 @@ const handlers = {
 self.addEventListener('message', (event: MessageEvent<WorkerRequest>) => {
   const request = event.data;
   const handler = handlers[request.operation];
-  void handler(request.files, request.options, (operationProgress) => {
+  void (async () => {
+    if (!['document-inspect','images-to-pdf','metadata'].includes(request.operation)) for (const file of request.files) if (file.type === 'application/pdf' || /\.pdf$/i.test(file.name)) await inspectDocument(file.buffer);
+    return handler(request.files, request.options, (operationProgress) => {
     const response: WorkerResponse = { requestId: request.requestId, type: 'progress', progress: operationProgress };
     self.postMessage(response);
-  }).then((result: OperationResult) => {
+  });
+  })().then((result: OperationResult) => {
     const response: WorkerResponse = { requestId: request.requestId, type: 'result', result };
     const transfers = result.outputs.map((output) => output.buffer);
     self.postMessage(response, { transfer: transfers });

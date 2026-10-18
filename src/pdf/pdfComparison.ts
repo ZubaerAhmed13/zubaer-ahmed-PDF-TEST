@@ -1,3 +1,5 @@
+import { abortable, cancellationScope, renderBoundedPage } from './pdfCancellation';
+import { openLocalPdf } from './pdfjsPolicy';
 import { alignPages, wordChanges, type TextChange, type PageSignature } from './pageAlignment';
 import * as pdfjs from 'pdfjs-dist';
 import type { PDFPageProxy } from 'pdfjs-dist';
@@ -64,7 +66,7 @@ function makeCanvas(): HTMLCanvasElement {
   canvas.height = RENDER_H;
   return canvas;
 }
-async function rasterize(page: PDFPageProxy | null): Promise<HTMLCanvasElement> {
+async function rasterize(page: PDFPageProxy | null, signal: AbortSignal): Promise<HTMLCanvasElement> {
   const canvas = makeCanvas();
   const ctx = canvas.getContext('2d', { willReadFrequently: true, alpha: false });
   if (!ctx) throw Error('Canvas rendering is unavailable.');
@@ -73,16 +75,11 @@ async function rasterize(page: PDFPageProxy | null): Promise<HTMLCanvasElement> 
   if (!page) return canvas;
   const unscaled = page.getViewport({ scale: 1 });
   const scale = Math.min((RENDER_W - 14) / unscaled.width, (RENDER_H - 14) / unscaled.height, 1.6);
-  const viewport = page.getViewport({ scale });
-  const docCanvas = document.createElement('canvas');
-  docCanvas.width = Math.max(1, Math.round(viewport.width));
-  docCanvas.height = Math.max(1, Math.round(viewport.height));
-  const dc = docCanvas.getContext('2d', { alpha: false });
-  if (!dc) throw Error('Page rendering is unavailable.');
-  await page.render({ canvasContext: dc, viewport }).promise;
-  ctx.drawImage(docCanvas, Math.floor((RENDER_W - docCanvas.width) / 2), Math.floor((RENDER_H - docCanvas.height) / 2));
-  docCanvas.width = 1;
-  docCanvas.height = 1;
+  try {
+    const docCanvas = await renderBoundedPage(page,scale,signal);
+    try {ctx.drawImage(docCanvas,Math.floor((RENDER_W-docCanvas.width)/2),Math.floor((RENDER_H-docCanvas.height)/2));}
+    finally {docCanvas.width=docCanvas.height=1;}
+  } catch(error) {canvas.width=canvas.height=1;throw error;}
   return canvas;
 }
 function pixels(canvas: HTMLCanvasElement): Uint8ClampedArray {
@@ -114,9 +111,11 @@ export async function comparePdfs(
   options: { mode: 'text' | 'visual' | 'both'; maxPages: number; threshold?: number; tolerance?: number },
   progress: (done: number, total: number) => void, cancelled: () => boolean
 ): Promise<ComparisonResult> {
-  const leftLoading = pdfjs.getDocument({ data: new Uint8Array(leftBuffer) });
-  const rightLoading = pdfjs.getDocument({ data: new Uint8Array(rightBuffer) });
-  let leftDoc: Awaited<typeof leftLoading.promise> | null = null;
+  const scope = cancellationScope(cancelled);
+  let leftLoading:ReturnType<typeof openLocalPdf>|null=null,rightLoading:ReturnType<typeof openLocalPdf>|null=null;
+  try {leftLoading=openLocalPdf(leftBuffer,scope.signal);rightLoading=openLocalPdf(rightBuffer,scope.signal);}
+  catch(error){scope.dispose();void leftLoading?.destroy();throw error;}
+  let leftDoc: import('pdfjs-dist').PDFDocumentProxy | null = null;
   let rightDoc: Awaited<typeof rightLoading.promise> | null = null;
   const check = (): void => { if (cancelled()) throw new DOMException('Comparison cancelled', 'AbortError'); };
   try {
@@ -128,10 +127,10 @@ export async function comparePdfs(
       for (let i = 1; i <= Math.min(limit, doc.numPages); i++) {
         check(); const page = await doc.getPage(i);
         try {
-          const text = textOf((await page.getTextContent()).items);
+          const text = textOf((await abortable(page.getTextContent(),scope.signal)).items);
           let fingerprint: number[] | undefined;
           if (!text && options.mode !== 'text') {
-            const canvas = await rasterize(page), tiny = document.createElement('canvas'); tiny.width = 24; tiny.height = 32;
+            const canvas = await rasterize(page,scope.signal), tiny = document.createElement('canvas'); tiny.width = 24; tiny.height = 32;
             const ctx = tiny.getContext('2d', { willReadFrequently: true })!; ctx.drawImage(canvas, 0, 0, 24, 32);
             const data = ctx.getImageData(0, 0, 24, 32).data; fingerprint = [];
             for (let k = 0; k < data.length; k += 4) fingerprint.push((data[k]! + data[k + 1]! + data[k + 2]!) / 3);
@@ -151,13 +150,14 @@ export async function comparePdfs(
         const lt = pair.left ? ls[pair.left - 1]!.text : '', rt = pair.right ? rs[pair.right - 1]!.text : '';
         let pixelDifferencePercent: number | null = null, preview: ComparisonPreview | null = null;
         if (options.mode !== 'text') {
-          const [lc, rc] = await Promise.all([rasterize(l), rasterize(r)]);
+          const lc = await rasterize(l,scope.signal); let rc:HTMLCanvasElement|null=null;
           try {
+            rc = await rasterize(r,scope.signal);
             const { percent, mask } = pixelDifference(pixels(lc), pixels(rc), threshold); pixelDifferencePercent = percent;
             const overlay = makeCanvas(), ctx = overlay.getContext('2d')!;
             const data = ctx.createImageData(RENDER_W, RENDER_H); data.data.set(mask); ctx.putImageData(data, 0, 0);
             preview = { page: index + 1, left: await toBlob(lc), right: await toBlob(rc), overlay: await toBlob(overlay) }; overlay.width = overlay.height = 1;
-          } finally { lc.width = lc.height = rc.width = rc.height = 1; }
+          } finally { lc.width = lc.height = 1; if(rc)rc.width=rc.height=1; }
           check();
         }
         const classification = classifyPagePair(l ? lt : null, r ? rt : null);
@@ -179,5 +179,5 @@ export async function comparePdfs(
     const escape = (value: string): string => value.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!));
     const html = `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>DocFlow comparison report</title><style>body{font:16px system-ui;max-width:900px;margin:32px auto;padding:0 20px;line-height:1.6}section{border-top:1px solid #bbb;padding:20px 0}ins{background:#d9f6df}del{background:#ffe0dc}a{color:#a33126}</style><h1>PDF comparison report</h1><p>${escape(disclaimer)}</p><p>${limited ? 'Incomplete comparison: pages beyond the limit were not matched.' : 'All pages compared.'} A: ${leftDoc.numPages} pages; B: ${rightDoc.numPages} pages.</p><nav aria-label="Page matches">${rows.map(row => `<a href="#pair-${row.page}">${escape(label(row))}</a><br>`).join('')}</nav>${rows.map(row => `<section id="pair-${row.page}"><h2>${escape(label(row))}</h2><p>${row.pixelDifferencePercent === null ? 'Text comparison' : `Changed pixels: ${row.pixelDifferencePercent}%`}</p><p>${row.changes.map(c => c.kind === 'added' ? `<ins>${escape(c.text)}</ins> ` : c.kind === 'removed' ? `<del>${escape(c.text)}</del> ` : escape(c.text) + ' ').join('')}</p>${row.textLimited ? '<p>Word diff incomplete: first 600 words only.</p>' : ''}<a href="#">Back to page matches</a></section>`).join('')}</html>`;
     return { leftPages: leftDoc.numPages, rightPages: rightDoc.numPages, pagesCompared: rows.length, changedPages, rows, previews, preview: previews[rows.findIndex(r => r.status !== 'same')] ?? previews[0] ?? null, limited, report: new Blob([reportText], { type: 'text/plain;charset=utf-8' }), htmlReport: new Blob([html], { type: 'text/html;charset=utf-8' }) };
-  } finally { await Promise.allSettled([leftDoc ? leftDoc.destroy() : leftLoading.destroy(), rightDoc ? rightDoc.destroy() : rightLoading.destroy()]); }
+  } finally { scope.dispose(); await Promise.allSettled([leftDoc ? leftDoc.destroy() : leftLoading.destroy(), rightDoc ? rightDoc.destroy() : rightLoading.destroy()]); }
 }

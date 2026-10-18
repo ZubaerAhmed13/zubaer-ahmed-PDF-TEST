@@ -1,3 +1,4 @@
+import { DocumentSafety } from './documentSafety';
 import { addShareButton } from './fileExport';
 import { tools, type ToolDefinition } from '../tools/registry';
 import { DocumentSession, pdfFilename, validateSessionPdf } from './documentSession';
@@ -26,6 +27,7 @@ export interface DocumentWorkspaceOptions {
 export class DocumentWorkspace {
   readonly session = new DocumentSession();
   private enabled = false;
+  private safety: DocumentSafety | null = null;
   private tool: ToolDefinition | null = null;
   private files: File[] = [];
   private operation = false;
@@ -119,6 +121,7 @@ export class DocumentWorkspace {
         const changed = files.length !== this.files.length || files.some((file, index) => this.session.sourceId(file) !== (this.files[index] ? this.session.sourceId(this.files[index]!) : ''));
         if (changed && !this.seeded && this.enabled && this.session.snapshot().current && this.tool?.id !== 'preview') this.draft = true;
         this.files = [...files];
+        this.safety?.setFiles(files);
         this.render();
       },
       busy: value => {
@@ -185,6 +188,8 @@ export class DocumentWorkspace {
   }
 
   mounted(): void {
+    this.safety = new DocumentSafety(this.options.root, this.tool?.id ?? 'preview');
+    this.safety.setFiles(this.files);
     const current = this.session.snapshot().current;
     const file = this.viewing ?? current?.file;
     if (this.enabled && file && this.tool?.id !== 'images-to-pdf') {
@@ -208,12 +213,14 @@ export class DocumentWorkspace {
       if (file) { this.session.start(file); this.filename = file.name; }
     }
     if (!this.seeded && this.enabled && this.tool?.id !== 'preview') this.draft = true;
+    this.safety?.setFiles(this.files);
     // The dedicated reader has no separate pre-edit preview.
     if (this.enabled && this.tool?.id === 'preview') queueMicrotask(() => this.options.root.querySelector<HTMLButtonElement>('#run-operation')?.click());
     this.render();
   }
 
   unmount(): void {
+    this.safety?.destroy(); this.safety = null;
     this.disconnect?.(); this.disconnect = null;
     this.bindings?.abort(); this.bindings = null;
     this.operation = false; this.files = []; this.draft = false; this.allowedLeave = false;
