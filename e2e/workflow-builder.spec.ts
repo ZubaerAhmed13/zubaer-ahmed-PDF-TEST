@@ -118,7 +118,7 @@ test('mobile step editing and form controls remain accessible', async ({ page })
   await dialog.getByRole('button', { name: 'Add step' }).click();
   await expect(dialog.locator('.wf-step')).toHaveCount(3);
   await expect(dialog.locator('.wf-step').last().getByText('Watermark text')).toBeVisible();
-  await dialog.locator('.wf-step').last().locator('input').first().fill('PERSONAL COPY');
-  expect(await dialog.locator('.wf-step').last().locator('input').first().inputValue()).toBe('PERSONAL COPY');
+  await dialog.locator('.wf-step').last().getByLabel('Watermark text', { exact: true }).fill('PERSONAL COPY');
+  expect(await dialog.locator('.wf-step').last().getByLabel('Watermark text', { exact: true }).inputValue()).toBe('PERSONAL COPY');
   await expect(dialog.getByRole('button', { name: 'Run workflow' })).toBeVisible();
 });

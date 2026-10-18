@@ -227,6 +227,9 @@ export function mountWorkspace(root: HTMLDivElement, _tool: ToolDefinition): voi
   const updateStep = (index: number, key: string, raw: string, control: HTMLInputElement | HTMLSelectElement): void => {
     if (locked || !steps[index]) return;
     const value = (control instanceof HTMLInputElement && control.type === 'number') || key === 'degrees' ? Number(raw) : raw;
+    // Text input already updates the draft. Its later blur/change must not replace
+    // the queue button that is currently receiving the user's click.
+    if (steps[index]!.options[key] === value) return;
     steps[index]!.options[key] = value;
     resetOutputs();
   };
