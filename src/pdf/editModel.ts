@@ -15,12 +15,13 @@ export interface Rect {
 export interface EditObject extends Rect {
   id: string;
   page: number;
-  kind: "text" | "rectangle" | "highlight" | "image" | "signature" | "comment";
+  kind: "text" | "rectangle" | "highlight" | "native-highlight" | "image" | "signature" | "comment";
   text?: string;
   color: string;
   size: number;
   data?: string;
   originalId?: string;
+  opacity?: number;
 }
 export interface EditPlan {
   objects: EditObject[];

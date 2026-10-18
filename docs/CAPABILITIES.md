@@ -1,10 +1,10 @@
 # Current capability and evidence matrix
 
-Current release: R7 / 0.9.0, 29 tool IDs; the original 28 stable IDs are retained. Test links identify coverage; passing results must be checked at the exact release SHA. Catalog preservation is not implied by a structural/lossless label.
+Current release: A1.1 / 0.10.0, 29 tool IDs; the original 28 stable IDs are retained. Test links identify coverage; passing results must be checked at the exact release SHA. Catalog preservation is not implied by a structural/lossless label.
 
 | Tool / ID | Coverage | Important boundary |
 |---|---|---|
-| Edit PDF (`edit-pdf`) | [R2 exports and independent reopen](../tests/r2Editing.test.ts), [browser journeys](../e2e/r2-editing-reading.spec.ts) | Added content only; Latin/Greek/Cyrillic tested; native Text sticky notes; crop hides content. [R2 limits](R2_RELEASE.md). |
+| Edit PDF (`edit-pdf`) | [R2 exports and independent reopen](../tests/r2Editing.test.ts), [browser journeys](../e2e/r2-editing-reading.spec.ts) | Added content only; Latin/Greek/Cyrillic tested; native Text sticky notes and single-region editable Highlight annotations; unsupported highlights stay unchanged; crop hides content. [A1.1 evidence and limits](A1_1_RELEASE.md). |
 | View PDF (`preview`) | [Controls](../e2e/preview-controls.spec.ts), [R2 reader](../e2e/r2-editing-reading.spec.ts) | Selectable-text search; OCR needed for scans. Continuous mode uses a three-page group. |
 | Merge PDF (`merge`) | [Browser coverage](../e2e/app.spec.ts) | Structural/catalog limits: see [preservation baseline](R0_PRESERVATION_MATRIX.md). |
 | Split PDF (`split`) | [Browser coverage](../e2e/release.spec.ts) | Structural/catalog limits: see [preservation baseline](R0_PRESERVATION_MATRIX.md). |
@@ -55,3 +55,9 @@ Homepage examples and task search open the existing tools. Help & capabilities u
 Diagnostics exports only validated version/build and selected boolean browser features. It never captures documents, filenames, text, settings, account details, URLs, user agent or logs. A readonly preview, field-group redaction and explicit review precede a local JSON download; panel disposal revokes its object URL. Local preference/recovery controls are scoped separately and do not delete cloud records or recipes. Recovery clearing is unavailable while a workspace is open.
 
 [R7 browser coverage](../e2e/r7-product-finish.spec.ts), [update recovery drill](../e2e/update-recovery.spec.ts), [release scope](R7_RELEASE.md) and [predeclared acceptance protocol](R7_ACCEPTANCE.md). No complete physical-device, manual accessibility, authenticated cloud or 30-attempt human usability certification is claimed.
+
+## A1.1 native region highlights
+
+Edit PDF adds actual Highlight annotation objects with comments, opacity and explicit appearance streams. Original page content is not repainted or rasterised by this path. Only single rectangular regions in the visible CropBox with supported RGB color, opacity, flags and no reply thread/layer are admitted. Multi-region, skewed/crossed, shared-reference, locked, hidden, layered, threaded and malformed highlights stay unchanged and are counted in the editor notice. Editing replaces the supported mark's appearance while retaining its author and popup reference. The disposable canvas copy omits admitted marks and popups; the overlay represents current geometry, so moving/deleting a mark cannot leave its old paint in the canvas.
+
+[Unit/independent output checks](../tests/a1Highlights.test.ts), [three-browser and production journeys](../e2e/a1-native-highlights.spec.ts), [engine feasibility decision](A1_FEASIBILITY.md). Existing-text editing and structure-preserving redaction remain deferred. Highlights are review marks, never redaction. Edit PDF refuses custom page scales (`/UserUnit` other than 1) before editing/export. Prior human/device/cloud acceptance gaps remain open.

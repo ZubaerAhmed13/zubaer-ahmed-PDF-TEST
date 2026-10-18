@@ -5,6 +5,7 @@ import {
   PDFHexString,
   PDFString,
   PDFArray,
+  PDFNumber,
   degrees,
   rgb,
 } from "pdf-lib";
@@ -20,6 +21,7 @@ import {
 } from "./editModel";
 import type { InputFile, OperationResult } from "./types";
 import { PdfOperationError } from "./errors";
+import { inspectNativeHighlights, removeAnnotationReferences, writeNativeHighlight } from "./nativeHighlights";
 
 const name = (value: string): PDFName => PDFName.of(value);
 const decode = (value: unknown): string =>
@@ -27,6 +29,9 @@ const decode = (value: unknown): string =>
     ? value.decodeText()
     : "";
 function frameFor(page: ReturnType<PDFDocument["getPage"]>): PageFrame {
+  const unit = page.node.lookup(name('UserUnit'));
+  if (unit !== undefined && (!(unit instanceof PDFNumber) || unit.asNumber() !== 1))
+    throw new Error('This PDF uses a custom page scale that Edit PDF cannot position accurately yet. Use another tool or keep the original unchanged.');
   const crop = page.getCropBox(),
     media = page.getMediaBox();
   const x = Math.max(crop.x, media.x),
@@ -42,6 +47,7 @@ function frameFor(page: ReturnType<PDFDocument["getPage"]>): PageFrame {
 function inspectDocument(doc: PDFDocument): {
   frames: PageFrame[];
   objects: EditObject[];
+  preservedHighlights: number;
 } {
   const objects: EditObject[] = [];
   const frames = doc.getPages().map((page, index) => {
@@ -84,18 +90,23 @@ function inspectDocument(doc: PDFDocument): {
     }
     return frame;
   });
-  return { frames, objects };
+  const highlights = inspectNativeHighlights(doc, frames);
+  objects.push(...highlights.objects);
+  return { frames, objects, preservedHighlights: highlights.preserved };
 }
 export async function inspectDirectEdit(
   files: InputFile[],
 ): Promise<OperationResult> {
   if (!files[0]) throw new Error("Choose a PDF first.");
-  const { frames, objects } = inspectDocument(
-    await PDFDocument.load(files[0].buffer, { updateMetadata: false }),
-  );
+  const doc = await PDFDocument.load(files[0].buffer, { updateMetadata: false });
+  const { frames, objects, preservedHighlights } = inspectDocument(doc);
+  const overlayIds = new Set(objects.filter(o => o.kind === 'native-highlight').map(o => o.originalId!));
+  // The source file is retained separately. Its editable highlight appearances are
+  // omitted from this disposable canvas copy so moved/deleted marks do not linger.
+  removeAnnotationReferences(doc, overlayIds);
   return {
-    outputs: [],
-    info: { frames: JSON.stringify(frames), comments: JSON.stringify(objects) },
+    outputs: overlayIds.size ? [{ name: 'editor-preview.pdf', type: 'application/pdf', buffer: (await doc.save()).slice().buffer }] : [],
+    info: { frames: JSON.stringify(frames), comments: JSON.stringify(objects), preservedHighlights },
   };
 }
 export function checkText(text: string, supported?: Set<number>): void {
@@ -140,6 +151,19 @@ async function applyEdits(
   const originalObjects = new Map(
     source.objects.map((o) => [o.originalId!, o]),
   );
+  const seen = new Set<string>();
+  for (const o of plan.objects) {
+    if (!o.originalId) continue;
+    const original = originalObjects.get(o.originalId);
+    if (!original || original.kind !== o.kind || original.page !== o.page)
+      throw new Error('This source annotation is not editable. Reopen the original PDF.');
+    if (seen.has(o.originalId)) throw new Error('A source annotation appears more than once. Duplicate it as a new object.');
+    seen.add(o.originalId);
+  }
+  for (const id of plan.removedComments ?? []) {
+    if (!originalObjects.has(id)) throw new Error('This source annotation is not editable.');
+    if (seen.has(id)) throw new Error('A source annotation cannot be edited and deleted together.');
+  }
   const unchanged = new Set(
     plan.objects
       .filter(
@@ -159,6 +183,7 @@ async function applyEdits(
     );
   };
   const removed = new Set(plan.removedComments);
+  removeAnnotationReferences(doc, removed);
   const existing = new Map<string, PDFDict>();
   doc.getPages().forEach((page, index) => {
     const annots = page.node.Annots();
@@ -168,16 +193,7 @@ async function applyEdits(
         item = doc.context.lookup(ref);
       if (!(item instanceof PDFDict)) continue;
       const subtype = item.get(name("Subtype"))?.toString();
-      if (
-        subtype === "/Popup" &&
-        removed.has(`${index}:${item.get(name("Parent"))?.toString()}`)
-      ) {
-        annots!.remove(i);
-        continue;
-      }
-      if (subtype !== "/Text") continue;
-      if (removed.has(id)) annots!.remove(i);
-      else existing.set(id, item);
+      if (subtype === "/Text" || subtype === "/Highlight") existing.set(id, item);
     }
   });
   for (const o of plan.objects) {
@@ -237,6 +253,8 @@ async function applyEdits(
         ? await doc.embedPng(o.data)
         : await doc.embedJpg(o.data);
       page.drawImage(image, { x, y, width: o.width, height: o.height, rotate });
+    } else if (o.kind === "native-highlight") {
+      writeNativeHighlight(doc, frame, o, o.originalId ? existing.get(o.originalId) : undefined);
     } else if (o.kind === "comment") {
       const box = pdfBounds(frame, o);
       const prior = o.originalId ? existing.get(o.originalId) : undefined;
