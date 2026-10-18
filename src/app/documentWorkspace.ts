@@ -4,6 +4,8 @@ import { tools, type ToolDefinition } from '../tools/registry';
 import { DocumentSession, pdfFilename, validateSessionPdf } from './documentSession';
 import { connectWorkspace } from './workspaceRuntime';
 import { configureWorkProtection, confirmAction } from './workProtection';
+import type { OutputAction } from './exportReview';
+import { validateInputBudget } from '../pdf/resourceBudget';
 
 const sourceSelector = '#workspace-file,#pro-pdf,#wf-input,#batch-files';
 const pdfInput = (file: File): boolean => file.type === 'application/pdf' || /\.pdf$/i.test(file.name);
@@ -34,6 +36,7 @@ export class DocumentWorkspace {
   private applying = false;
   private draft = false;
   private seeded = false;
+  private seedSources: readonly File[] = [];
   private allowedLeave = false;
   private viewing: File | null = null;
   private ticket: { baseId: string; sourceIds: string[] } | null = null;
@@ -42,6 +45,7 @@ export class DocumentWorkspace {
   private urls: string[] = [];
   private filename = '';
   private notice = '';
+  private compareFiles: File[] | null = null;
 
   constructor(private readonly options: DocumentWorkspaceOptions) {
     this.session.subscribe(() => this.render());
@@ -110,14 +114,18 @@ export class DocumentWorkspace {
   prepare(tool: ToolDefinition, viewing?: File): void {
     this.unmount();
     this.tool = tool; this.files = []; this.draft = false;
+    this.options.root.dataset.toolId = tool.id;
     this.viewing = viewing ?? null; this.ticket = null;
     const signal = (this.bindings = new AbortController()).signal;
     const { root } = this.options;
+    root.addEventListener('docflow-result-action', event => {
+      const detail = (event as CustomEvent<OutputAction>).detail;
+      void this.outputAction(detail);
+    }, { signal });
     this.disconnect = connectWorkspace(root, {
       sessionActive: () => this.enabled,
       inputs: files => {
-        const seededFile = this.viewing ?? this.session.snapshot().current?.file;
-        if (this.seeded && seededFile && files[0]) this.session.aliasSource(files[0], seededFile);
+        if (this.seeded) files.forEach((file, index) => { const original = this.seedSources[index]; if (original) this.session.aliasSource(file, original); });
         const changed = files.length !== this.files.length || files.some((file, index) => this.session.sourceId(file) !== (this.files[index] ? this.session.sourceId(this.files[index]!) : ''));
         if (changed && !this.seeded && this.enabled && this.session.snapshot().current && this.tool?.id !== 'preview') this.draft = true;
         this.files = [...files];
@@ -162,7 +170,7 @@ export class DocumentWorkspace {
     const markDraft = (event: Event): void => {
       const target = event.target;
       if (event.type === 'input' && (!event.isTrusted || (target instanceof Element && target.matches('.organizer-select')))) return;
-      if (this.seeded || !(target instanceof Element) || target.closest('.pre-edit-preview,#preview-area')) return;
+      if (this.seeded || !(target instanceof Element) || target.closest('.pre-edit-preview,#preview-area,.export-review')) return;
       if (event.type === 'pointerup' && !(target instanceof HTMLCanvasElement)) return;
       if (event.type === 'input' && target instanceof HTMLInputElement && target.type === 'file') return;
       if (this.enabled && this.session.snapshot().current) this.draft = true;
@@ -192,21 +200,64 @@ export class DocumentWorkspace {
     this.safety.setFiles(this.files);
     const current = this.session.snapshot().current;
     const file = this.viewing ?? current?.file;
-    if (this.enabled && file && this.tool?.id !== 'images-to-pdf') {
+    const pair = this.tool?.id === 'compare' ? this.compareFiles : null;
+    this.compareFiles = null;
+    if (((this.enabled || this.viewing) && file && this.tool?.id !== 'images-to-pdf') || pair) {
       const input = this.options.root.querySelector<HTMLInputElement>(sourceSelector);
       if (input) {
         this.seeded = true;
-        const transfer = new DataTransfer(); transfer.items.add(file); input.files = transfer.files;
+        this.seedSources = pair ?? [file!];
+        const transfer = new DataTransfer();
+        for (const entry of pair ?? [file!]) transfer.items.add(entry);
+        input.files = transfer.files;
         input.dispatchEvent(new Event('change', { bubbles: true }));
         this.seeded = false;
+        this.seedSources = [];
       }
     }
     this.render();
   }
 
+  private async outputAction(detail: OutputAction): Promise<void> {
+    if (!detail || this.busy) { if (detail?.status) detail.status.textContent = 'Wait for the current operation to finish.'; return; }
+    const { file, action, status } = detail;
+    const source = detail.source;
+    const tool = this.tool;
+    if (!tool || !(file instanceof File)) return;
+    if (action === 'compare') {
+      if (!source) { status.textContent = 'No source PDF is available for comparison.'; return; }
+      if (!await this.canLeave()) return;
+      this.compareFiles = [source, file];
+      await this.options.open('compare'); this.compareFiles = null; return;
+    }
+    if (action === 'review') {
+      if (!await this.canLeave()) return;
+      await this.options.open('preview', file);
+      this.options.root.querySelector<HTMLButtonElement>('#run-operation')?.click(); return;
+    }
+    // Validate once before an atomic adoption. Never invoke the originating tool again.
+    this.applying = true; this.render();
+    try {
+      validateInputBudget([file.size]);
+      if (file.size > 128 * 1048576) throw Error('This result exceeds the 128 MB session limit. Download and reopen it separately.');
+      const pages = await validateSessionPdf(file);
+      if (!this.session.snapshot().current) {
+        this.enabled = true; this.session.start(source ?? file);
+      }
+      const current = this.session.snapshot().current!;
+      this.session.stage(current.id, tool.id, tool.name, source ? [this.session.sourceId(source)] : [], [{ name: file.name, type: file.type, buffer: await file.arrayBuffer() }]);
+      await this.session.apply(0, async () => pages);
+      this.filename = file.name; this.enabled = true; this.draft = false; this.viewing = null;
+    } catch (error) {
+      status.textContent = error instanceof Error ? error.message : 'Unable to continue with this PDF.';
+      this.applying = false; this.render(); return;
+    }
+    this.applying = false; this.render();
+    await this.options.open('preview');
+  }
+
   private acceptFiles(incoming: File[], multiple: boolean): void {
-    const known = this.viewing ?? this.session.snapshot().current?.file;
-    if (this.seeded && known && incoming[0]) this.session.aliasSource(incoming[0], known);
+    if (this.seeded) incoming.forEach((file, index) => { const original = this.seedSources[index]; if (original) this.session.aliasSource(file, original); });
     this.files = multiple ? [...this.files, ...incoming] : incoming.slice(0, 1);
     if (this.enabled && !this.session.snapshot().current) {
       const file = this.files.find(pdfInput);

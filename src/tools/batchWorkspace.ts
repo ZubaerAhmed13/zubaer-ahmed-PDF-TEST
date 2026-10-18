@@ -4,6 +4,8 @@ import '../styles/batch.css';
 import type { ToolDefinition } from './registry';
 import { runWorkerOperation, type RunningOperation } from '../pdf/workerClient';
 import type { InputFile, OperationResult, OutputFile, WorkerOperation } from '../pdf/types';
+import { MAX_FILES, MAX_FILE_BYTES, MAX_BATCH_BYTES, validateStep, type WorkflowStep } from '../workflows/workflowEngine';
+import type { WorkflowPreflight } from '../workflows/workflowPreflight';
 
 type BatchOperation = 'rotate' | 'page-numbers' | 'watermark' | 'optimize';
 type QueueState = 'pending' | 'running' | 'complete' | 'failed' | 'cancelled';
@@ -14,6 +16,8 @@ interface QueueItem {
   state: QueueState;
   status: string;
   output?: OutputFile;
+  execution?: WorkflowStep;
+  summary?: string;
 }
 
 function escapeHtml(value: string): string {
@@ -51,7 +55,7 @@ function optionsMarkup(operation: BatchOperation): string {
     <label>Opacity<input name="opacity" type="number" min=".05" max="1" step=".05" value=".18"></label>
     <label>Rotation<input name="rotation" type="number" min="-180" max="180" value="-35"></label>
     <label>Font size<input name="fontSize" type="number" min="12" max="120" value="42"></label>`;
-  return `<div class="notice wide"><strong>Structural optimization only</strong><p>This batch mode re-saves PDF structure with object streams. It does not claim professional image recompression.</p></div>`;
+  return `<div class="notice wide"><strong>Optimise supported images</strong><p>Recompression can change image pixels. Unsupported images remain unchanged; a smaller file is not guaranteed.</p></div>`;
 }
 
 function collectOptions(form: HTMLFormElement): Record<string, unknown> {
@@ -110,9 +114,12 @@ export function mountWorkspace(container: HTMLDivElement, tool: ToolDefinition):
         </div>
         <div class="batch-actions">
           <button class="secondary" id="batch-cancel" type="button" disabled>Cancel batch</button>
+          <button class="secondary" id="batch-check" type="button">Check batch</button>
+          <button class="secondary" id="batch-retry" type="button" disabled>Retry failed files</button>
           <button class="primary" id="batch-run" type="button">Run batch</button>
           <button class="secondary" id="batch-zip" type="button" disabled>Prepare ZIP</button>
         </div>
+        <p class="help">Check batch previews page counts and consequences. Retry uses each file’s original and last executed settings, even if you edit the controls. Run batch starts a new job for every file.</p>
         <div id="batch-queue" class="batch-queue" aria-live="polite"></div>
         <div id="batch-results" class="batch-results"></div>
       </section>
@@ -133,6 +140,8 @@ export function mountWorkspace(container: HTMLDivElement, tool: ToolDefinition):
   const runButton = container.querySelector<HTMLButtonElement>('#batch-run');
   const cancelButton = container.querySelector<HTMLButtonElement>('#batch-cancel');
   const zipButton = container.querySelector<HTMLButtonElement>('#batch-zip');
+  const checkButton = container.querySelector<HTMLButtonElement>('#batch-check')!;
+  const retryButton = container.querySelector<HTMLButtonElement>('#batch-retry')!;
   if (!input || !drop || !warning || !form || !operationSelect || !operationOptions || !stage || !percent || !progress || !errorBox || !queue || !results || !runButton || !cancelButton || !zipButton) return;
 
   let items: QueueItem[] = [];
@@ -146,6 +155,14 @@ export function mountWorkspace(container: HTMLDivElement, tool: ToolDefinition):
     urls.forEach((url) => URL.revokeObjectURL(url));
     urls = [];
   };
+  const invalidateZip = (): void => {
+    for (const group of results.querySelectorAll<HTMLElement>('[data-zip-export]')) {
+      const url = group.querySelector<HTMLAnchorElement>('a')?.href;
+      if (url) { URL.revokeObjectURL(url); urls = urls.filter(value => value !== url); }
+      group.remove();
+    }
+  };
+  results.addEventListener('docflow-output-renamed', invalidateZip);
 
   const setError = (message = ''): void => {
     errorBox.hidden = !message;
@@ -170,8 +187,10 @@ export function mountWorkspace(container: HTMLDivElement, tool: ToolDefinition):
       <div class="batch-row" data-batch-id="${item.id}" data-state="${item.state}">
         <span><strong>${escapeHtml(item.file.name)}</strong><small>${humanBytes(item.file.size)} · Queue #${index + 1}</small><span class="batch-state">${escapeHtml(item.status)}</span></span>
         <button type="button" class="secondary" data-remove-batch="${item.id}" ${locked ? 'disabled' : ''}>Remove</button>
+        ${item.execution && (item.state === 'failed' || item.state === 'cancelled') ? `<button type="button" class="secondary" data-retry-batch="${item.id}" aria-label="Retry ${escapeHtml(item.file.name)}" ${locked ? 'disabled' : ''}>Retry this file</button>` : ''}
       </div>`).join('') || '<p class="quick-empty">Add PDF files to build the queue.</p>';
     updateWarning();
+    retryButton.disabled = locked || !items.some(item => item.execution && (item.state === 'failed' || item.state === 'cancelled'));
   };
 
   const renderResults = (): void => {
@@ -184,7 +203,7 @@ export function mountWorkspace(container: HTMLDivElement, tool: ToolDefinition):
       urls.push(url);
       return `<a class="download" href="${url}" download="${escapeHtml(output.name)}">Download ${escapeHtml(output.name)} <span>${humanBytes(blob.size)}</span></a>`;
     }).join('');
-    addOutputSharing(results, completed.map(item => item.output!));
+    addOutputSharing(results, completed.map(item => item.output!), completed.map(item => item.file));
     zipButton.disabled = locked || completed.length === 0;
   };
 
@@ -198,11 +217,12 @@ export function mountWorkspace(container: HTMLDivElement, tool: ToolDefinition):
     const valid = candidates.filter((file) => file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf'));
     if (valid.length !== candidates.length) setError('One or more files were rejected because batch processing currently accepts PDF files only.');
     else setError();
-    const existing = new Set(items.map((item) => `${item.file.name}:${item.file.size}:${item.file.lastModified}`));
+    const existing = new Set(items.map((item) => item.file));
+    let total = items.reduce((sum, item) => sum + item.file.size, 0);
     for (const file of valid) {
-      const fingerprint = `${file.name}:${file.size}:${file.lastModified}`;
-      if (existing.has(fingerprint)) continue;
-      existing.add(fingerprint);
+      if (existing.has(file)) continue;
+      if (!file.size || file.size > MAX_FILE_BYTES || items.length >= MAX_FILES || total + file.size > MAX_BATCH_BYTES) { setError('Batch limits: 20 PDFs, 50 MB each, 150 MB combined.'); continue; }
+      existing.add(file); total += file.size;
       items.push({ id: crypto.randomUUID(), file, state: 'pending', status: 'Pending' });
     }
     renderQueue();
@@ -214,29 +234,47 @@ export function mountWorkspace(container: HTMLDivElement, tool: ToolDefinition):
     input.disabled = value;
     operationSelect.disabled = value;
     form.querySelectorAll<HTMLInputElement | HTMLSelectElement>('input,select').forEach((control) => { control.disabled = value; });
+    results.querySelectorAll<HTMLInputElement | HTMLButtonElement>('input,button').forEach(control => { control.disabled = value; });
     runButton.disabled = value;
+    checkButton.disabled = value;
     cancelButton.disabled = !value;
     if (value) zipButton.disabled = true;
     renderQueue();
   };
 
-  const execute = async (): Promise<void> => {
+  const currentStep = (): WorkflowStep => {
+    const options = collectOptions(form); delete options.operation;
+    if (options.degrees !== undefined) options.degrees = Number(options.degrees);
+    return validateStep({ id: 'batch-step', operation: operationSelect.value, options });
+  };
+  const preflight = async (item: QueueItem, step: WorkflowStep): Promise<void> => {
+    const file = await inputFile(item.file);
+    if (cancelled || disposed) throw new DOMException('Cancelled', 'AbortError');
+    running = runWorkerOperation('workflow-preflight', [file], { steps: [step] }, () => {});
+    const result = await running.result; running = null;
+    if (cancelled || disposed) throw new DOMException('Cancelled', 'AbortError');
+    const report = JSON.parse(String(result.info?.preflight)) as WorkflowPreflight;
+    item.summary = report.inputPages + ' → ' + report.outputPages + ' pages. ' + report.steps.flatMap(step => step.warnings).join(' ');
+  };
+  const execute = async (retryOnly = false, selectedId?: string): Promise<void> => {
     if (locked) return;
     if (!items.length) { setError('Choose at least one PDF for the batch queue.'); return; }
     setError();
-    clearUrls();
-    results.replaceChildren();
+    if (!retryOnly) { clearUrls(); results.replaceChildren(); }
     cancelled = false;
-    const operation = operationSelect.value as BatchOperation;
-    const options = collectOptions(form);
-    delete options.operation;
-    items = items.map((item) => ({ id: item.id, file: item.file, state: 'pending', status: 'Pending' }));
+    let step: WorkflowStep;
+    try { step = retryOnly ? { id: 'unused', operation: 'rotate', options: {} } : currentStep(); }
+    catch (error) { setError(error instanceof Error ? error.message : 'Invalid batch options.'); return; }
+    const targets = retryOnly ? items.filter(item => (!selectedId || item.id === selectedId) && item.execution && (item.state === 'failed' || item.state === 'cancelled')) : items;
+    for (const item of targets) { item.state = 'pending'; item.status = 'Pending'; item.output = undefined; if (!retryOnly) item.execution = step; }
     lockUi(true);
 
     let succeeded = 0;
-    const outputNames = new Set<string>();
-    for (let index = 0; index < items.length; index += 1) {
-      const item = items[index]!;
+    const outputNames = new Set(items.filter(item => item.output).map(item => item.output!.name.toLowerCase()));
+    for (let index = 0; index < targets.length; index += 1) {
+      const item = targets[index]!;
+      const operation = item.execution!.operation as BatchOperation;
+      const options = item.execution!.options;
       if (cancelled || disposed) {
         item.state = 'cancelled';
         item.status = 'Cancelled';
@@ -249,6 +287,7 @@ export function mountWorkspace(container: HTMLDivElement, tool: ToolDefinition):
       const perItem = 100 / items.length;
       setProgress(`Processing ${index + 1} of ${items.length}: ${item.file.name}`, baseProgress);
       try {
+        await preflight(item, item.execution!);
         const file = await inputFile(item.file);
         if (cancelled || disposed) throw new DOMException('Operation cancelled', 'AbortError');
         running = runWorkerOperation(workerOperation(operation), [file], options, (update) => {
@@ -259,15 +298,17 @@ export function mountWorkspace(container: HTMLDivElement, tool: ToolDefinition):
           if (stateNode) stateNode.textContent = item.status;
         });
         const operationResult: OperationResult = await running.result;
+        if (cancelled || disposed) throw new DOMException('Cancelled', 'AbortError');
         const output = operationResult.outputs[0];
         if (!output) throw new Error('This batch operation did not return a PDF output.');
         const base = outputName(item.file.name, operation);
         let name = base, suffix = 2;
         while (outputNames.has(name.toLowerCase())) name = base.replace(/\.pdf$/i, '') + '-' + suffix++ + '.pdf';
         outputNames.add(name.toLowerCase());
+        if (items.reduce((size, other) => size + (other.output?.buffer.byteLength ?? 0), 0) + output.buffer.byteLength > MAX_BATCH_BYTES) throw Error('Completed outputs exceed the 150 MB batch budget. Export a smaller batch.');
         item.output = { ...output, name };
         item.state = 'complete';
-        item.status = 'Complete';
+        item.status = 'Complete · ' + (item.summary ?? 'Review the result');
         succeeded += 1;
       } catch (error) {
         if (error instanceof DOMException && error.name === 'AbortError') {
@@ -280,7 +321,7 @@ export function mountWorkspace(container: HTMLDivElement, tool: ToolDefinition):
         }
       } finally {
         running = null;
-        renderQueue();
+        if (!disposed) renderQueue();
       }
     }
 
@@ -298,15 +339,17 @@ export function mountWorkspace(container: HTMLDivElement, tool: ToolDefinition):
   };
 
   const prepareZip = async (): Promise<void> => {
+    if (locked) return;
     const completed = items.filter((item) => item.state === 'complete' && item.output);
     if (!completed.length) return;
-    zipButton.disabled = true;
+    cancelled = false; lockUi(true); invalidateZip();
     setProgress('Preparing ZIP from completed outputs', 98);
     try {
       const { default: JSZip } = await import('jszip');
       const zip = new JSZip();
       completed.forEach((item) => zip.file(item.output!.name, item.output!.buffer));
       const blob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE', compressionOptions: { level: 6 } });
+      if (disposed || cancelled) return;
       const url = URL.createObjectURL(blob);
       urls.push(url);
       const link = document.createElement('a');
@@ -314,13 +357,13 @@ export function mountWorkspace(container: HTMLDivElement, tool: ToolDefinition):
       link.href = url;
       link.download = 'docflow-batch-results.zip';
       link.textContent = `Download docflow-batch-results.zip (${humanBytes(blob.size)})`;
-      results.prepend(link);
+      const group = document.createElement('div'); group.dataset.zipExport = 'true'; group.className = 'export-archive'; group.append(link); results.prepend(group);
       addShareButton(link, blob);
       setProgress(`ZIP ready · ${completed.length} output${completed.length === 1 ? '' : 's'}`, 100);
     } catch (error) {
       setError(error instanceof Error ? error.message : 'Could not prepare the ZIP archive.');
     } finally {
-      zipButton.disabled = false;
+      if (!disposed) { lockUi(false); zipButton.disabled = false; }
     }
   };
 
@@ -332,13 +375,32 @@ export function mountWorkspace(container: HTMLDivElement, tool: ToolDefinition):
   drop.addEventListener('drop', (event) => { if (event.dataTransfer?.files) addFiles(event.dataTransfer.files); });
   queue.addEventListener('click', (event) => {
     if (locked) return;
+    const retry = (event.target as HTMLElement).closest<HTMLElement>('[data-retry-batch]')?.dataset.retryBatch;
+    if (retry) { void execute(true, retry); return; }
     const id = (event.target as HTMLElement).closest<HTMLElement>('[data-remove-batch]')?.dataset.removeBatch;
     if (!id) return;
     items = items.filter((item) => item.id !== id);
     renderQueue();
+    renderResults();
   });
   operationSelect.addEventListener('change', resetOperationOptions);
   runButton.addEventListener('click', () => { void execute(); });
+  retryButton.addEventListener('click', () => { void execute(true); });
+  checkButton.addEventListener('click', () => {
+    if (locked || !items.length) { setError('Choose PDF files first.'); return; }
+    let step: WorkflowStep;
+    try { step = currentStep(); } catch (error) { setError(String(error)); return; }
+    cancelled = false; setError(); lockUi(true);
+    void (async () => {
+      for (const item of items) {
+        if (cancelled || disposed) break;
+        try { await preflight(item, step); item.status = 'Checked · ' + item.summary; }
+        catch (error) { if (cancelled || disposed) break; item.status = 'Check failed: ' + (error instanceof Error ? error.message : 'Invalid file'); }
+        finally { running = null; if (!disposed) renderQueue(); }
+      }
+      if (!disposed) { lockUi(false); zipButton.disabled = !items.some(item => item.output); setProgress(cancelled ? 'Batch check cancelled' : 'Batch check complete · documents unchanged', cancelled ? 0 : 100); }
+    })();
+  });
   cancelButton.addEventListener('click', () => { cancelled = true; running?.cancel(); });
   zipButton.addEventListener('click', () => { void prepareZip(); });
 

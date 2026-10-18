@@ -26,6 +26,7 @@ export interface OperationResult {
 }
 
 export type WorkerOperation =
+  | 'workflow-preflight'
   | 'document-inspect'
   | 'direct-edit'
   | 'direct-edit-inspect'

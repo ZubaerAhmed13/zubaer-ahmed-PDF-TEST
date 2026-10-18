@@ -39,3 +39,5 @@ Local PDF tools remain usable without login. Temporary adversarial PR #5 is not 
 - Keep physical-camera acceptance and Safari offline execution explicitly unverified until performed.
 
 R5: verify provenance; inspect preservation JSON and all pre-export policies; run repeat-build artifact checksum comparison; retain ZIP/manifest; verify redaction size preview and stale-draft invalidation, owned-resource lifecycle, strict oversized input behavior and existing 300-page/300-DPI suites. Record application licensing decision status and device/AT/offline limitations.
+
+R6: export/import/rerun a local recipe, dry-run intermediate page ranges, retain successful outputs during selected retries after draft/source changes, inspect filename/share/ZIP agreement, compare the captured original and continue a result without repeating its operation. Keep protected results download-only and redaction history barriers. Run all three browser suites and the R6 production journeys; independently reopen a live workflow download and retain exact build evidence in the PR.

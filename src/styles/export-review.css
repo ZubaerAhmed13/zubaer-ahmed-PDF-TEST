@@ -1,0 +1,11 @@
+.export-review { width:100%; min-width:0; box-sizing:border-box; padding:10px 12px; border:1px solid #d7e1e9; border-radius:9px; background:#f6f8fa; color:#253548; font-size:12px; overflow-wrap:anywhere; }
+.export-review summary { cursor:pointer; font-weight:700; padding:5px 0; }
+.export-review p { color:#465b70; line-height:1.55; margin:8px 0; }
+.export-review label { display:grid; gap:5px; font-weight:700; }
+.export-review input { box-sizing:border-box; width:100%; min-width:0; min-height:42px; border:1px solid #c1cfdb; border-radius:7px; padding:8px; font:inherit; background:#fff; color:#253548; }
+.export-review .export-next { display:flex; flex-wrap:wrap; gap:8px; }
+.export-review .export-next button { min-height:44px; white-space:normal; padding:8px 10px; font-size:12px; color:#253548; background:#fff; border:1px solid #c1cfdb; border-radius:7px; }
+.export-review :focus-visible { outline:3px solid #244ec6; outline-offset:2px; }
+.export-review [role=status]:empty { display:none; }
+.export-archive { width:100%; display:grid; gap:8px; }
+@media(max-width:600px) { .export-review .export-next button { flex:1 1 100%; } }

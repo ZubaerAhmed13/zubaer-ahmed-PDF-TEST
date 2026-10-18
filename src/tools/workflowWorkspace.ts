@@ -1,4 +1,6 @@
 import { addShareButton } from '../app/fileExport';
+import { exportRecipe, importRecipe, workflowOutputName, DEFAULT_OUTPUT_PATTERN, MAX_RECIPE_BYTES } from '../workflows/recipeTransfer';
+import type { WorkflowPreflight } from '../workflows/workflowPreflight';
 import { workspaceRuntime } from '../app/workspaceRuntime';
 import '../styles/batch.css';
 import '../styles/workflows.css';
@@ -19,6 +21,8 @@ interface QueueFile {
   state: State;
   detail: string;
   output?: OutputFile;
+  preflight?: WorkflowPreflight;
+  checkError?: string;
 }
 interface EditField {
   name: string;
@@ -43,6 +47,7 @@ const SPEC: Record<WorkflowOperation, EditField[]> = {
     { name: 'margin', label: 'Bottom margin (pt)', type: 'number', min: 4, max: 200 }
   ],
   watermark: [
+    { name: 'pages', label: 'Pages (blank = all)', type: 'text' },
     { name: 'text', label: 'Watermark text', type: 'text' },
     { name: 'opacity', label: 'Opacity', type: 'number', min: .05, max: 1, step: '.05' },
     { name: 'rotation', label: 'Rotation', type: 'number', min: -180, max: 180 },
@@ -64,6 +69,7 @@ const SPEC: Record<WorkflowOperation, EditField[]> = {
     { name: 'keywords', label: 'Keywords (comma separated)', type: 'text' }
   ],
   'remove-pages': [ { name: 'pages', label: 'Remove pages (e.g., 2,4-5)', type: 'text' } ],
+  'extract-pages': [ { name: 'pages', label: 'Keep pages (e.g., 1,3-5)', type: 'text' } ],
   optimize: [
     { name: 'quality', label: 'JPEG quality (35–100)', type: 'number', min: 35, max: 100 }
   ]
@@ -74,9 +80,6 @@ const initialStep = (operation: WorkflowOperation = 'rotate'): WorkflowStep => (
 function bytes(value: number): string {
   if (value < 1024) return value + ' B';
   return (value / 1048576).toFixed(1) + ' MB';
-}
-function baseName(value: string): string {
-  return value.replace(/\.pdf$/i, '').replace(/[^a-z0-9_-]+/gi, '-').replace(/^-+|-+$/g, '').slice(0, 72) || 'document';
 }
 const titleOf = (operation: WorkflowOperation): string =>
   WORKFLOW_OPERATIONS.find(item => item.id === operation)?.label ?? operation;
@@ -95,6 +98,8 @@ export function mountWorkspace(root: HTMLDivElement, _tool: ToolDefinition): voi
     '<button type="button" class="secondary" id="wf-apply">Load recipe</button>' +
     '<button type="button" class="secondary" id="wf-delete" disabled>Delete saved recipe</button></div>' +
     '<div class="wf-name"><label for="wf-name">Workflow name</label><input id="wf-name" maxlength="60" autocomplete="off" value="My workflow"><button type="button" class="secondary" id="wf-save">Save preset on this device</button></div>' +
+    '<div class="wf-transfer"><a id="wf-export" class="secondary" download="docflow-recipe.json">Export recipe</a><label>Import recipe file<input id="wf-import" type="file" accept=".json,application/json"></label></div>' +
+    '<details class="wf-help"><summary>Help & common tasks</summary><p>Prepare for sharing adds numbers and optimises images. Internal review adds a DRAFT watermark and numbers. Keep selected pages can prepare a shorter submission. Ranges refer to the current PDF at that step, so removing page 1 shifts later page numbers. Check workflow previews page counts and consequences without changing documents.</p><p>Export/import transfers the draft recipe only. Import never runs or saves it automatically. Saved or exported recipes can contain watermark text and properties: review them before sharing. OCR remains a separate reviewed PDF/report operation; continue with a workflow result to use it.</p></details>' +
     '<div class="wf-section-head"><h3>Steps <span id="wf-count">0 / 8</span></h3><p>Top to bottom · consecutive PDF outputs feed into the next step</p></div>' +
     '<div id="wf-steps" class="wf-steps" aria-label="Workflow steps"></div>' +
     '<div class="wf-add"><label for="wf-new-operation">Add an operation</label><select id="wf-new-operation"></select><button type="button" class="secondary" id="wf-add">Add step</button></div>' +
@@ -102,10 +107,13 @@ export function mountWorkspace(root: HTMLDivElement, _tool: ToolDefinition): voi
     '<div class="batch-drop wf-drop" role="group" aria-label="Choose PDF files">' +
     '<label for="wf-input"><strong>Drop PDF files here or browse</strong></label><input id="wf-input" type="file" accept=".pdf,application/pdf" multiple></div></div>' +
     '<p class="wf-recipe-note">Presets are saved locally only when you select Save. They may contain watermark text or document properties; avoid saving sensitive text in shared browsers.</p>' +
+    '<label>Output naming pattern<input id="wf-output-pattern" maxlength="100" value="{name}-{index}-workflow"><span>Use {name}, {index} or {recipe}. Duplicate names receive a suffix.</span></label>' +
+    '<section id="wf-preflight" class="wf-preflight" aria-label="Workflow preflight" aria-live="polite"></section>' +
     '<div class="operation-status" aria-live="polite"><div class="status-line"><span id="wf-stage">Ready</span><span id="wf-percent">0%</span></div>' +
     '<progress id="wf-progress" max="100" value="0"></progress><div id="wf-error" class="error-box" role="alert" hidden></div></div>' +
     '<div class="batch-actions wf-actions"><button id="wf-cancel" class="secondary" type="button" disabled>Cancel</button>' +
     '<button id="wf-retry" class="secondary" type="button" disabled>Retry failed</button>' +
+    '<button id="wf-check" class="secondary" type="button">Check workflow</button>' +
     '<button id="wf-run" class="primary" type="button">Run workflow</button>' +
     '<button id="wf-zip" class="secondary" type="button" disabled>Prepare ZIP</button></div>' +
     '<div id="wf-queue" class="batch-queue" aria-live="polite"></div><div id="wf-results" class="batch-results" aria-live="polite"></div>' +
@@ -132,6 +140,11 @@ export function mountWorkspace(root: HTMLDivElement, _tool: ToolDefinition): voi
   const cancelButton = root.querySelector<HTMLButtonElement>('#wf-cancel')!;
   const zipButton = root.querySelector<HTMLButtonElement>('#wf-zip')!;
   const count = root.querySelector<HTMLElement>('#wf-count')!;
+  const transferLink = root.querySelector<HTMLAnchorElement>('#wf-export')!;
+  const transferInput = root.querySelector<HTMLInputElement>('#wf-import')!;
+  const naming = root.querySelector<HTMLInputElement>('#wf-output-pattern')!;
+  const checkButton = root.querySelector<HTMLButtonElement>('#wf-check')!;
+  const preflightArea = root.querySelector<HTMLElement>('#wf-preflight')!;
 
   let steps: WorkflowStep[] = DEFAULT_WORKFLOW_RECIPES[0]!.steps.map(step => ({ ...step, id: crypto.randomUUID(), options: { ...step.options } }));
   let recipes: WorkflowRecipe[] = [];
@@ -144,10 +157,21 @@ export function mountWorkspace(root: HTMLDivElement, _tool: ToolDefinition): voi
   let disposed = false;
   let urls: string[] = [];
   let lastRecipe: WorkflowRecipe | null = null;
+  let lastPattern = DEFAULT_OUTPUT_PATTERN;
+  let transferUrl = '';
+  let importGeneration = 0;
   const clearUrls = (): void => {
     for (const url of urls) URL.revokeObjectURL(url);
     urls = [];
   };
+  const invalidateZip = (): void => {
+    for (const group of results.querySelectorAll<HTMLElement>('[data-zip-export]')) {
+      const url = group.querySelector<HTMLAnchorElement>('a')?.href;
+      if (url) { URL.revokeObjectURL(url); urls = urls.filter(value => value !== url); }
+      group.remove();
+    }
+  };
+  results.addEventListener('docflow-output-renamed', invalidateZip);
   const setError = (message = ''): void => {
     errorBox.hidden = !message;
     errorBox.textContent = message;
@@ -158,14 +182,13 @@ export function mountWorkspace(root: HTMLDivElement, _tool: ToolDefinition): voi
     percent.textContent = Math.round(value) + '%';
   };
   const resetOutputs = (): void => {
-    clearUrls();
-    results.replaceChildren();
-    files = files.map(item => ({ id: item.id, file: item.file, state: 'pending', detail: 'Ready' }));
-    lastRecipe = null;
+    importGeneration++;
+    for (const item of files) { item.preflight = undefined; item.checkError = undefined; }
+    preflightArea.replaceChildren();
     renderQueue();
-    retryButton.disabled = true;
-    zipButton.disabled = true;
-    setProgress('Ready', 0);
+    renderResults();
+    setProgress(lastRecipe ? 'Draft changed · Retry uses the last executed recipe; Run workflow starts a new job.' : 'Ready', 0);
+    refreshRecipeExport();
   };
   const allPresets = (): WorkflowRecipe[] => [...DEFAULT_WORKFLOW_RECIPES, ...recipes];
   const renderRecipes = (): void => {
@@ -181,6 +204,7 @@ export function mountWorkspace(root: HTMLDivElement, _tool: ToolDefinition): voi
     del.disabled = locked || selectedPreset.startsWith('built-in-');
   };
   const updateLocked = (state: boolean): void => {
+    if (state) importGeneration++;
     runtime.busy(state);
     locked = state;
     root.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLButtonElement>(
@@ -195,6 +219,7 @@ export function mountWorkspace(root: HTMLDivElement, _tool: ToolDefinition): voi
       del.disabled = selectedPreset.startsWith('built-in-');
       add.disabled = steps.length >= MAX_STEPS;
     }
+    transferLink.setAttribute('aria-disabled', String(state));
     renderQueue();
     renderSteps();
   };
@@ -268,6 +293,7 @@ export function mountWorkspace(root: HTMLDivElement, _tool: ToolDefinition): voi
           }
         }
         control.id = id;
+        control.disabled = locked;
         control.value = String(value);
         control.dataset.stepIndex = String(index);
         control.dataset.optionKey = field.name;
@@ -308,15 +334,20 @@ export function mountWorkspace(root: HTMLDivElement, _tool: ToolDefinition): voi
       remove.dataset.removeFile = item.id;
       remove.disabled = locked;
       row.append(info, remove);
+      if (item.state === 'failed' || item.state === 'cancelled') {
+        const retry = document.createElement('button'); retry.type = 'button'; retry.className = 'secondary';
+        retry.textContent = 'Retry this file'; retry.setAttribute('aria-label', 'Retry ' + item.file.name);
+        retry.dataset.retryFile = item.id; retry.disabled = locked || !lastRecipe; row.append(retry);
+      }
       queue.append(row);
     }
   };
   const renderResults = (): void => {
     clearUrls();
     results.replaceChildren();
-    for (const [index, item] of files.entries()) {
+    for (const item of files) {
       if (item.state !== 'complete' || !item.output) continue;
-      const name = baseName(item.file.name) + '-' + (index + 1) + '-workflow.pdf';
+      const name = item.output.name;
       const url = URL.createObjectURL(new Blob([item.output.buffer], { type: 'application/pdf' }));
       urls.push(url);
       const link = document.createElement('a');
@@ -325,7 +356,12 @@ export function mountWorkspace(root: HTMLDivElement, _tool: ToolDefinition): voi
       link.download = name;
       link.textContent = 'Download ' + name + ' (' + bytes(item.output.buffer.byteLength) + ')';
       results.append(link);
-      addShareButton(link, new Blob([item.output.buffer], { type: 'application/pdf' }));
+      addShareButton(link, new Blob([item.output.buffer], { type: 'application/pdf' }), undefined, item.file, name => {
+        const used = new Set(files.filter(other => other !== item && other.output).map(other => other.output!.name.toLowerCase()));
+        const base = name.replace(/\.pdf$/i, ''); let unique = name, suffix = 2;
+        while (used.has(unique.toLowerCase())) unique = base + '-' + suffix++ + '.pdf';
+        item.output!.name = unique; return unique;
+      });
     }
     zipButton.disabled = locked || !files.some(item => item.state === 'complete' && item.output);
     retryButton.disabled = locked || !files.some(item => item.state === 'failed' || item.state === 'cancelled');
@@ -334,10 +370,9 @@ export function mountWorkspace(root: HTMLDivElement, _tool: ToolDefinition): voi
     if (locked) return;
     let rejected = 0;
     let total = files.reduce((sum, item) => sum + item.file.size, 0);
-    const known = new Set(files.map(item => item.file.name + ':' + item.file.size + ':' + item.file.lastModified));
+    const known = new Set(files.map(item => item.file));
     for (const file of [...incoming]) {
-      const fingerprint = file.name + ':' + file.size + ':' + file.lastModified;
-      if (known.has(fingerprint)) continue;
+      if (known.has(file)) continue;
       if (file.size > MAX_FILE_BYTES || total + file.size > MAX_BATCH_BYTES ||
           files.length >= MAX_FILES || file.size === 0 ||
           !(file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf'))) {
@@ -345,7 +380,7 @@ export function mountWorkspace(root: HTMLDivElement, _tool: ToolDefinition): voi
         continue;
       }
       files.push({ id: crypto.randomUUID(), file, state: 'pending', detail: 'Ready' });
-      known.add(fingerprint);
+      known.add(file);
       total += file.size;
     }
     if (rejected) setError(rejected + ' file(s) rejected. Only PDFs within the 20-file / 50-MB-each / 150-MB-total limits are supported.');
@@ -357,27 +392,61 @@ export function mountWorkspace(root: HTMLDivElement, _tool: ToolDefinition): voi
     name: recipeName.value,
     steps
   });
-  const runQueue = async (retryOnly = false): Promise<void> => {
+  const refreshRecipeExport = (): void => {
+    if (transferUrl) URL.revokeObjectURL(transferUrl);
+    transferUrl = '';
+    try {
+      transferUrl = URL.createObjectURL(new Blob([exportRecipe(getDraft())], { type: 'application/json' }));
+      transferLink.href = transferUrl; transferLink.removeAttribute('aria-disabled');
+    } catch { transferLink.removeAttribute('href'); transferLink.setAttribute('aria-disabled', 'true'); }
+  };
+  const renderPreflight = (): void => {
+    preflightArea.replaceChildren();
+    for (const item of files) {
+      if (!item.preflight && !item.checkError) continue;
+      const details = document.createElement('details'); details.open = true;
+      const summary = document.createElement('summary');
+      summary.textContent = item.file.name + ' · ' + (item.preflight ? item.preflight.inputPages + ' → ' + item.preflight.outputPages + ' pages' : item.checkError);
+      details.append(summary);
+      for (const [i, step] of (item.preflight?.steps ?? []).entries()) {
+        const row = document.createElement('p');
+        row.textContent = 'Step ' + (i + 1) + ' · ' + titleOf(step.operation as WorkflowOperation) + ' · ' + step.affectedPages + ' page(s). ' + step.warnings.join(' ');
+        details.append(row);
+      }
+      preflightArea.append(details);
+    }
+  };
+  const checkFile = async (item: QueueFile, recipe: WorkflowRecipe): Promise<void> => {
+    const buffer = await item.file.arrayBuffer();
+    if (cancelled || disposed) throw new DOMException('Cancelled', 'AbortError');
+    running = runWorkerOperation('workflow-preflight', [{ name: item.file.name, type: 'application/pdf', buffer }], { steps: recipe.steps }, () => {});
+    const result = await running.result; running = null;
+    if (cancelled || disposed) throw new DOMException('Cancelled', 'AbortError');
+    item.preflight = JSON.parse(String(result.info?.preflight)) as WorkflowPreflight;
+    item.checkError = undefined; renderPreflight();
+  };
+  const runQueue = async (retryOnly = false, selectedId?: string): Promise<void> => {
     if (locked) return;
     if (!files.length) { setError('Select one or more PDF files first.'); return; }
+    if (retryOnly && !lastRecipe) { setError('Run a workflow before retrying its failed files.'); return; }
     let recipe: WorkflowRecipe;
     try {
       recipe = retryOnly && lastRecipe ? lastRecipe : getDraft();
-      if (!retryOnly) lastRecipe = recipe;
+      if (!retryOnly) { workflowOutputName('document.pdf', 1, naming.value, recipe.name); lastRecipe = recipe; lastPattern = naming.value; }
     } catch (error) {
       setError(error instanceof Error ? error.message : 'Invalid workflow configuration.');
       return;
     }
+    const targets = retryOnly ? files.filter(item => (!selectedId || item.id === selectedId) && (item.state === 'failed' || item.state === 'cancelled')) : [...files];
     if (!retryOnly) {
       clearUrls();
       results.replaceChildren();
       files.forEach(item => { item.output = undefined; item.state = 'pending'; item.detail = 'Pending'; });
     } else {
-      files.filter(item => item.state === 'failed' || item.state === 'cancelled').forEach(item => {
+      targets.forEach(item => {
         item.state = 'pending'; item.detail = 'Retry from original';
       });
     }
-    const targets = files.filter(item => item.state === 'pending');
     if (!targets.length) { setError('There are no failed files to retry.'); return; }
     cancelled = false;
     setError();
@@ -393,6 +462,7 @@ export function mountWorkspace(root: HTMLDivElement, _tool: ToolDefinition): voi
       item.detail = 'Preparing';
       renderQueue();
       try {
+        await checkFile(item, recipe);
         const initial: InputFile = { name: item.file.name, type: 'application/pdf', buffer: await item.file.arrayBuffer() };
         if (cancelled || disposed) throw new DOMException('Workflow cancelled', 'AbortError');
         const result = await executeWorkflow(
@@ -407,7 +477,12 @@ export function mountWorkspace(root: HTMLDivElement, _tool: ToolDefinition): voi
           }, handle => { running = handle; }
         );
         if (cancelled || disposed) throw new DOMException('Workflow cancelled', 'AbortError');
-        item.output = result;
+        const base = workflowOutputName(item.file.name, files.indexOf(item) + 1, lastPattern, recipe.name);
+        const used = new Set(files.filter(other => other !== item && other.output).map(other => other.output!.name.toLowerCase()));
+        let name = base, suffix = 2;
+        while (used.has(name.toLowerCase())) name = base.replace(/\.pdf$/i, '') + '-' + suffix++ + '.pdf';
+        if (files.reduce((size, other) => size + (other.output?.buffer.byteLength ?? 0), 0) + result.buffer.byteLength > MAX_BATCH_BYTES) throw Error('Completed outputs exceed the 150 MB batch budget. Export a smaller batch.');
+        item.output = { ...result, name };
         item.state = 'complete';
         item.detail = 'Completed ' + recipe.steps.length + ' step(s)';
         succeeded++;
@@ -417,6 +492,7 @@ export function mountWorkspace(root: HTMLDivElement, _tool: ToolDefinition): voi
           item.state = 'cancelled';
           item.detail = 'Cancelled · retry starts from original';
         } else {
+          item.checkError = error instanceof Error ? error.message : 'Check failed'; renderPreflight();
           failures++;
           item.state = 'failed';
           item.detail = 'Failed: ' + (error instanceof Error ? error.message : 'Unknown error');
@@ -437,18 +513,17 @@ export function mountWorkspace(root: HTMLDivElement, _tool: ToolDefinition): voi
     if (locked) return;
     const completed = files.filter(item => item.state === 'complete' && item.output);
     if (!completed.length) return;
-    zipButton.disabled = true;
+    cancelled = false; updateLocked(true); invalidateZip();
     try {
       const { default: JSZip } = await import('jszip');
       const archive = new JSZip();
       for (const item of completed) {
-        const index = files.indexOf(item) + 1;
-        archive.file(baseName(item.file.name) + '-' + index + '-workflow.pdf', item.output!.buffer);
+        archive.file(item.output!.name, item.output!.buffer);
       }
       const blob = await archive.generateAsync({
         type: 'blob', compression: 'DEFLATE', compressionOptions: { level: 4 }
       }, metadata => setProgress('Preparing ZIP', Math.min(99, metadata.percent)));
-      if (disposed) return;
+      if (disposed || cancelled) return;
       const url = URL.createObjectURL(blob);
       urls.push(url);
       const link = document.createElement('a');
@@ -456,12 +531,12 @@ export function mountWorkspace(root: HTMLDivElement, _tool: ToolDefinition): voi
       link.download = 'docflow-workflow-results.zip';
       link.href = url;
       link.textContent = 'Download workflow ZIP (' + bytes(blob.size) + ')';
-      results.prepend(link);
+      const group = document.createElement('div'); group.dataset.zipExport = 'true'; group.className = 'export-archive'; group.append(link); results.prepend(group);
       addShareButton(link, blob);
       setProgress('ZIP ready · ' + completed.length + ' file(s)', 100);
     } catch (error) {
       setError(error instanceof Error ? error.message : 'ZIP preparation failed.');
-    } finally { if (!disposed) zipButton.disabled = false; }
+    } finally { if (!disposed) updateLocked(false); }
   };
 
   addOp.replaceChildren();
@@ -475,6 +550,41 @@ export function mountWorkspace(root: HTMLDivElement, _tool: ToolDefinition): voi
   recipeName.value = 'Prepare for sharing';
   renderSteps();
   renderQueue();
+  refreshRecipeExport();
+  recipeName.addEventListener('input', () => { if (!locked) { importGeneration++; refreshRecipeExport(); } });
+  naming.addEventListener('input', () => { if (!locked) resetOutputs(); });
+  transferLink.addEventListener('click', event => { if (locked || !transferUrl) { event.preventDefault(); setError('Finish processing and correct the recipe before exporting.'); } });
+  transferInput.addEventListener('change', () => {
+    const file = transferInput.files?.[0]; transferInput.value = '';
+    if (!file || locked) return;
+    const generation = ++importGeneration;
+    if (file.size > MAX_RECIPE_BYTES) { setError('Recipe files must be at most 64 KB.'); return; }
+    void file.text().then(json => {
+      if (disposed || locked || generation !== importGeneration) return;
+      const recipe = importRecipe(json);
+      steps = recipe.steps; recipeName.value = recipe.name;
+      selectedPreset = ''; resetOutputs(); renderSteps(); setError();
+      setProgress('Recipe imported · review it before running or saving', 0);
+    }).catch(error => { if (!disposed && generation === importGeneration) setError(error instanceof Error ? error.message : 'Recipe import failed.'); });
+  });
+  checkButton.addEventListener('click', () => {
+    if (locked || !files.length) { setError('Select one or more PDF files first.'); return; }
+    let recipe: WorkflowRecipe;
+    try { recipe = getDraft(); workflowOutputName('document.pdf', 1, naming.value, recipe.name); } catch (error) { setError(String(error)); return; }
+    cancelled = false; setError(); updateLocked(true);
+    void (async () => {
+      let failures = 0;
+      for (const item of files) {
+        if (cancelled || disposed) break;
+        try { await checkFile(item, recipe); }
+        catch (error) {
+          if (cancelled || disposed) break;
+          item.preflight = undefined; item.checkError = error instanceof Error ? error.message : 'Check failed'; failures++; renderPreflight();
+        } finally { running = null; }
+      }
+      if (!disposed) { updateLocked(false); setProgress(cancelled ? 'Preflight cancelled' : 'Preflight complete · ' + failures + ' file(s) need attention · documents unchanged', cancelled ? 0 : 100); }
+    })();
+  });
 
   const stepChange = (event: Event): void => {
     const control = event.target;
@@ -561,6 +671,8 @@ export function mountWorkspace(root: HTMLDivElement, _tool: ToolDefinition): voi
   drop.addEventListener('drop', event => { if (event.dataTransfer?.files) addFiles(event.dataTransfer.files); });
   queue.addEventListener('click', event => {
     if (locked) return;
+    const retry = (event.target as HTMLElement).closest<HTMLButtonElement>('[data-retry-file]');
+    if (retry) { void runQueue(true, retry.dataset.retryFile); return; }
     const button = (event.target as HTMLElement).closest<HTMLButtonElement>('[data-remove-file]');
     if (!button) return;
     files = files.filter(item => item.id !== button.dataset.removeFile);
@@ -585,6 +697,8 @@ export function mountWorkspace(root: HTMLDivElement, _tool: ToolDefinition): voi
     running?.cancel();
     running = null;
     clearUrls();
+    if (transferUrl) URL.revokeObjectURL(transferUrl);
+    importGeneration++;
     files = [];
     steps = [];
     window.removeEventListener('beforeunload', beforeUnload);

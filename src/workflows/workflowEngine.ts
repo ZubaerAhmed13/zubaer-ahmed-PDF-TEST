@@ -8,6 +8,7 @@ export const WORKFLOW_OPERATIONS = [
   { id: 'crop', label: 'Crop visible area', description: 'Hide margins; does not erase hidden content.' },
   { id: 'metadata-edit', label: 'Edit PDF properties', description: 'Update standard PDF Info metadata.' },
   { id: 'remove-pages', label: 'Remove pages', description: 'Permanently omit selected pages from the exported copy.' },
+  { id: 'extract-pages', label: 'Keep selected pages', description: 'Create one PDF containing just the selected pages.' },
   { id: 'optimize', label: 'Optimise PDF', description: 'Recompress supported JPEG images when safe.' }
 ] as const;
 
@@ -70,6 +71,7 @@ const rules: Record<WorkflowOperation, Record<string, FieldRule>> = {
     margin: { kind: 'number', default: 24, min: 4, max: 200 }
   },
   watermark: {
+    pages: { kind: 'string', default: '', maxLength: 180 },
     text: { kind: 'string', default: 'CONFIDENTIAL', maxLength: 180 },
     opacity: { kind: 'number', default: 0.18, min: 0.05, max: 1 },
     rotation: { kind: 'number', default: -35, min: -180, max: 180 },
@@ -91,6 +93,7 @@ const rules: Record<WorkflowOperation, Record<string, FieldRule>> = {
     keywords: { kind: 'string', default: '', maxLength: 512 }
   },
   'remove-pages': { pages: { kind: 'string', default: '', maxLength: 180 } },
+  'extract-pages': { pages: { kind: 'string', default: '', maxLength: 180 } },
   optimize: {
     quality: { kind: 'number', default: 75, min: 35, max: 100 }
   }
@@ -130,7 +133,13 @@ export function validateStep(candidate: unknown): WorkflowStep {
   // Reject a rotation value the worker cannot legitimately use.
   if (operation === 'rotate' && ![90, 180, 270].includes(options.degrees as number)) throw Error('Rotation must be 90°, 180° or 270°.');
   if (operation === 'rotate' && options.target === 'selected' && !String(options.pages).trim()) throw Error('Selected pages are required.');
-  if (operation === 'remove-pages' && !String(options.pages).trim()) throw Error('Enter the page numbers to remove.');
+  if (['remove-pages', 'extract-pages'].includes(operation) && !String(options.pages).trim()) throw Error('Enter the page numbers to select.');
+  const pageRange = String(options.pages ?? '').trim();
+  if (pageRange && !pageRange.split(',').every(token => {
+    const match = token.trim().match(/^(\d+)(?:\s*-\s*(\d+))?$/);
+    return match && Number(match[1]) >= 1 && Number(match[1]) <= 1000 && (!match[2] || (Number(match[2]) >= Number(match[1]) && Number(match[2]) <= 1000));
+  })) throw Error('Invalid page selection. Use pages such as 1,3-5 (maximum 1000).');
+  if (operation === 'page-numbers' && !Number.isInteger(options.start)) throw Error('Starting number must be an integer.');
   if (operation === 'watermark' && !String(options.text).trim()) throw Error('Enter watermark text.');
   if (operation === 'crop' && !['left','right','top','bottom'].some((key) => Number(options[key]) > 0)) throw Error('Enter a non-zero crop margin.');
   return { id: item.id, operation, options };
@@ -169,6 +178,7 @@ export function storeRecipes(storage: Pick<Storage, 'setItem'>, recipes: readonl
   storage.setItem(STORAGE_KEY, JSON.stringify(validated));
 }
 function assertPdf(output: OutputFile): void {
+  if (output.buffer.byteLength > MAX_FILE_BYTES) throw Error('Workflow output exceeds the 50 MB per-file limit. Use a smaller document.');
   if (output.type !== 'application/pdf') throw Error('Workflow step did not return a PDF.');
   const head = new TextDecoder('ascii').decode(new Uint8Array(output.buffer, 0, Math.min(5, output.buffer.byteLength)));
   if (head !== '%PDF-') throw Error('Workflow step produced an invalid PDF header.');
