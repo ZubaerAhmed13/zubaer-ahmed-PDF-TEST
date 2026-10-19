@@ -320,6 +320,13 @@ export function createApp(root: HTMLDivElement | null): void {
 
   const journey = new PageJourney({ root, dialog: workspaceDialog, workspace, canLeave: () => documents.canLeave(), refresh: () => documents.refresh(), mount: mountTool });
 
+  // Task shortcuts must trigger exactly the same guarded tool route as the catalogue.
+  // The first matching [data-open-tool] is used by existing browser tests and must work.
+  root.querySelector('.hero-shortcuts')?.addEventListener('click', event => {
+    const button = (event.target as HTMLElement).closest<HTMLButtonElement>('[data-open-tool]');
+    if (button?.dataset.openTool) void openTool(button.dataset.openTool, button);
+  });
+
   grid.addEventListener('click', (event) => {
     const target = event.target as HTMLElement;
     if (target.closest('[data-reset-search]')) {
