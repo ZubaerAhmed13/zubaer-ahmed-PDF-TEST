@@ -139,7 +139,7 @@ export function mountWorkspace(container: HTMLDivElement, tool: ToolDefinition):
           <span class="df-picker-selected-mark" aria-hidden="true">${removing ? '×' : '✓'}</span>
           <strong>Page ${number}</strong>
         </button>
-        <button type="button" class="df-picker-zoom" data-pick-preview="${number}" aria-label="Preview page ${number}">⤢ Preview</button>
+        <button type="button" class="df-picker-zoom" data-pick-preview="${number}" aria-label="Enlarge page ${number}">⤢ Preview</button>
       `;
       fragment.append(item);
     }
