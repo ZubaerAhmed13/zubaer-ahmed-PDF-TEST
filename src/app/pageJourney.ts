@@ -144,6 +144,9 @@ export class PageJourney {
       this.releaseURLs(); this.outputs.invalidate(); this.tool = null;
       if (this.options.dialog.open) this.options.dialog.close();
       this.present('home');
+      // The editor may have updated the retained document while tool pages were
+      // hidden. Re-render the home resume card after restoring visibility.
+      this.options.refresh();
     } else {
       this.renderResult(route.kind === 'result' ? route.id : '');
       if (!this.options.dialog.open) this.options.dialog.show();
