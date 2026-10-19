@@ -5,7 +5,7 @@ import { expect, type Page } from '@playwright/test';
  * independently certify the default completion/download experience. */
 export async function returnToEditor(page: Page): Promise<void> {
   const result = page.locator('[data-result-page]');
-  if (await page.locator('.page-toolbar[data-busy="true"]').count()) await expect(result).toBeVisible({ timeout: 90_000 });
+  await expect(page.locator('.page-toolbar')).not.toHaveAttribute('data-busy', 'true', { timeout: 90_000 });
   if (await result.isVisible()) {
     await result.getByRole('button', { name: 'Return to editing', exact: true }).click();
     await expect(result).toBeHidden();

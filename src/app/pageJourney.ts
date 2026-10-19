@@ -114,7 +114,7 @@ export class PageJourney {
     if (route.kind === 'tool') {
       const tool = tools.find(t => t.id === route.toolId); if (!tool) return false;
       if (!reuse) {
-        this.tool = tool; this.sourceCount = 0; this.sources = []; this.busy = false; this.loadFailed = false; this.configuring = false; this.invalidate();
+        this.tool = tool; this.sourceCount = 0; this.sources = []; this.busy = false; this.bar.dataset.busy = 'false'; this.loadFailed = false; this.configuring = false; this.invalidate();
         this.refreshFavorite();
         this.upload.querySelector<HTMLElement>('[data-configure-workflow]')!.hidden = tool.id !== 'workflow';
         this.upload.querySelector('h1')!.textContent = tool.name;
@@ -234,6 +234,19 @@ export class PageJourney {
     const status = this.options.workspace.querySelector('#stage,#wf-stage,#batch-stage,#pro-stage')?.textContent ?? '';
     this.result.innerHTML = `<div class="result-symbol success" aria-hidden="true">✓</div><p class="eyebrow">${escape(this.tool?.name ?? 'PDF operation')} · result</p><h1 tabindex="-1">Your ${group.outputs.length === 1 ? 'file is' : 'files are'} ready</h1><p>Review your result, then save a copy to your device.</p>${/cancel|failed|succeeded|Finished/i.test(status) ? '<p class="result-job-summary">' + escape(status) + '</p>' : ''}<div class="page-output-list"></div><div class="result-return"><button type="button" class="secondary" data-return-editor>Return to editing</button><button type="button" class="secondary" data-page-home>Choose another tool</button></div><p class="result-lifetime">This result stays in this tab until you change the source, edit again or close/reload. Your original file is unchanged.</p>`;
     const list = this.result.querySelector('.page-output-list')!;
+    // Preserve the engine's actual recovery warnings when hiding its workspace.
+    for (const warning of this.options.workspace.querySelectorAll<HTMLElement>('.pro-warning')) {
+      if (!warning.textContent?.trim()) continue;
+      const notice = document.createElement('p'); notice.className = 'page-result-warning';
+      notice.textContent = warning.textContent; list.before(notice);
+    }
+    const report = this.options.workspace.querySelector<HTMLElement>('.info-result');
+    if (report?.textContent?.trim()) {
+      const details = document.createElement('details'); details.className = 'result-operation-details';
+      const summary = document.createElement('summary'); summary.textContent = 'Operation details';
+      const content = document.createElement('pre'); content.textContent = report.textContent;
+      details.append(summary, content); list.before(details);
+    }
     for (const output of group.outputs) this.renderOutput(list, output, group.toolId);
   }
 

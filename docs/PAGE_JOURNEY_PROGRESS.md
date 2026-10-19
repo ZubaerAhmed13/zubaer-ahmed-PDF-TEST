@@ -21,3 +21,11 @@ Tasks 2/3 integration: dedicated tool/upload/result pages now cover all 29 IDs, 
 Regressions found and corrected: nonmodal region must omit aria-modal entirely; inactive step contrast increased; rejected tool switching refreshes the session dropdown; hidden direct editors do not redraw at zero width; source/result lifetime remains in memory only. Direct editor vertical layout was first tested RED (canvas at y=832), then compacted and verified GREEN (canvas begins before y=500). Desktop/phone screenshots inspected.
 
 Current verification: migrating modal-specific/inline-download assumptions in the full existing browser corpus to explicit page navigation and Return to editing. PDF structure/content assertions remain. Some broad-run failures reflect the pre-migration test snapshot; do not claim complete regression acceptance until a fresh final run passes.
+
+Final review: independent fresh-context review of base..9cd0499 found three Important issues and no Critical or actionable minor issues. One fix pass:
+- Archive rename removed its own ZIP through constituent-output invalidation. New batch and workflow page tests both failed RED, then passed GREEN after scoping invalidation to child outputs.
+- Phone Options hid operation progress/errors. New closed-Options invalid-range test failed RED, then passed GREEN after moving the real status/progress/error component into the always-visible export footer.
+- Result pages hid qpdf recovery warnings. Both damaged-repair fixtures failed RED on default result warning visibility, then passed GREEN after carrying real warnings and operation details to results.
+Targeted fix acceptance: 5/5 Chromium browser tests passed. Final full-suite run follows. No review minors deferred; no review findings declined. Existing physical-device/keyboard/screen-reader acceptance remains unverified.
+
+Additional regression corrections: explicit Return to editing in advanced export-review tests; scope settings menu and ZIP selectors; respect leave confirmation when testing recovery. A stale busy presentation attribute is reset on tool remount; test helper waits for processing to settle without assuming every busy operation produces an export (preview/undo do not).

@@ -169,6 +169,8 @@ for (const damage of ['wrong-startxref', 'missing-xref'] as const) {
     await dialog.locator('#pro-pdf').setInputFiles({ name: damage + '.pdf', mimeType: 'application/pdf', buffer: source });
     await dialog.getByRole('button', { name: 'Attempt structural repair' }).click();
     await expect(dialog.locator('#pro-stage')).toHaveText('Complete', { timeout: 90_000 });
+    await expect(page.locator('[data-result-page] .page-result-warning')).toBeVisible();
+    await expect(page.locator('[data-result-page] .page-result-warning')).toContainText('qpdf reported warnings');
     await returnToEditor(page);
     await expect(dialog.locator('.pro-warning')).toContainText('warnings');
     const result = await downloaded(page, dialog.locator('#pro-results a.download'));

@@ -211,7 +211,7 @@ function createLegacyShell(root: HTMLElement, grid: HTMLElement, tool: ToolDefin
   settings.append(options);
   if (quality) settings.append(quality);
   if (privacy) settings.append(privacy);
-  settings.append(status, result);
+  settings.append(result);
 
   body.append(filesPane, center, settings);
   journey.addEventListener('click', (event) => {
@@ -244,7 +244,7 @@ function createLegacyShell(root: HTMLElement, grid: HTMLElement, tool: ToolDefin
   close.textContent = 'Close';
   close.addEventListener('click', () => closeWorkspace(root));
   footerButtons.append(close, actions);
-  footer.append(footerState, footerButtons);
+  footer.append(footerState, status, footerButtons);
 
   grid.replaceChildren(header, info, body, footer);
 

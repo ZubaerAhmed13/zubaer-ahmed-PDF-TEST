@@ -53,7 +53,7 @@ test('manual account sync restores only favourites and recent tools without PDF 
   await page.locator('[data-favorite="merge"]').click();
   await expect(page.locator('[data-favorite="merge"]')).toHaveAttribute('aria-pressed', 'true');
 
-  await page.locator('.settings-menu > summary').click();
+  await page.locator('.topbar-actions .settings-menu > summary').click();
   await page.locator('.topbar-actions [data-action="cloud"]').click();
   const dialog = page.locator('#info-dialog');
   await expect(dialog).toBeVisible();
@@ -71,14 +71,14 @@ test('manual account sync restores only favourites and recent tools without PDF 
   await page.locator('[data-favorite="merge"]').click();
   await expect(page.locator('[data-favorite="merge"]')).toHaveAttribute('aria-pressed', 'false');
 
-  await page.locator('.settings-menu > summary').click();
+  await page.locator('.topbar-actions .settings-menu > summary').click();
   await page.locator('.topbar-actions [data-action="cloud"]').click();
   await dialog.getByRole('button', { name: 'Restore cloud preferences' }).click();
   await expect(dialog.getByText('Cloud favorites and recent tools restored on this device.')).toBeVisible();
   await dialog.getByRole('button', { name: 'Close' }).click();
   await expect(page.locator('[data-favorite="merge"]')).toHaveAttribute('aria-pressed', 'true');
 
-  await page.locator('.settings-menu > summary').click();
+  await page.locator('.topbar-actions .settings-menu > summary').click();
   await page.locator('.topbar-actions [data-action="cloud"]').click();
   await dialog.getByRole('button', { name: 'Sign out' }).click();
   await expect(dialog.getByText('Not signed in')).toBeVisible();
@@ -94,7 +94,7 @@ test('manual account sync restores only favourites and recent tools without PDF 
 test('cloud preferences remain discoverable on mobile without requiring sign-in', async ({ page }) => {
   await page.setViewportSize({ width: 360, height: 820 });
   await page.goto('/zubaer-ahmed-PDF-TEST/');
-  await page.locator('.settings-menu > summary').click();
+  await page.locator('.topbar-actions .settings-menu > summary').click();
   await page.locator('.topbar-actions [data-action="cloud"]').click();
   await expect(page.locator('#info-dialog')).toBeVisible();
   await expect(page.locator('#info-dialog').getByText('Keep working locally without signing in.')).toBeVisible();
@@ -126,7 +126,7 @@ test('email-confirmation callback validates identity and removes URL tokens', as
   await expect.poll(() => page.evaluate(() => location.hash)).toBe('');
   await expect.poll(() => page.evaluate(() => sessionStorage.getItem('docflow.cloud-session.v1'))).toContain('confirmed@example.com');
   expect(requested.some((url) => url.includes('/auth/v1/user'))).toBe(true);
-  await page.locator('.settings-menu > summary').click();
+  await page.locator('.topbar-actions .settings-menu > summary').click();
   await page.locator('.topbar-actions [data-action="cloud"]').click();
   await expect(page.locator('#info-dialog').getByText('Signed in as confirmed@example.com')).toBeVisible();
 });

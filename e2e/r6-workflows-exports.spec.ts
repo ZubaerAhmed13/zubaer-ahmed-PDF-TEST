@@ -71,6 +71,8 @@ test('review comparison retains the original source when a different input is se
   const dialog = await open(page, 'rotate');
   await dialog.locator('#workspace-file').setInputFiles(await sample('old.pdf', 1));
   await dialog.locator('#run-operation').click();
+  await expect(page.locator('[data-result-page]')).toBeVisible();
+  await returnToEditor(page);
   const review = dialog.locator('.export-review').first(); await expect(review).toBeVisible();
   await dialog.locator('#workspace-file').setInputFiles(await sample('new.pdf', 2));
   await review.locator('summary').click();
@@ -83,6 +85,8 @@ test('export review renames, reopens and continues a result without applying the
   const dialog = await open(page, 'rotate');
   await dialog.locator('#workspace-file').setInputFiles(await sample('turn.pdf', 1));
   await dialog.locator('#run-operation').click();
+  await expect(page.locator('[data-result-page]')).toBeVisible();
+  await returnToEditor(page);
   const review = dialog.locator('.export-review').first();
   await expect(review).toBeVisible();
   await review.locator('summary').click();
@@ -112,7 +116,9 @@ test('output renaming invalidates the old ZIP and rebuilds with the chosen name'
   await expect(dialog.locator('#wf-stage')).toContainText('Finished');
   await returnToEditor(page);
   await dialog.getByRole('button', { name: 'Prepare ZIP', exact: true }).click();
-  const zipLink = dialog.locator('a[download="docflow-workflow-results.zip"]'); await expect(zipLink).toBeVisible();
+  await expect(page.locator('[data-result-page]')).toBeVisible();
+  await returnToEditor(page);
+  const zipLink = dialog.locator('#wf-results a[download="docflow-workflow-results.zip"]'); await expect(zipLink).toBeVisible();
   const review = dialog.locator('#wf-results > .export-review').first(); await review.locator('summary').click();
   await review.getByLabel('Output filename').fill('renamed');
   await expect(zipLink).toHaveCount(0);

@@ -1,3 +1,4 @@
+import { closeToolPage } from './helpers/editorReturn';
 import { expect, test } from '@playwright/test';
 import { PDFDocument } from 'pdf-lib';
 
@@ -52,8 +53,7 @@ test('persists lightweight project metadata and settings without storing file co
   const storedFiles = stored.files as Array<Record<string, unknown>>;
   expect(Object.keys(storedFiles[0] ?? {}).sort()).toEqual(['lastModified', 'name', 'size', 'type']);
 
-  await dialog.getByRole('button', { name: 'Back to all tools' }).click();
-  await expect(dialog).toBeHidden();
+  await closeToolPage(page);
 
   await page.reload();
   await openRotateTool(page);

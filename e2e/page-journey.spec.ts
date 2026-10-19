@@ -2,6 +2,7 @@ import { expect, test } from '@playwright/test';
 import { PDFDocument, StandardFonts } from 'pdf-lib';
 import AxeBuilder from '@axe-core/playwright';
 import { tools } from '../src/tools/registry';
+import JSZip from 'jszip';
 
 const base = '/zubaer-ahmed-PDF-TEST/';
 async function sample(count = 1) {
@@ -116,4 +117,37 @@ test('phone discovery, upload and result states fit the screen and remain access
   await page.screenshot({ path: 'test-results/journey-phone-result.png' });
   const audit = await new AxeBuilder({ page }).analyze();
   expect(audit.violations.filter(v => ['critical', 'serious'].includes(v.impact ?? ''))).toEqual([]);
+});
+
+for (const tool of ['batch', 'workflow']) test(`${tool} archive can be renamed on its result page without losing the download`, async ({ page }) => {
+  await page.goto(base + '#/tools/' + tool);
+  await page.locator(tool === 'batch' ? '#batch-files' : '#wf-input').setInputFiles(await sample());
+  await page.getByRole('button', { name: tool === 'batch' ? 'Run batch' : 'Run workflow', exact: true }).click();
+  const results = page.locator('[data-result-page]');
+  await expect(results).toBeVisible();
+  await results.getByRole('button', { name: 'Return to editing', exact: true }).click();
+  await page.getByRole('button', { name: 'Prepare ZIP', exact: true }).click();
+  await expect(results).toBeVisible();
+  await results.getByRole('textbox', { name: 'Output filename' }).fill('reviewed-archive');
+  const link = results.getByRole('link', { name: 'Download ZIP', exact: true });
+  await expect(link).toHaveAttribute('download', 'reviewed-archive.zip');
+  const pending = page.waitForEvent('download'); await link.click();
+  const download = await pending, stream = await download.createReadStream(), chunks: Buffer[] = [];
+  for await (const chunk of stream!) chunks.push(Buffer.from(chunk));
+  const zip = await JSZip.loadAsync(Buffer.concat(chunks));
+  const entry = Object.values(zip.files).find(file => !file.dir)!;
+  expect((await PDFDocument.load(await entry.async('uint8array'))).getPageCount()).toBe(1);
+});
+
+test('phone processing errors remain visible after closing Options', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto(base + '#/tools/split');
+  await page.locator('#workspace-file').setInputFiles(await sample());
+  await page.getByRole('button', { name: 'Options', exact: true }).click();
+  await page.locator('input[name="ranges"]').fill('99');
+  await page.getByRole('button', { name: 'Options', exact: true }).click();
+  await page.locator('#run-operation').click();
+  await expect(page.locator('#stage')).toHaveText('Failed');
+  await expect(page.locator('#error')).toBeVisible();
+  await expect(page.locator('#stage')).toBeVisible();
 });
