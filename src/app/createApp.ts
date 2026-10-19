@@ -324,7 +324,11 @@ export function createApp(root: HTMLDivElement | null): void {
     const target = event.target as HTMLElement;
     if (target.closest('[data-reset-search]')) {
       search.value = ''; category = 'all';
-      root.querySelectorAll<HTMLButtonElement>('[role="tab"]').forEach(tab => tab.setAttribute('aria-selected', String(tab.dataset.category === 'all')));
+      root.querySelectorAll<HTMLButtonElement>('.category-tabs [role="tab"]').forEach(tab => {
+        const selected = tab.dataset.category === 'all';
+        tab.setAttribute('aria-selected', String(selected));
+        tab.tabIndex = selected ? 0 : -1;
+      });
       render(); search.focus(); return;
     }
     const fav = target.closest<HTMLButtonElement>('[data-favorite]');
@@ -374,7 +378,7 @@ export function createApp(root: HTMLDivElement | null): void {
   });
   categoryTabs?.addEventListener('keydown', event => {
     if (!['ArrowRight', 'ArrowLeft', 'Home', 'End'].includes(event.key)) return;
-    const tabs = [...categoryTabs.querySelectorAll<HTMLButtonElement>('[role="tab"]')];
+    const tabs = [...(event.currentTarget as HTMLElement).querySelectorAll<HTMLButtonElement>('[role="tab"]')];
     const focused = event.target instanceof HTMLButtonElement ? tabs.indexOf(event.target) : -1;
     if (focused < 0) return;
     event.preventDefault();
