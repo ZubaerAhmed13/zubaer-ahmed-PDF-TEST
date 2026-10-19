@@ -45,6 +45,15 @@ function tool(definition: Omit<ToolDefinition, 'load'>): ToolDefinition {
   };
 }
 
+function pagePickTool(definition: Omit<ToolDefinition, 'load'>): ToolDefinition {
+  return {
+    ...definition,
+    load: (retry = isRecoveryRetry(definition.id)) => retry
+      ? import('./visualPageSelectionWorkspace?retry')
+      : import('./visualPageSelectionWorkspace')
+  };
+}
+
 export const tools: ToolDefinition[] = [
   { id: 'edit-pdf', name: 'Edit PDF', category: 'edit', description: 'Position added text, images, shapes, visual signatures, editable region highlights, sticky-note comments and crop frames directly on each page. Keyboard controls and edit undo/redo included.', keywords: ['editor','text','image','signature','crop','comment','highlight','review','unicode'], icon: '✎', quality: 'Lossless', status: 'Migrated', multipleFiles: false, load: (retry = isRecoveryRetry('edit-pdf')) => retry ? import('./directEditWorkspace?retry') : import('./directEditWorkspace') },
   {
@@ -55,8 +64,8 @@ export const tools: ToolDefinition[] = [
   },
   tool({ id: 'merge', name: 'Merge PDF', category: 'organize', description: 'Combine PDFs without intentionally rasterizing page content.', keywords: ['combine','join'], icon: '⊕', quality: 'Lossless', status: 'Migrated', multipleFiles: true }),
   tool({ id: 'split', name: 'Split PDF', category: 'organize', description: 'Extract ranges, individual pages, or chunks into new PDFs.', keywords: ['extract','range','pages'], icon: '✂', quality: 'Lossless', status: 'Migrated', multipleFiles: false }),
-  tool({ id: 'remove-pages', name: 'Remove pages', category: 'organize', description: 'Remove selected pages structurally while preserving the remaining page content.', keywords: ['delete','remove','pages'], icon: '−', quality: 'Lossless', status: 'Migrated', multipleFiles: false }),
-  tool({ id: 'extract-pages', name: 'Extract pages', category: 'organize', description: 'Create a new PDF from selected pages without intentionally rasterizing them.', keywords: ['extract','copy','selected pages'], icon: '⇥', quality: 'Lossless', status: 'Migrated', multipleFiles: false }),
+  pagePickTool({ id: 'remove-pages', name: 'Remove pages', category: 'organize', description: 'Remove selected pages structurally while preserving the remaining page content.', keywords: ['delete','remove','pages'], icon: '−', quality: 'Lossless', status: 'Migrated', multipleFiles: false }),
+  pagePickTool({ id: 'extract-pages', name: 'Extract pages', category: 'organize', description: 'Create a new PDF from selected pages without intentionally rasterizing them.', keywords: ['extract','copy','selected pages'], icon: '⇥', quality: 'Lossless', status: 'Migrated', multipleFiles: false }),
   {
     id: 'organize', name: 'Organize pages', category: 'organize',
     description: 'Visually reorder, remove and duplicate pages with lazy thumbnails, multi-select and undo/redo while preserving a deterministic structural operation plan.',
