@@ -16,12 +16,15 @@ test('lazy-load failure is recoverable and Retry really opens the editor', async
       await route.abort('failed');
       return;
     }
+    if (new URL(page.url()).searchParams.has('docflowRetry')) {
+      await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
+    }
     await route.continue();
   });
   await page.goto(appUrl);
 
   await page.locator('[data-open-tool="merge"]').first().click();
-  const dialog = page.getByRole('dialog', { name: 'Workspace' });
+  const dialog = page.getByRole('region', { name: 'Workspace' });
   await expect(dialog).toBeVisible();
   await expect(dialog.locator('.workspace-loading')).toHaveCount(0);
   await expect(dialog.getByRole('heading', { name: 'Unable to open Merge PDF', exact: true })).toBeVisible();
@@ -36,7 +39,8 @@ test('lazy-load failure is recoverable and Retry really opens the editor', async
   await expect(dialog.getByRole('heading', { name: 'Merge PDF', exact: true })).toBeVisible();
   await expect(dialog.locator('.workspace-loading')).toHaveCount(0);
   await expect(dialog.locator('[data-load-error-for="merge"]')).toHaveCount(0);
-  expect(await page.evaluate(() => sessionStorage.getItem('docflow.retry-tool.v1'))).toBeNull();
+  await expect.poll(() => page.evaluate(() => sessionStorage.getItem('docflow.retry-tool.v1'))).toBeNull();
+  await expect(page.locator('[data-select-source]')).toBeEnabled();
 });
 
 test('closing during a delayed lazy load permanently invalidates that open session', async ({ page }) => {
@@ -58,11 +62,11 @@ test('closing during a delayed lazy load permanently invalidates that open sessi
   });
   await page.goto(appUrl);
 
-  const dialog = page.getByRole('dialog', { name: 'Workspace' });
+  const dialog = page.getByRole('region', { name: 'Workspace' });
   try {
     await page.locator('[data-open-tool="merge"]').first().click();
-    await expect(dialog.locator('.workspace-loading')).toBeVisible();
-    await page.keyboard.press('Escape');
+    await expect(dialog.locator('.workspace-loading')).toBeAttached();
+    await page.getByRole('button', { name: 'Back to all tools', exact: true }).click();
     await expect(dialog).toBeHidden();
 
     releaseOnce();

@@ -1,3 +1,4 @@
+import { returnToEditor } from './helpers/editorReturn';
 import { test, expect, type Page } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 import { PDFDocument, PDFName, PDFString, PDFDict, degrees } from 'pdf-lib';
@@ -26,8 +27,10 @@ async function properties(page: Page, values: Record<string, string>): Promise<v
     await page.getByRole('button', { name: 'Apply properties', exact: true }).click();
 }
 async function output(page: Page): Promise<Buffer> {
+  await returnToEditor(page);
     await page.getByRole('button', { name: 'Run Edit PDF', exact: true }).click();
-    await expect(page.locator('#stage')).toContainText('Edits ready');
+    await expect(page.locator('[data-result-page]')).toBeVisible();
+    await returnToEditor(page);
     const pending = page.waitForEvent('download');
     await page.getByRole('link', { name: 'Download edited PDF', exact: true }).click();
     const path = await (await pending).path();

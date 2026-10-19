@@ -194,6 +194,7 @@ export function mountWorkspace(container: HTMLDivElement, tool: ToolDefinition):
 
   const clearOrganizer = async (): Promise<void> => {
     loadGeneration += 1;
+    orderInput.disabled = false;
     disconnectObserver();
     selectedIds.clear();
     items = [];
@@ -209,6 +210,8 @@ export function mountWorkspace(container: HTMLDivElement, tool: ToolDefinition):
 
   const buildOrganizer = async (file: File): Promise<void> => {
     const generation = ++loadGeneration;
+    // Initial order installation must not reset a user's active text selection.
+    orderInput.disabled = true;
     disconnectObserver();
     const previous = previewController;
     previewController = null;
@@ -242,6 +245,8 @@ export function mountWorkspace(container: HTMLDivElement, tool: ToolDefinition):
       status.hidden = false;
       status.textContent = error instanceof Error ? `Could not build page organizer: ${error.message}` : 'Could not build page organizer.';
       panel.dataset.organizerReady = 'false';
+    } finally {
+      if (!disposed && generation === loadGeneration) orderInput.disabled = false;
     }
   };
 

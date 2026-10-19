@@ -11,7 +11,7 @@ test('virtualizes the thumbnail DOM and lazily renders only the visible page win
   await page.goto('/zubaer-ahmed-PDF-TEST/');
   await page.getByLabel('Search tools').fill('view pdf');
   await page.locator('#tool-grid [data-open-tool="preview"]').click();
-  const dialog = page.getByRole('dialog', { name: 'Workspace' });
+  const dialog = page.getByRole('region', { name: 'Workspace' });
   await dialog.locator('#workspace-file').setInputFiles({
     name: 'forty-pages.pdf',
     mimeType: 'application/pdf',

@@ -1,3 +1,4 @@
+import { returnToEditor } from './helpers/editorReturn';
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import { PDFDocument } from 'pdf-lib';
 import { readFile } from 'node:fs/promises';
@@ -24,7 +25,7 @@ async function openLiveApp(page: Page): Promise<void> {
     await page.waitForTimeout(5_000);
   }
   expect(loaded).toBe(true);
-  await expect(page.getByRole('heading', { name: /Private PDF tools/ })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /Your PDFs/ })).toBeVisible();
 
   const manifest = await page.evaluate(async () => {
     const response = await fetch('./manifest.webmanifest', { cache: 'no-store' });
@@ -44,12 +45,13 @@ async function openLiveApp(page: Page): Promise<void> {
 async function openTool(page: Page, query: string, toolId: string): Promise<Locator> {
   await page.getByLabel('Search tools').fill(query);
   await page.locator(`#tool-grid [data-open-tool="${toolId}"]`).click();
-  const dialog = page.getByRole('dialog', { name: 'Workspace' });
+  const dialog = page.getByRole('region', { name: 'Workspace' });
   await expect(dialog).toBeVisible();
   return dialog;
 }
 
 async function download(dialog: Locator, page: Page, name: RegExp): Promise<Buffer> {
+  await returnToEditor(page);
   const pending = page.waitForEvent('download');
   await dialog.getByRole('link', { name }).click();
   const item = await pending;
@@ -73,12 +75,13 @@ test('deployed Pages build executes structural rotation and local AES-256 protec
   await dialog.locator('select[name="degrees"]').selectOption('90');
   await dialog.getByRole('button', { name: 'Run Rotate pages' }).click();
   await expect(dialog.locator('#stage')).toHaveText('Complete', { timeout: 45_000 });
+  await returnToEditor(page);
   const rotatedBytes = await download(dialog, page, /^Download rotated\.pdf/);
   const rotated = await PDFDocument.load(rotatedBytes);
   expect(rotated.getPageCount()).toBe(2);
   expect(rotated.getPages().every((pdfPage) => pdfPage.getRotation().angle === 90)).toBe(true);
 
-  await dialog.getByRole('button', { name: 'Close workspace' }).click();
+  await dialog.getByRole('button', { name: 'Back to all tools' }).click();
   await expect(dialog).toBeHidden();
 
   dialog = await openTool(page, 'protect', 'protect-pdf');
@@ -87,6 +90,7 @@ test('deployed Pages build executes structural rotation and local AES-256 protec
   await dialog.locator('#encryption-password-confirm').fill(PASSWORD);
   await dialog.getByRole('button', { name: 'Run Protect PDF' }).click();
   await expect(dialog.locator('#stage')).toHaveText('Complete', { timeout: 60_000 });
+  await returnToEditor(page);
   await expect(dialog.locator('#encryption-password')).toHaveValue('');
   await expect(dialog.locator('#encryption-password-confirm')).toHaveValue('');
 

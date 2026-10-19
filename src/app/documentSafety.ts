@@ -5,6 +5,7 @@ import { preservationConsequences } from '../pdf/preservationPolicy';
 /** Keeps only small inventories. Files and parsed documents are never persisted. */
 export class DocumentSafety {
   private readonly panel = document.createElement('section');
+  private content = document.createElement('div');
   private generation = 0;
   private readonly observer: MutationObserver;
   private running: RunningOperation | null = null;
@@ -32,12 +33,13 @@ export class DocumentSafety {
     this.running?.cancel(); this.running = null;
     this.panel.replaceChildren(); this.panel.hidden = !pdfs.length;
     if (!pdfs.length) return;
-    const heading = document.createElement('strong'); heading.textContent = 'Before export · preservation and safety';
-    this.panel.append(heading);
+    const disclosure = document.createElement('details'); disclosure.className = 'document-consequences';
+    const heading = document.createElement('summary'); heading.textContent = 'Before export · preservation and safety';
+    this.content = document.createElement('div'); disclosure.append(heading, this.content); this.panel.append(disclosure);
     for (const message of preservationConsequences(this.tool)) this.add(message);
     this.add('Every PDF rewrite can invalidate digital signatures. Inspection detects structures only; it does not validate signatures or certify a document as safe.');
     const details = document.createElement('details');
-    const summary = document.createElement('summary'); summary.textContent = 'Local document inspection'; details.append(summary); this.panel.append(details);
+    const summary = document.createElement('summary'); summary.textContent = 'Local document inspection'; details.append(summary); this.content.append(details);
     void (async () => {
       for (const file of pdfs) {
         if (this.disposed || generation !== this.generation) return;
@@ -65,6 +67,6 @@ export class DocumentSafety {
       }
     })();
   }
-  private add(message: string): void { const p = document.createElement('p'); p.textContent = message; this.panel.append(p); }
+  private add(message: string): void { const p = document.createElement('p'); p.textContent = message; this.content.append(p); }
   destroy(): void { this.observer.disconnect(); this.disposed = true; ++this.generation; this.running?.cancel(); this.running = null; this.files = []; this.panel.remove(); }
 }

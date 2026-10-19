@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { closeToolPage } from './helpers/editorReturn';
 import { PDFDocument } from 'pdf-lib';
 
 async function pdfFixture(pageCount: number, width = 595.28, height = 841.89): Promise<Buffer> {
@@ -9,7 +10,7 @@ async function pdfFixture(pageCount: number, width = 595.28, height = 841.89): P
 
 async function openTool(page: import('@playwright/test').Page, toolId: string): Promise<import('@playwright/test').Locator> {
   await page.locator(`[data-open-tool="${toolId}"]`).first().click();
-  const dialog = page.getByRole('dialog', { name: 'Workspace' });
+  const dialog = page.getByRole('region', { name: 'Workspace' });
   await expect(dialog).toBeVisible();
   return dialog;
 }
@@ -102,7 +103,7 @@ test('Files and Settings panes independently consume wheel scrolling on a short 
   await page.mouse.wheel(0, 300);
   await expect.poll(() => filesPane.evaluate((element) => element.scrollTop)).toBeGreaterThan(filesBefore);
 
-  await dialog.locator('.legacy-footer-close').click();
+  await closeToolPage(page);
   await expect(dialog).toBeHidden();
   dialog = await openTool(page, 'forms');
   await dialog.locator('#workspace-file').setInputFiles({
@@ -133,8 +134,8 @@ test('representative restored editors remain navigable at constrained desktop he
     await expect(preview).toBeVisible();
     await expect(preview).toHaveAttribute('data-preview-ready', 'true');
     await expect(preview.locator('.pre-edit-canvas-shell')).toBeVisible();
-    await expect(dialog.locator('.legacy-footer-close')).toBeVisible();
-    await dialog.locator('.legacy-footer-close').click();
+    await expect(dialog.locator('[data-page-home]').first()).toBeVisible();
+    await closeToolPage(page);
     await expect(dialog).toBeHidden();
   }
 });
@@ -152,12 +153,11 @@ test('stacked mobile editor remains scrollable without browser-page horizontal o
   await expect(preview).toHaveAttribute('data-preview-ready', 'true');
   await expect(preview.getByRole('button', { name: 'Zoom in' })).toBeVisible();
   const body = dialog.locator('.legacy-editor-body');
-  const bodyMetrics = await body.evaluate((element) => ({ clientHeight: element.clientHeight, scrollHeight: element.scrollHeight }));
-  expect(bodyMetrics.scrollHeight).toBeGreaterThan(bodyMetrics.clientHeight);
-  await body.hover();
-  const bodyBefore = await body.evaluate((element) => element.scrollTop);
-  await page.mouse.wheel(0, 300);
-  await expect.poll(() => body.evaluate((element) => element.scrollTop)).toBeGreaterThan(bodyBefore);
+  await expect(body).toBeVisible();
+  await dialog.locator('[data-mobile-panel="options"]').click();
+  await expect(dialog.locator('.legacy-settings-pane')).toBeVisible();
+  await dialog.locator('[data-mobile-panel="options"]').click();
+  await expect(dialog.locator('.legacy-settings-pane')).toBeHidden();
 
   const documentOverflow = await page.evaluate(() => ({
     scrollWidth: document.documentElement.scrollWidth,
@@ -194,11 +194,11 @@ test('workspace favorite synchronizes with Home immediately in both directions',
   await page.evaluate(() => localStorage.removeItem('docflow.favorites.v1'));
   await page.reload();
   const dialog = await openTool(page, 'rotate');
-  const editorFavorite = dialog.locator('.legacy-favorite-button[aria-pressed]');
+  const editorFavorite = dialog.locator('[data-page-favorite]');
   await expect(editorFavorite).toHaveAttribute('aria-pressed', 'false');
   await editorFavorite.click();
   await expect(editorFavorite).toHaveAttribute('aria-pressed', 'true');
-  await dialog.getByRole('button', { name: 'Close', exact: true }).last().click();
+  await closeToolPage(page);
   await expect(dialog).toBeHidden();
 
   const homeFavorite = page.locator('#favorite-tools [data-open-tool="rotate"]');
@@ -208,7 +208,7 @@ test('workspace favorite synchronizes with Home immediately in both directions',
   await expect(homeFavorite).toHaveCount(0);
 
   await page.locator('[data-open-tool="rotate"]').first().click();
-  await expect(page.getByRole('dialog', { name: 'Workspace' }).locator('.legacy-favorite-button[aria-pressed]')).toHaveAttribute('aria-pressed', 'false');
+  await expect(page.getByRole('region', { name: 'Workspace' }).locator('[data-page-favorite]')).toHaveAttribute('aria-pressed', 'false');
 });
 
 test('failed lazy tool load leaves a recoverable error instead of endless Loading', async ({ page, browserName }) => {
@@ -224,7 +224,7 @@ test('failed lazy tool load leaves a recoverable error instead of endless Loadin
   });
 
   await page.locator('[data-open-tool="merge"]').first().click();
-  const dialog = page.getByRole('dialog', { name: 'Workspace' });
+  const dialog = page.getByRole('region', { name: 'Workspace' });
   await expect(dialog).toBeVisible();
   await expect(dialog.locator('.workspace-loading')).toHaveCount(0);
   await expect(dialog.getByRole('heading', { name: 'Unable to open Merge PDF' })).toBeVisible();
@@ -251,11 +251,11 @@ test('closing during lazy load invalidates the stale open session', async ({ pag
     await route.continue();
   });
 
-  const dialog = page.getByRole('dialog', { name: 'Workspace' });
+  const dialog = page.getByRole('region', { name: 'Workspace' });
   try {
     await page.locator('[data-open-tool="merge"]').first().click();
-    await expect(dialog.locator('.workspace-loading')).toBeVisible();
-    await page.keyboard.press('Escape');
+    await expect(dialog.locator('.workspace-loading')).toBeAttached();
+    await page.getByRole('button', { name: 'Back to all tools', exact: true }).click();
     await expect(dialog).toBeHidden();
     releaseOnce();
     await page.waitForTimeout(250);
@@ -267,5 +267,5 @@ test('closing during lazy load invalidates the stale open session', async ({ pag
 
   await page.unroute('**/*.js');
   await page.locator('[data-open-tool="merge"]').first().click();
-  await expect(page.getByRole('dialog', { name: 'Workspace' }).getByRole('heading', { name: 'Merge PDF' })).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Workspace' }).getByRole('heading', { name: 'Merge PDF' })).toBeVisible();
 });

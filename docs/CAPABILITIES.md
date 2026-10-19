@@ -1,6 +1,6 @@
 # Current capability and evidence matrix
 
-Current release: A1.1 / 0.10.0, 29 tool IDs; the original 28 stable IDs are retained. Test links identify coverage; passing results must be checked at the exact release SHA. Catalog preservation is not implied by a structural/lossless label.
+Current release: U1 / 0.11.0, 29 tool IDs; the original 28 stable IDs are retained. Test links identify coverage; passing results must be checked at the exact release SHA. Catalog preservation is not implied by a structural/lossless label.
 
 | Tool / ID | Coverage | Important boundary |
 |---|---|---|
@@ -61,3 +61,7 @@ Diagnostics exports only validated version/build and selected boolean browser fe
 Edit PDF adds actual Highlight annotation objects with comments, opacity and explicit appearance streams. Original page content is not repainted or rasterised by this path. Only single rectangular regions in the visible CropBox with supported RGB color, opacity, flags and no reply thread/layer are admitted. Multi-region, skewed/crossed, shared-reference, locked, hidden, layered, threaded and malformed highlights stay unchanged and are counted in the editor notice. Editing replaces the supported mark's appearance while retaining its author and popup reference. The disposable canvas copy omits admitted marks and popups; the overlay represents current geometry, so moving/deleting a mark cannot leave its old paint in the canvas.
 
 [Unit/independent output checks](../tests/a1Highlights.test.ts), [three-browser and production journeys](../e2e/a1-native-highlights.spec.ts), [engine feasibility decision](A1_FEASIBILITY.md). Existing-text editing and structure-preserving redaction remain deferred. Highlights are review marks, never redaction. Edit PDF refuses custom page scales (`/UserUnit` other than 1) before editing/export. Prior human/device/cloud acceptance gaps remain open.
+
+## U1 page journey
+
+All 29 tools use dedicated upload/workspace pages and separate transient result pages. [Journey coverage](../e2e/page-journey.spec.ts) verifies direct links, guarded Back, retained edits, multi-output names/bytes, expired links and phone accessibility. [Release scope and acceptance](U1_RELEASE.md).

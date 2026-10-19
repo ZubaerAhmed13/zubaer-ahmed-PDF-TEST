@@ -1,3 +1,4 @@
+import { returnToEditor } from './helpers/editorReturn';
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import JSZip from 'jszip';
@@ -29,12 +30,13 @@ async function openTool(page: Page, query: string, toolId: string): Promise<Loca
   const openButton = page.locator(`#tool-grid [data-open-tool="${toolId}"]`);
   await expect(openButton).toHaveCount(1);
   await openButton.click();
-  const dialog = page.getByRole('dialog', { name: 'Workspace' });
+  const dialog = page.getByRole('region', { name: 'Workspace' });
   await expect(dialog).toBeVisible();
   return dialog;
 }
 
 async function downloadFrom(dialog: Locator, page: Page, name: RegExp): Promise<Buffer> {
+  await returnToEditor(page);
   const downloadPromise = page.waitForEvent('download');
   await dialog.getByRole('link', { name }).click();
   const download = await downloadPromise;
@@ -57,15 +59,16 @@ async function runPdfExport(
   if (configure) await configure(dialog);
   await dialog.getByRole('button', { name: `Run ${toolName}` }).click();
   await expect(dialog.locator('#stage')).toHaveText('Complete');
+  await returnToEditor(page);
   const bytes = await downloadFrom(dialog, page, outputName);
-  await page.keyboard.press('Escape');
+  await page.getByRole('button', { name: 'Back to all tools', exact: true }).click();
   await expect(dialog).toBeHidden();
   return bytes;
 }
 
 test.beforeEach(async ({ page }) => {
   await page.goto(appPath);
-  await expect(page.getByRole('heading', { name: /Private PDF tools/ })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /Your PDFs/ })).toBeVisible();
 });
 
 test('release matrix reopens structural edit exports', async ({ page }) => {
@@ -103,6 +106,7 @@ test('split exports the requested ranges as reopenable PDFs', async ({ page }) =
   await dialog.locator('input[name="ranges"]').fill('1-2;3');
   await dialog.getByRole('button', { name: 'Run Split PDF' }).click();
   await expect(dialog.locator('#stage')).toHaveText('Complete');
+  await returnToEditor(page);
 
   const zipBytes = await downloadFrom(dialog, page, /^Download split-pdf\.zip/);
   const zip = await JSZip.loadAsync(zipBytes);
@@ -154,6 +158,7 @@ test('AcroForm inspect, fill, export, and reopen works through the UI', async ({
   await dialog.locator('textarea[name="values"]').fill(JSON.stringify({ CustomerName: 'Zubaer', Accepted: true }));
   await dialog.getByRole('button', { name: 'Run Fill PDF forms' }).click();
   await expect(dialog.locator('#stage')).toHaveText('Complete');
+  await returnToEditor(page);
 
   const bytes = await downloadFrom(dialog, page, /^Download filled-form\.pdf/);
   const output = await PDFDocument.load(bytes);
@@ -168,15 +173,17 @@ test('image conversion workflows produce valid downloadable artifacts', async ({
   await dialog.locator('#workspace-file').setInputFiles({ name: 'pixel.png', mimeType: 'image/png', buffer: png });
   await dialog.getByRole('button', { name: 'Run Images to PDF' }).click();
   await expect(dialog.locator('#stage')).toHaveText('Complete');
+  await returnToEditor(page);
   const pdfBytes = await downloadFrom(dialog, page, /^Download images\.pdf/);
   expect((await PDFDocument.load(pdfBytes)).getPageCount()).toBe(1);
-  await page.keyboard.press('Escape');
+  await page.getByRole('button', { name: 'Back to all tools', exact: true }).click();
 
   dialog = await openTool(page, 'pdf to images', 'pdf-to-images');
   await dialog.locator('#workspace-file').setInputFiles({ name: 'one-page.pdf', mimeType: 'application/pdf', buffer: await pdfFixture(1) });
   await dialog.locator('select[name="format"]').selectOption('png');
   await dialog.getByRole('button', { name: 'Run PDF to images' }).click();
   await expect(dialog.locator('#stage')).toHaveText('Complete');
+  await returnToEditor(page);
   const zipBytes = await downloadFrom(dialog, page, /^Download pdf-images\.zip/);
   const zip = await JSZip.loadAsync(zipBytes);
   const imageNames = Object.keys(zip.files).filter((name) => name.endsWith('.png'));
@@ -193,6 +200,7 @@ test('300-page mixed-dimension structural workflow reopens without rasterization
   await dialog.locator('select[name="degrees"]').selectOption('90');
   await dialog.getByRole('button', { name: 'Run Rotate pages' }).click();
   await expect(dialog.locator('#stage')).toHaveText('Complete', { timeout: 40_000 });
+  await returnToEditor(page);
 
   const bytes = await downloadFrom(dialog, page, /^Download rotated\.pdf/);
   const output = await PDFDocument.load(bytes);
@@ -217,6 +225,7 @@ test('core PDF processing makes no cross-origin network requests', async ({ page
   ]);
   await dialog.getByRole('button', { name: 'Run Merge PDF' }).click();
   await expect(dialog.locator('#stage')).toHaveText('Complete');
+  await returnToEditor(page);
   expect(externalRequests).toEqual([]);
 });
 

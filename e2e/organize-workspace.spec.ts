@@ -1,3 +1,4 @@
+import { returnToEditor } from './helpers/editorReturn';
 import { expect, test } from '@playwright/test';
 import { PDFDocument } from 'pdf-lib';
 import { readFile } from 'node:fs/promises';
@@ -11,11 +12,38 @@ async function organizerFixture(): Promise<Buffer> {
   return Buffer.from(await doc.save());
 }
 
+test('advanced order waits for source preparation before accepting edits', async ({ page }) => {
+  await page.addInitScript(() => {
+    const original = File.prototype.arrayBuffer;
+    let released = false;
+    const pending: (() => void)[] = [];
+    (window as unknown as { releaseOrderSource: () => void }).releaseOrderSource = () => { released = true; pending.splice(0).forEach(read => read()); };
+    File.prototype.arrayBuffer = function () {
+      if (this.name !== 'slow-order.pdf' || released) return original.call(this);
+      return new Promise<ArrayBuffer>((resolve, reject) => pending.push(() => { original.call(this).then(resolve, reject); }));
+    };
+  });
+  await page.goto('/zubaer-ahmed-PDF-TEST/#/tools/organize');
+  await page.locator('#workspace-file').setInputFiles({ name: 'slow-order.pdf', mimeType: 'application/pdf', buffer: await organizerFixture() });
+  const order = page.locator('input[name="order"]');
+  await expect(order).toBeDisabled();
+  await page.evaluate(() => (window as unknown as { releaseOrderSource: () => void }).releaseOrderSource());
+  await expect(order).toBeEnabled();
+  await order.fill('3,1,1');
+  await page.locator('#run-operation').click();
+  await expect(page.locator('[data-result-page]')).toBeVisible();
+  await returnToEditor(page);
+  const pending = page.waitForEvent('download'); await page.getByRole('link', { name: /^Download organized\.pdf/ }).click();
+  const download = await pending;
+  const pdf = await PDFDocument.load(await readFile((await download.path())!));
+  expect(pdf.getPages().map(page => page.getWidth())).toEqual([302, 300, 300]);
+});
+
 test('visual organizer synchronizes duplicate, multi-select delete, undo and move controls with structural export', async ({ page }) => {
   await page.goto('/zubaer-ahmed-PDF-TEST/');
   await page.getByLabel('Search tools').fill('organize pages');
   await page.locator('#tool-grid [data-open-tool="organize"]').click();
-  const dialog = page.getByRole('dialog', { name: 'Workspace' });
+  const dialog = page.getByRole('region', { name: 'Workspace' });
   const order = dialog.locator('input[name="order"]');
 
   await dialog.locator('#workspace-file').setInputFiles({
@@ -47,6 +75,7 @@ test('visual organizer synchronizes duplicate, multi-select delete, undo and mov
 
   await dialog.getByRole('button', { name: 'Run Organize pages' }).click();
   await expect(dialog.locator('#stage')).toHaveText('Complete');
+  await returnToEditor(page);
   const downloadPromise = page.waitForEvent('download');
   await dialog.getByRole('link', { name: /^Download organized\.pdf/ }).click();
   const download = await downloadPromise;
@@ -62,7 +91,7 @@ test('advanced deterministic order input remains supported and synchronizes the 
   await page.goto('/zubaer-ahmed-PDF-TEST/');
   await page.getByLabel('Search tools').fill('organize pages');
   await page.locator('#tool-grid [data-open-tool="organize"]').click();
-  const dialog = page.getByRole('dialog', { name: 'Workspace' });
+  const dialog = page.getByRole('region', { name: 'Workspace' });
   await dialog.locator('#workspace-file').setInputFiles({
     name: 'organizer-advanced.pdf',
     mimeType: 'application/pdf',

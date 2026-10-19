@@ -1,3 +1,4 @@
+import { returnToEditor } from './helpers/editorReturn';
 import { test, expect, type Page, type Locator } from '@playwright/test';
 import { PDFDocument } from 'pdf-lib';
 import { readFile } from 'node:fs/promises';
@@ -11,10 +12,11 @@ async function sample(name = 'source.pdf', count = 3) {
 async function open(page: Page, id = 'workflow') {
   await page.goto('/zubaer-ahmed-PDF-TEST/');
   await page.locator('#tool-grid [data-open-tool="' + id + '"]').click();
-  const dialog = page.getByRole('dialog', { name: 'Workspace', exact: true });
-  await expect(dialog).toBeVisible(); return dialog;
+  const dialog = page.getByRole('region', { name: 'Workspace', exact: true });
+  await expect(dialog).toBeVisible(); if (id === 'workflow') await dialog.getByRole('button', { name: 'Manage workflow recipes', exact: true }).click(); return dialog;
 }
 async function bytes(page: Page, link: Locator) {
+  await returnToEditor(page);
   const wait = page.waitForEvent('download'); await link.click();
   const file = await wait; return readFile((await file.path())!);
 }
@@ -37,6 +39,7 @@ test('portable recipe, dry run and page-relative export survive a local round tr
   await expect(dialog.locator('#wf-results a.download')).toHaveCount(0);
   await dialog.getByRole('button', { name: 'Run workflow', exact: true }).click();
   await expect(dialog.locator('#wf-stage')).toContainText('Finished', { timeout: 60000 });
+  await returnToEditor(page);
   const output = await bytes(page, dialog.locator('#wf-results a.download'));
   const doc = await PDFDocument.load(output);
   expect(doc.getPageCount()).toBe(1); expect(doc.getPage(0).getWidth()).toBe(402);
@@ -52,12 +55,14 @@ test('selected retry keeps successes and uses the executed recipe after draft ed
   await dialog.locator('#wf-input').setInputFiles([await sample('short.pdf', 1), await sample('good.pdf', 3)]);
   await dialog.getByRole('button', { name: 'Run workflow', exact: true }).click();
   await expect(dialog.locator('#wf-stage')).toContainText('Finished');
+  await returnToEditor(page);
   const goodBefore = await bytes(page, dialog.locator('#wf-results a.download'));
   await dialog.locator('.wf-step input').fill('1');
   await dialog.locator('#wf-input').setInputFiles(await sample('new-pending.pdf', 3));
   await expect(dialog.locator('#wf-results a.download')).toHaveCount(1);
   await dialog.getByRole('button', { name: 'Retry short.pdf', exact: true }).click();
   await expect(dialog.locator('#wf-stage')).toContainText('Finished');
+  await returnToEditor(page);
   await expect(dialog.locator('.batch-row[data-state=failed]')).toContainText('Step 1');
   await expect(dialog.locator('.batch-row[data-state=pending]')).toContainText('new-pending.pdf');
   expect(await bytes(page, dialog.locator('#wf-results a.download'))).toEqual(goodBefore);
@@ -66,10 +71,13 @@ test('review comparison retains the original source when a different input is se
   const dialog = await open(page, 'rotate');
   await dialog.locator('#workspace-file').setInputFiles(await sample('old.pdf', 1));
   await dialog.locator('#run-operation').click();
+  await expect(page.locator('[data-result-page]')).toBeVisible();
+  await returnToEditor(page);
   const review = dialog.locator('.export-review').first(); await expect(review).toBeVisible();
   await dialog.locator('#workspace-file').setInputFiles(await sample('new.pdf', 2));
   await review.locator('summary').click();
   await review.getByRole('button', { name: 'Compare with original', exact: true }).click();
+  await page.getByRole('dialog', { name: 'Leave unapplied tool changes?', exact: true }).getByRole('button', { name: 'Leave tool', exact: true }).click();
   await expect(dialog.locator('#file-list .file-row')).toHaveCount(2);
   await expect(dialog.locator('#file-list')).toContainText('old.pdf');
   await expect(dialog.locator('#file-list')).not.toContainText('new.pdf');
@@ -78,6 +86,8 @@ test('export review renames, reopens and continues a result without applying the
   const dialog = await open(page, 'rotate');
   await dialog.locator('#workspace-file').setInputFiles(await sample('turn.pdf', 1));
   await dialog.locator('#run-operation').click();
+  await expect(page.locator('[data-result-page]')).toBeVisible();
+  await returnToEditor(page);
   const review = dialog.locator('.export-review').first();
   await expect(review).toBeVisible();
   await review.locator('summary').click();
@@ -105,8 +115,11 @@ test('output renaming invalidates the old ZIP and rebuilds with the chosen name'
   await dialog.locator('#wf-input').setInputFiles(await sample('rename.pdf', 1));
   await dialog.getByRole('button', { name: 'Run workflow', exact: true }).click();
   await expect(dialog.locator('#wf-stage')).toContainText('Finished');
+  await returnToEditor(page);
   await dialog.getByRole('button', { name: 'Prepare ZIP', exact: true }).click();
-  const zipLink = dialog.locator('a[download="docflow-workflow-results.zip"]'); await expect(zipLink).toBeVisible();
+  await expect(page.locator('[data-result-page]')).toBeVisible();
+  await returnToEditor(page);
+  const zipLink = dialog.locator('#wf-results a[download="docflow-workflow-results.zip"]'); await expect(zipLink).toBeVisible();
   const review = dialog.locator('#wf-results > .export-review').first(); await review.locator('summary').click();
   await review.getByLabel('Output filename').fill('renamed');
   await expect(zipLink).toHaveCount(0);

@@ -9,6 +9,7 @@ import { mountHelpCenter } from './helpCenter';
 import { mountDiagnostics } from './diagnostics';
 import { mountPrivacyPanel } from './privacyPanel';
 import { productCopy } from '../content/en';
+import { PageJourney } from './pageJourney';
 
 const RECENT_KEY = 'docflow.recent-tools.v1';
 
@@ -48,8 +49,7 @@ export function createApp(root: HTMLDivElement | null): void {
           <button type="button" data-action="help">Help & capabilities</button>
         </nav>
         <div class="topbar-actions">
-          <button class="secondary" type="button" data-action="offline">Offline & storage</button><button class="secondary" type="button" data-action="diagnostics">Diagnostics</button>
-          <button class="secondary" type="button" data-action="cloud">Cloud sync</button>
+          <details class="settings-menu"><summary><span class="desktop-menu-label">Settings & help</span><span class="mobile-menu-label">Menu</span></summary><div class="settings-menu-items"><button type="button" data-action="offline">Offline & storage</button><button type="button" data-action="cloud">Cloud sync</button><button type="button" data-action="privacy">Privacy & data</button><button type="button" data-action="help">Help & capabilities</button><button type="button" data-action="diagnostics">Diagnostics</button></div></details>
           <button class="primary" type="button" data-action="open">Open PDF</button>
         </div>
       </header>
@@ -57,17 +57,17 @@ export function createApp(root: HTMLDivElement | null): void {
       <main id="main">
         <section class="hero" aria-labelledby="hero-title">
           <div class="hero-copy">
-            <p class="eyebrow"><span class="eyebrow-dot" aria-hidden="true"></span> Private · local · offline-capable</p>
-            <h1 id="hero-title">Private PDF tools that run <em>directly on your device.</em></h1>
-            <p class="lede">A focused workspace for everyday PDF jobs—organize, edit, convert, protect and optimize documents without sending them to a remote processing service.</p>
+            <p class="eyebrow"><span class="eyebrow-dot" aria-hidden="true"></span> A little less paperwork</p>
+            <h1 id="hero-title">Your PDFs. <em>A clear next step.</em></h1>
+            <p class="lede">Edit, organise, convert and finish your documents. Choose a tool to get started.</p>
             <div class="hero-actions">
               <button class="primary" type="button" data-action="open">Open a PDF</button>
               <button class="secondary" type="button" data-action="focus-search">Explore all tools</button>
             </div>
             <div class="hero-microcopy" aria-label="Product benefits">
-              <span><b class="hero-check" aria-hidden="true">✓</b> No document upload</span>
-              <span><b class="hero-check" aria-hidden="true">✓</b> Offline after setup</span>
-              <span><b class="hero-check" aria-hidden="true">✓</b> No analytics configured</span>
+              <span><b class="hero-check" aria-hidden="true">✓</b> ${tools.length} focused tools</span>
+              <span><b class="hero-check" aria-hidden="true">✓</b> Original files preserved</span>
+              <span><b class="hero-check" aria-hidden="true">✓</b> Clear processing choices</span>
             </div>
           </div>
 
@@ -178,26 +178,37 @@ export function createApp(root: HTMLDivElement | null): void {
   const recentTools = root.querySelector<HTMLDivElement>('#recent-tools');
   if (!grid || !search || !workspaceDialog || !workspace || !infoDialog || !infoContent || !favoriteTools || !recentTools) return;
 
+  const discovery = root.querySelector<HTMLElement>('.discovery')!;
+  root.querySelector('.hero')!.insertAdjacentElement('afterend', discovery);
+
   let disposeInfo: (() => void) | null = null;
+  let infoReturnFocus: HTMLElement | null = null;
   // A search input consumes native Escape to clear its value. In this modal,
   // Escape consistently dismisses help instead of leaving an invisible blocker.
   infoDialog.addEventListener('keydown', event => {
     if (event.key !== 'Escape') return;
     event.preventDefault(); event.stopPropagation(); infoDialog.close();
   }, true);
-  infoDialog.addEventListener('close', () => { disposeInfo?.(); disposeInfo = null; });
+  infoDialog.addEventListener('close', () => { disposeInfo?.(); disposeInfo = null; const target = infoReturnFocus; infoReturnFocus = null; queueMicrotask(() => { if (target?.isConnected && !infoDialog.open) target.focus({ preventScroll: true }); }); });
   let category = 'all';
   let workspaceGeneration = 0;
   let workspaceTrigger: HTMLElement | null = null;
+
+  const openTool = async (id: string, trigger: HTMLElement | null = null, view?: File): Promise<void> => {
+    await journey!.open(id, trigger, view, Boolean(view));
+  };
 
   const documents = new DocumentWorkspace({
     root: workspace, dialog: workspaceDialog,
     toolbar: root.querySelector<HTMLElement>('[data-document-toolbar]')!,
     home: root.querySelector<HTMLElement>('[data-document-home]')!,
-    open: (id, view) => openTool(id, null, view)
+    open: async (id, view) => { await journey!.open(id, null, view, true); },
+    inputsChanged: files => journey?.inputs(files),
+    busyChanged: busy => journey?.processing(busy),
+    editsChanged: () => journey?.invalidate()
   });
   const closeWorkspace = async (): Promise<void> => {
-    if (await documents.canLeave()) workspaceDialog.close();
+    await journey!.home();
   };
   // Own every close path, including native form submission, the restored
   // header/footer buttons and Escape. Active work is never silently cancelled.
@@ -248,12 +259,12 @@ export function createApp(root: HTMLDivElement | null): void {
 
   const sessionIsActive = (generation: number): boolean => generation === workspaceGeneration && workspaceDialog.open;
 
-  const openTool = async (id: string, trigger: HTMLElement | null = null, view?: File): Promise<void> => {
+  const mountTool = async (id: string, trigger: HTMLElement | null = null, view?: File): Promise<boolean> => {
     const tool = tools.find((candidate) => candidate.id === id);
-    if (!tool) return;
+    if (!tool) return false;
     // Capture before the asynchronous leave guard consumes the retry marker.
     const recoveryRetry = new URL(location.href).searchParams.get('docflowRetry') === id;
-    if (!await documents.canLeave()) { documents.refresh(); return; }
+    if (!await documents.canLeave()) { documents.refresh(); return false; }
     documents.unmount();
     workspace.dispatchEvent(new CustomEvent('docflow-cleanup'));
     workspaceDialog.classList.remove('legacy-exact-active');
@@ -263,17 +274,17 @@ export function createApp(root: HTMLDivElement | null): void {
     try { localStorage.setItem(RECENT_KEY, JSON.stringify(recent)); } catch { /* Local storage can be disabled; PDF tools must still open. */ }
     renderQuickAccess();
     workspace.innerHTML = `<div class="workspace-loading" role="status">Loading ${escapeHtml(tool.name)}…</div>`;
-    if (!workspaceDialog.open) workspaceDialog.showModal();
+    if (!workspaceDialog.open) workspaceDialog.show();
 
     try {
       const module = await tool.load(recoveryRetry);
-      if (!sessionIsActive(generation)) return;
+      if (!sessionIsActive(generation)) return false;
       documents.prepare(tool, view);
       module.mountWorkspace(workspace, tool);
       document.dispatchEvent(new CustomEvent('docflow-workspace-mounted'));
       documents.mounted();
     } catch (error) {
-      if (!sessionIsActive(generation)) return;
+      if (!sessionIsActive(generation)) return false;
       console.error('DocFlow tool load failed', {
         toolId: tool.id,
         timestamp: new Date().toISOString(),
@@ -292,12 +303,15 @@ export function createApp(root: HTMLDivElement | null): void {
           </div>
         </section>
       `;
-      workspace.querySelector<HTMLButtonElement>('[data-load-retry]')?.addEventListener('click', () => { void openTool(id, workspaceTrigger); });
-      workspace.querySelector<HTMLButtonElement>('[data-load-close]')?.addEventListener('click', () => workspaceDialog.close());
+      workspace.querySelector<HTMLButtonElement>('[data-load-retry]')?.addEventListener('click', () => { void journey!.open(id, workspaceTrigger, undefined, true); });
+      workspace.querySelector<HTMLButtonElement>('[data-load-close]')?.addEventListener('click', () => { void journey!.home(); });
       workspace.querySelector<HTMLButtonElement>('[data-load-reload]')?.addEventListener('click', async () => { if (await approveReload()) { prepareApprovedReload(); location.reload(); } });
       workspace.querySelector<HTMLButtonElement>('[data-load-retry]')?.focus();
     }
+    return true;
   };
+
+  const journey = new PageJourney({ root, dialog: workspaceDialog, workspace, canLeave: () => documents.canLeave(), refresh: () => documents.refresh(), mount: mountTool });
 
   grid.addEventListener('click', (event) => {
     const target = event.target as HTMLElement;
@@ -344,8 +358,14 @@ export function createApp(root: HTMLDivElement | null): void {
   });
 
   root.addEventListener('click', (event) => {
+    const homeLink = (event.target as HTMLElement).closest<HTMLAnchorElement>('.brand,a[href="#tools"],a[href="#how-it-works"]');
+    if (homeLink) { event.preventDefault(); void journey!.home().then(() => { if (homeLink.hash === '#tools') search.focus(); }); return; }
     const actionTarget = (event.target as HTMLElement).closest<HTMLElement>('[data-action]');
     const action = actionTarget?.dataset.action;
+    if (actionTarget) {
+      infoReturnFocus = actionTarget.closest('details.settings-menu')?.querySelector<HTMLElement>('summary') ?? null;
+      root.querySelectorAll<HTMLDetailsElement>('.settings-menu').forEach(menu => menu.removeAttribute('open'));
+    }
     if (action === 'focus-search') {
       search.focus();
       search.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -391,10 +411,12 @@ export function createApp(root: HTMLDivElement | null): void {
   });
 
   workspaceDialog.addEventListener('close', () => {
+    if (workspaceDialog.open) return;
     workspaceGeneration += 1;
     documents.unmount();
     workspace.dispatchEvent(new CustomEvent('docflow-cleanup'));
     workspace.replaceChildren();
+    journey?.closed();
     const trigger = workspaceTrigger;
     workspaceTrigger = null;
     if (trigger?.isConnected) queueMicrotask(() => {
@@ -410,4 +432,5 @@ export function createApp(root: HTMLDivElement | null): void {
 
   render();
   renderQuickAccess();
+  journey.start();
 }

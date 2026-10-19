@@ -23,6 +23,9 @@ export interface DocumentWorkspaceOptions {
   toolbar: HTMLElement;
   home: HTMLElement;
   open: (id: string, view?: File) => Promise<void>;
+  inputsChanged?: (files: readonly File[]) => void;
+  busyChanged?: (busy: boolean) => void;
+  editsChanged?: () => void;
 }
 
 /** One lifecycle owner above the existing tools; never observes their DOM. */
@@ -103,7 +106,7 @@ export class DocumentWorkspace {
       this.allowedLeave = approved;
       return approved;
     }
-    if (this.enabled && this.draft) {
+    if (this.draft) {
       const approved = await confirmAction('Leave unapplied tool changes?', 'The current document and applied history stay in this tab. Settings, selections or marks not yet run in this tool will be discarded.', 'Leave tool');
       if (approved) this.draft = false;
       return approved;
@@ -127,13 +130,15 @@ export class DocumentWorkspace {
       inputs: files => {
         if (this.seeded) files.forEach((file, index) => { const original = this.seedSources[index]; if (original) this.session.aliasSource(file, original); });
         const changed = files.length !== this.files.length || files.some((file, index) => this.session.sourceId(file) !== (this.files[index] ? this.session.sourceId(this.files[index]!) : ''));
-        if (changed && !this.seeded && this.enabled && this.session.snapshot().current && this.tool?.id !== 'preview') this.draft = true;
+        if (changed && !this.seeded && this.tool?.id !== 'preview') this.draft = true;
         this.files = [...files];
+        this.options.inputsChanged?.(files);
         this.safety?.setFiles(files);
         this.render();
       },
       busy: value => {
         this.operation = value;
+        this.options.busyChanged?.(value);
         if (value) {
           const current = this.session.snapshot().current;
           this.ticket = current ? { baseId: current.id, sourceIds: this.files.map(file => this.session.sourceId(file)) } : null;
@@ -149,7 +154,7 @@ export class DocumentWorkspace {
         }
         this.render();
       },
-      changed: () => { if (this.enabled) { this.draft = true; if (this.session.snapshot().pending?.toolId === tool.id) this.session.discardResult(); } },
+      changed: () => { this.draft = true; this.options.editsChanged?.(); if (this.enabled && this.session.snapshot().pending?.toolId === tool.id) this.session.discardResult(); },
       selection: pages => { if (this.enabled) this.session.select(pages); }
     });
     root.addEventListener('change', event => {
@@ -173,7 +178,7 @@ export class DocumentWorkspace {
       if (this.seeded || !(target instanceof Element) || target.closest('.pre-edit-preview,#preview-area,.export-review')) return;
       if (event.type === 'pointerup' && !(target instanceof HTMLCanvasElement)) return;
       if (event.type === 'input' && target instanceof HTMLInputElement && target.type === 'file') return;
-      if (this.enabled && this.session.snapshot().current) this.draft = true;
+      if (this.files.length) { this.draft = true; this.options.editsChanged?.(); }
     };
     root.addEventListener('input', markDraft, { capture: true, signal });
     root.addEventListener('pointerup', markDraft, { capture: true, signal });
@@ -263,7 +268,8 @@ export class DocumentWorkspace {
       const file = this.files.find(pdfInput);
       if (file) { this.session.start(file); this.filename = file.name; }
     }
-    if (!this.seeded && this.enabled && this.tool?.id !== 'preview') this.draft = true;
+    this.options.inputsChanged?.(this.files);
+    if (!this.seeded && this.tool?.id !== 'preview') this.draft = true;
     this.safety?.setFiles(this.files);
     // The dedicated reader has no separate pre-edit preview.
     if (this.enabled && this.tool?.id === 'preview') queueMicrotask(() => this.options.root.querySelector<HTMLButtonElement>('#run-operation')?.click());

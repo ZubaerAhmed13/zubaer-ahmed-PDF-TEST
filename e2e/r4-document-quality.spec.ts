@@ -1,3 +1,4 @@
+import { returnToEditor } from './helpers/editorReturn';
 import { test, expect, type Page, type Locator } from '@playwright/test';
 import { PDFDocument, StandardFonts, degrees } from 'pdf-lib';
 import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs';
@@ -6,10 +7,10 @@ import AxeBuilder from '@axe-core/playwright';
 const app = '/zubaer-ahmed-PDF-TEST/';
 async function open(page: Page, id: string, search: string) {
   await page.goto(app); await page.getByLabel('Search tools').fill(search); await page.locator(`#tool-grid [data-open-tool="${id}"]`).click();
-  return page.getByRole('dialog', { name: 'Workspace' });
+  return page.getByRole('region', { name: 'Workspace' });
 }
 async function pdfTexts(texts: string[]) { const doc = await PDFDocument.create(), font = await doc.embedFont(StandardFonts.Helvetica); for (const text of texts) doc.addPage([480, 600]).drawText(text, { x: 30, y: 500, size: 25, font }); return Buffer.from(await doc.save()); }
-async function download(page: Page, dialog: Locator, name: RegExp) { const pending = page.waitForEvent('download'); await dialog.getByRole('link', { name }).click(); const path = await (await pending).path(); if (!path) throw Error('Missing download'); return readFile(path); }
+async function download(page: Page, dialog: Locator, name: RegExp) { await returnToEditor(page); const pending = page.waitForEvent('download'); await dialog.getByRole('link', { name }).click(); const path = await (await pending).path(); if (!path) throw Error('Missing download'); return readFile(path); }
 
 test('R4 aligns inserted/moved pages and navigates word changes and a safe report', async ({ page }) => {
   const dialog = await open(page, 'compare', 'compare');
@@ -17,7 +18,7 @@ test('R4 aligns inserted/moved pages and navigates word changes and a safe repor
     { name: 'before.pdf', mimeType: 'application/pdf', buffer: await pdfTexts(['Alpha contract total 100 euros', 'Beta delivery tomorrow', 'Gamma final terms']) },
     { name: 'after.pdf', mimeType: 'application/pdf', buffer: await pdfTexts(['New cover', 'Gamma final terms', 'Alpha contract total 120 euros', 'Beta delivery tomorrow']) }
   ]);
-  await dialog.getByRole('button', { name: 'Run Compare PDFs' }).click(); await expect(dialog.locator('#stage')).toHaveText('Comparison complete');
+  await dialog.getByRole('button', { name: 'Run Compare PDFs' }).click(); await expect(dialog.locator('#stage')).toHaveText('Comparison complete'); await returnToEditor(page);
   const results = dialog.locator('#pdf-comparison-results');
   await expect(results).toContainText('missing-left'); await expect(results).toContainText('moved');
   await results.getByLabel('Matched pages', { exact: true }).selectOption({ label: 'A 1 ↔ B 3: different' });
@@ -55,6 +56,7 @@ test('R4 photo crop, perspective review, rotate and reorder export a reopenable 
   await page.evaluate(() => (window as Window & { releaseR4Encoder?: () => void }).releaseR4Encoder!());
   await expect(dialog.locator('#stage')).toHaveText('Cancelled'); await expect(dialog.locator('#result a.download')).toHaveCount(0);
   await dialog.getByRole('button', { name: 'Run Images to PDF' }).click(); await expect(dialog.locator('#stage')).toHaveText('Complete');
+  await returnToEditor(page);
   const bytes = await download(page, dialog, /^Download images\.pdf/), pdf = await PDFDocument.load(bytes);
   expect(pdf.getPageCount()).toBe(2); expect(pdf.getPage(0).getSize()).toEqual({ width: 225, height: 300 }); expect(pdf.getPage(1).getWidth()).toBeCloseTo(360, 0); expect(pdf.getPage(1).getHeight()).toBeCloseTo(600, 0);
 });
@@ -82,7 +84,8 @@ test('R4 incomplete comparison and literal Markdown extraction remain explicit',
   const dialog = await open(page, 'compare', 'compare'); await dialog.getByLabel('Source files', { exact: true }).setInputFiles([
     { name: 'a.pdf', mimeType: 'application/pdf', buffer: await pdfTexts(['Alpha', 'Beta']) }, { name: 'b.pdf', mimeType: 'application/pdf', buffer: await pdfTexts(['Alpha', 'Beta']) }
   ]);
-  await dialog.locator('input[name=maxPages]').fill('1'); await dialog.getByRole('button', { name: 'Run Compare PDFs' }).click(); await expect(dialog.locator('#stage')).toHaveText('Comparison complete'); await expect(dialog.locator('#pdf-comparison-results')).toContainText('Incomplete comparison');
+  await dialog.locator('input[name=maxPages]').fill('1'); await dialog.getByRole('button', { name: 'Run Compare PDFs' }).click(); await expect(dialog.locator('#stage')).toHaveText('Comparison complete'); await returnToEditor(page); await expect(dialog.locator('#pdf-comparison-results')).toContainText('Incomplete comparison');
   page.on('dialog', d => d.accept()); await page.goto(app); const extraction = await open(page, 'text-search', 'extract text'); await extraction.getByLabel('Source files', { exact: true }).setInputFiles({ name: 'literal.pdf', mimeType: 'application/pdf', buffer: await pdfTexts(['# title <script> [link](x)', 'Second page']) });
   await extraction.getByRole('button', { name: /Run Search/ }).click(); await expect(extraction.locator('#stage')).toHaveText('Complete'); const markdown = (await download(page, extraction, /^Download extracted-text\.md/)).toString(); expect(markdown).toContain('\\# title \\<script\\>'); expect(markdown).toContain('## Page 2');
+  await returnToEditor(page);
 });

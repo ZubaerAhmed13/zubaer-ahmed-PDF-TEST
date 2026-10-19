@@ -171,7 +171,9 @@ export function mountWorkspace(root: HTMLDivElement, _tool: ToolDefinition): voi
       group.remove();
     }
   };
-  results.addEventListener('docflow-output-renamed', invalidateZip);
+  results.addEventListener('docflow-output-renamed', event => {
+    if (!(event.target instanceof Element) || !event.target.closest('[data-zip-export]')) invalidateZip();
+  });
   const setError = (message = ''): void => {
     errorBox.hidden = !message;
     errorBox.textContent = message;

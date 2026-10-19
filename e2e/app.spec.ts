@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test';
 import { PDFDocument } from 'pdf-lib';
 import { readFile } from 'node:fs/promises';
+import { returnToEditor } from './helpers/editorReturn';
 
 async function pdfFixture(pageCount: number): Promise<Buffer> {
   const doc = await PDFDocument.create();
@@ -10,7 +11,7 @@ async function pdfFixture(pageCount: number): Promise<Buffer> {
 
 test('loads professional shell and exposes tool discovery', async ({ page }) => {
   await page.goto('/zubaer-ahmed-PDF-TEST/');
-  await expect(page.getByRole('heading', { name: /Private PDF tools/ })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /Your PDFs/ })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Choose an operation' })).toBeVisible();
   await page.getByLabel('Search tools').fill('merge');
   await expect(page.getByRole('heading', { name: 'Merge PDF' })).toBeVisible();
@@ -23,12 +24,12 @@ test('Ctrl/Cmd+K moves focus to global search', async ({ page }) => {
   await expect(page.getByLabel('Search tools')).toBeFocused();
 });
 
-test('opens a unified workspace and closes with Escape', async ({ page }) => {
+test('opens a dedicated tool page and returns to all tools', async ({ page }) => {
   await page.goto('/zubaer-ahmed-PDF-TEST/');
   await page.getByRole('button', { name: 'Open tool' }).first().click();
-  const dialog = page.getByRole('dialog', { name: 'Workspace' });
+  const dialog = page.getByRole('region', { name: 'Workspace' });
   await expect(dialog).toBeVisible();
-  await page.keyboard.press('Escape');
+  await page.getByRole('button', { name: 'Back to all tools', exact: true }).click();
   await expect(dialog).toBeHidden();
 });
 
@@ -36,7 +37,7 @@ test('runs a real worker-backed merge workflow and reopens the downloaded export
   await page.goto('/zubaer-ahmed-PDF-TEST/');
   await page.getByLabel('Search tools').fill('merge');
   await page.getByRole('button', { name: 'Open tool' }).click();
-  const dialog = page.getByRole('dialog', { name: 'Workspace' });
+  const dialog = page.getByRole('region', { name: 'Workspace' });
   await expect(dialog).toBeVisible();
   await dialog.locator('#workspace-file').setInputFiles([
     { name: 'one.pdf', mimeType: 'application/pdf', buffer: await pdfFixture(1) },
@@ -46,6 +47,7 @@ test('runs a real worker-backed merge workflow and reopens the downloaded export
   await expect(dialog.getByText('two.pdf',{exact:true})).toBeVisible();
   await dialog.getByRole('button', { name: 'Run Merge PDF' }).click();
   await expect(dialog.locator('#stage')).toHaveText('Complete');
+  await returnToEditor(page);
   const link = dialog.getByRole('link', { name: /Download merged\.pdf/ });
   await expect(link).toBeVisible();
 
@@ -101,10 +103,10 @@ test('certifies offline app availability and local processing where the browser 
 
   await context.setOffline(true);
   await page.reload();
-  await expect(page.getByRole('heading', { name: /Private PDF tools/ })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /Your PDFs/ })).toBeVisible();
   await page.getByLabel('Search tools').fill('merge');
   await page.getByRole('button', { name: 'Open tool' }).click();
-  const dialog = page.getByRole('dialog', { name: 'Workspace' });
+  const dialog = page.getByRole('region', { name: 'Workspace' });
   await expect(dialog).toBeVisible();
   await dialog.locator('#workspace-file').setInputFiles([
     { name: 'offline-one.pdf', mimeType: 'application/pdf', buffer: await pdfFixture(1) },
@@ -112,6 +114,7 @@ test('certifies offline app availability and local processing where the browser 
   ]);
   await dialog.getByRole('button', { name: 'Run Merge PDF' }).click();
   await expect(dialog.locator('#stage')).toHaveText('Complete');
+  await returnToEditor(page);
   await expect(dialog.getByRole('link', { name: /Download merged\.pdf/ })).toBeVisible();
   await context.setOffline(false);
 });
@@ -120,20 +123,20 @@ test('responsive shell and workspace avoid horizontal overflow at target widths'
   for (const width of [360, 768, 1280]) {
     await page.setViewportSize({ width, height: 900 });
     await page.goto('/zubaer-ahmed-PDF-TEST/');
-    await expect(page.getByRole('heading', { name: /Private PDF tools/ })).toBeVisible();
+    await expect(page.getByRole('heading', { name: /Your PDFs/ })).toBeVisible();
     const shellOverflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
     expect(shellOverflow).toBeLessThanOrEqual(1);
 
     await page.getByLabel('Search tools').fill('merge');
     await page.getByRole('button', { name: 'Open tool' }).click();
-    const dialog = page.getByRole('dialog', { name: 'Workspace' });
+    const dialog = page.getByRole('region', { name: 'Workspace' });
     await expect(dialog).toBeVisible();
-    await expect(dialog.locator('.drop-zone')).toBeVisible();
-    await expect(dialog.getByRole('button', { name: 'Run Merge PDF' })).toBeVisible();
+    await expect(dialog.locator('[data-select-source]')).toBeVisible();
+    await expect(dialog.locator('[data-upload-stage]')).toBeVisible();
     const dialogBox = await dialog.boundingBox();
     expect(dialogBox).not.toBeNull();
     expect((dialogBox?.x ?? 0) + (dialogBox?.width ?? 0)).toBeLessThanOrEqual(width + 1);
-    await page.keyboard.press('Escape');
+    await page.getByRole('button', { name: 'Back to all tools', exact: true }).click();
     await expect(dialog).toBeHidden();
   }
 });

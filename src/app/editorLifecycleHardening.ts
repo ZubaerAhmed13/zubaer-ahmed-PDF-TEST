@@ -99,6 +99,19 @@ function resumeRetriedTool(): void {
   const toolId = pendingRetryToolId();
   if (!toolId) return;
 
+  // The page router already opens a direct tool URL. A second click during
+  // its pending import would supersede the original navigation and strand
+  // the upload button in its loading state.
+  if (location.hash === '#/tools/' + encodeURIComponent(toolId)) {
+    const mounted = (): void => {
+      if (document.querySelector<HTMLElement>('#workspace')?.dataset.toolId !== toolId) return;
+      clearRetryMarker();
+      document.removeEventListener('docflow-workspace-mounted', mounted);
+    };
+    document.addEventListener('docflow-workspace-mounted', mounted);
+    return;
+  }
+
   /* Wait for a connected real trigger instead of depending on one microtask or
    * browser-specific document restoration timing. Keep the marker until the
    * click is actually dispatched, then consume both URL/session fallbacks. */

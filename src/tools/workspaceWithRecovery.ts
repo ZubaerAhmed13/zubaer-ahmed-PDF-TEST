@@ -76,6 +76,7 @@ export function mountWorkspace(container: HTMLDivElement, tool: ToolDefinition):
       : '<p>No file metadata was saved for this session.</p>';
     recoveryPanel.innerHTML = `<strong>Recovered local project state</strong><p>Settings from ${escapeHtml(new Date(updatedAt).toLocaleString())} were restored. PDF/image contents were not stored; reselect the original file${fileMetadata.length === 1 ? '' : 's'} to continue.</p>${files}<button type="button" class="secondary" data-clear-recovery>Clear recovery</button>`;
     recoveryPanel.hidden = false;
+    container.dispatchEvent(new CustomEvent('docflow-recovery-ready', { detail: recoveryPanel }));
   };
 
   const persist = async (currentGeneration: number): Promise<void> => {

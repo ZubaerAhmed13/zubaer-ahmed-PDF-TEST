@@ -1,3 +1,4 @@
+import { returnToEditor } from './helpers/editorReturn';
 import { expect, test, type Page } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 import { PDFDocument, PDFName } from 'pdf-lib';
@@ -8,7 +9,7 @@ import { pdfPixels } from './helpers/pdfPixels';
 async function open(page:Page,id:string,search:string) {
   await page.goto('/zubaer-ahmed-PDF-TEST/'); await page.getByLabel('Search tools').fill(search);
   await page.locator(`#tool-grid [data-open-tool="${id}"]`).click();
-  return page.getByRole('dialog',{name:'Workspace'});
+  return page.getByRole('region',{name:'Workspace'});
 }
 test('local inspection surfaces signature, active-content and page-copy consequences before export',async({page})=>{
   const requests:string[]=[]; page.on('request',request=>{if(!request.url().startsWith('data:')&&!request.url().startsWith('blob:'))requests.push(request.url());});
@@ -19,6 +20,7 @@ test('local inspection surfaces signature, active-content and page-copy conseque
   await expect(panel).toContainText('Signature/certification structures detected');
   await expect(panel).toContainText('JavaScript');
   await expect(panel).toContainText('1 non-HTTPS or unsafe link');
+  await panel.locator('.document-consequences > summary').click();
   await panel.getByText('Local document inspection',{exact:true}).click();
   await expect(panel).toContainText('2 pages');
   expect(await dialog.getByRole('button',{name:'Run Extract pages',exact:true}).evaluate(button=>{const r=button.getBoundingClientRect();return r.top>=0&&r.bottom<=innerHeight;})).toBe(true);
@@ -46,6 +48,7 @@ test('redaction reviews individual areas and previews exact export bytes at the 
   await expect(dialog.locator('#pro-results a.download')).toHaveCount(0);
   const download=page.waitForEvent('download');
   await dialog.getByRole('button',{name:'Apply permanent redactions'}).click();
+  await returnToEditor(page);
   await dialog.locator('#pro-results a.download').click();
   const location=await (await download).path(); if(!location)throw Error('No download');
   const bytes=await readFile(location);
@@ -75,11 +78,11 @@ test('repeated reader open/close releases worker, URL and canvas ownership withi
   const samples:unknown[]=[];
   for(let i=0;i<5;i++){
     await page.getByLabel('Search tools').fill('view pdf'); await page.locator('#tool-grid [data-open-tool="preview"]').click();
-    const dialog=page.getByRole('dialog',{name:'Workspace'});
+    const dialog=page.getByRole('region',{name:'Workspace'});
     await dialog.locator('#workspace-file').setInputFiles({name:'lifecycle.pdf',mimeType:'application/pdf',buffer});
     await dialog.getByRole('button',{name:'Run View PDF'}).click(); await expect(dialog.locator('#viewer-status')).toHaveText('Page 1 of 40');
     expect(await dialog.locator('canvas').evaluateAll(cs=>cs.reduce((sum,c)=>sum+(c as HTMLCanvasElement).width*(c as HTMLCanvasElement).height,0))).toBeLessThan(9_000_000);
-    await dialog.getByRole('button',{name:'Close workspace',exact:true}).click();
+    await dialog.getByRole('button',{name:'Back to all tools',exact:true}).click();
     await expect(dialog).toBeHidden();
     await expect.poll(()=>page.evaluate(()=> (window as unknown as {r5Resources:()=>{workers:number}}).r5Resources().workers)).toBe(0);
     const sample=await page.evaluate(()=> (window as unknown as {r5Resources:()=>{workers:number;urls:number;canvasPixels:number}}).r5Resources());

@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { PDFDocument } from 'pdf-lib';
+import { returnToEditor } from './helpers/editorReturn';
 
 async function pdfFixture(pageCount: number): Promise<Buffer> {
   const document = await PDFDocument.create();
@@ -11,11 +12,12 @@ async function openMerge(page: import('@playwright/test').Page) {
   await page.goto('/zubaer-ahmed-PDF-TEST/');
   await page.getByLabel('Search tools').fill('merge');
   await page.locator('[data-tool="merge"]').getByRole('button', { name: 'Open tool' }).click();
-  return page.getByRole('dialog', { name: 'Workspace' });
+  return page.getByRole('region', { name: 'Workspace' });
 }
 
 test('Merge PDF matches the preserved four-pane editor experience', async ({ page }) => {
   const dialog = await openMerge(page);
+  await dialog.locator('#workspace-file').setInputFiles({ name: 'source.pdf', mimeType: 'application/pdf', buffer: await pdfFixture(2) });
   await expect(dialog.locator('.legacy-editor-shell')).toBeVisible();
   await expect(dialog.locator('.legacy-files-pane')).toBeVisible();
   await expect(dialog.locator('.legacy-center-pane')).toBeVisible();
@@ -26,12 +28,6 @@ test('Merge PDF matches the preserved four-pane editor experience', async ({ pag
   await expect(dialog.locator('[data-parity-undo]')).toBeVisible();
   await expect(dialog.locator('[data-parity-redo]')).toBeVisible();
   await expect(dialog.locator('input[name="outputFilename"]')).toHaveValue('merged.pdf');
-
-  await dialog.locator('#workspace-file').setInputFiles({
-    name: 'source.pdf',
-    mimeType: 'application/pdf',
-    buffer: await pdfFixture(2)
-  });
 
   await expect(dialog.locator('[data-pre-edit-preview]')).toBeVisible();
   await expect(dialog.locator('[data-pre-edit-preview]')).toHaveAttribute('data-preview-ready', 'true');
@@ -76,6 +72,7 @@ test('Merge file ordering, custom output name and PDF Overview stay connected to
 
   await dialog.locator('input[name="outputFilename"]').fill('My merged result.pdf');
   await dialog.getByRole('button', { name: 'Run Merge PDF' }).click();
+  await returnToEditor(page);
   const download = dialog.locator('#result a.download');
   await expect(download).toBeVisible();
   await expect(download).toHaveAttribute('download', 'My merged result.pdf');
