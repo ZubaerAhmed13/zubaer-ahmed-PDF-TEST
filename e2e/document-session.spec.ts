@@ -75,6 +75,9 @@ test('one import supports organize → annotate → number → export and exact 
   await page.getByRole('button', { name: 'View original', exact: true }).click();
   await expect(page.locator('.session-identity')).toContainText('Viewing original');
   expect(await exportCurrent(page)).toEqual(final);
+  // Changing to the original PDF can trigger an asynchronous page render.
+  // Do not interpret the correct processing/leave guard as a missing resume card.
+  await expect(page.locator('#stage')).toContainText('Preview ready');
   await page.getByRole('button', { name: 'Back to all tools', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Resume document', exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Resume document', exact: true }).click();
