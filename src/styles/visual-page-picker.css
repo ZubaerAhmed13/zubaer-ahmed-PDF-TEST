@@ -1,0 +1,62 @@
+/* U4 — document-first page selection, shared between Remove pages and Extract pages. */
+/* Keep the independent document reader available: existing zoom, page navigation and
+   export tests require it. The page grid is an additional interactive mode, not a replacement. */
+.workspace[data-tool-id="remove-pages"] .legacy-live-preview,
+.workspace[data-tool-id="extract-pages"] .legacy-live-preview{overflow:auto;overscroll-behavior:contain}
+.df-page-picker{min-height:0;display:flex;flex-direction:column;min-width:0;overflow:visible;background:#f5f7fb;color:#1b2840}
+.df-page-picker[hidden]{display:none!important}
+.df-picker-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:20px 23px 14px;background:#fff;border-bottom:1px solid #e1e6f0}
+.df-picker-head h2{font-size:22px;letter-spacing:-.04em;line-height:1.16;margin:6px 0 9px;color:#192842}
+.df-picker-head>div>span{font-size:10px;letter-spacing:.11em;font-weight:850;color:#4b43a5}
+.df-picker-head p{font-size:12px;line-height:1.55;color:#53637d;max-width:580px;margin:0}
+.df-picker-head>[data-picker-count]{border-radius:999px;background:#f0eefc;color:#44369c;font-size:12px;font-weight:800;padding:10px 13px;white-space:nowrap}
+.df-picker-actions{display:flex;align-items:center;gap:9px;padding:12px 21px;background:#fff;border-bottom:1px solid #e1e6f0;flex-wrap:wrap}
+.df-picker-actions button{min-height:44px;border-radius:11px;padding:9px 14px;font-size:12px;font-weight:750;border-color:#d9dfea;color:#243653}
+.df-picker-actions>span{margin-left:auto;font-size:11px;color:#66758a}
+.df-page-picker [data-picker-alert]{padding:11px 16px;margin:9px 21px 0;background:#fff2ee;border:1px solid #efc5bd;border-radius:10px;color:#96352a;font-size:12px}
+ .df-picker-grid{flex:0 0 auto;height:min(42dvh,420px);min-height:235px;overflow:auto;display:grid;grid-template-columns:repeat(auto-fill,minmax(164px,1fr));align-content:start;gap:15px;padding:22px;overscroll-behavior:contain;scrollbar-gutter:stable}
+.df-picker-card{display:flex;flex-direction:column;gap:7px;min-width:0;border:1px solid #e1e5ef;border-radius:17px;background:white;padding:10px;box-shadow:0 4px 15px rgba(21,40,77,.04);transition:border-color .15s,box-shadow .15s}
+.df-picker-card:hover{border-color:#b5afe8;box-shadow:0 10px 24px rgba(21,40,77,.08)}
+.df-picker-card[data-selected="true"]{border-color:#5445d1;box-shadow:0 0 0 2px rgba(83,70,206,.21),0 7px 19px rgba(21,40,77,.07)}
+.workspace[data-tool-id="remove-pages"] .df-picker-card[data-selected="true"]{border-color:#c53e43;box-shadow:0 0 0 2px rgba(197,62,67,.22),0 7px 19px rgba(21,40,77,.07)}
+.df-picker-select{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:9px;min-height:184px;width:100%;border:1px solid #e4e8ef;border-radius:11px;background:#f2f4f9;color:#253850;padding:13px 8px 9px;cursor:pointer}
+.df-picker-select:hover{border-color:#b3ade9;background:#f0effe}
+.df-picker-card[data-selected="true"] .df-picker-select{background:#eeebff}
+.workspace[data-tool-id="remove-pages"] .df-picker-card[data-selected="true"] .df-picker-select{background:#fff0f0;border-color:#e8b1b4}
+.df-picker-select canvas{display:block;max-width:100%;max-height:128px;width:auto!important;height:auto!important;min-height:74px;object-fit:contain;border:1px solid #eaecf0;background:white;box-shadow:0 4px 12px rgba(28,47,83,.11);border-radius:3px}
+.df-picker-select>strong{font-size:12px;font-weight:750;color:#34425e}
+.df-picker-number{position:absolute;top:8px;left:9px;border-radius:8px;background:white;padding:5px 8px;font-size:11px;font-weight:850;color:#3d4b69;box-shadow:0 2px 6px rgba(20,37,72,.09)}
+.df-picker-selected-mark{position:absolute;top:7px;right:7px;display:grid;place-items:center;border-radius:50%;background:#4a3cc2;color:white;width:34px;height:34px;font-size:20px;font-weight:900;line-height:1;opacity:0;transform:scale(.75);transition:opacity .15s,transform .15s}
+.workspace[data-tool-id="remove-pages"] .df-picker-selected-mark{background:#c53e43}
+.df-picker-card[data-selected="true"] .df-picker-selected-mark{opacity:1;transform:scale(1)}
+.df-picker-zoom{width:100%;min-height:44px;border:1px solid #dfe4ee;border-radius:9px;background:#fff;color:#35446a;font-size:12px;font-weight:750;cursor:pointer}
+.df-picker-zoom:hover{background:#f6f5ff;border-color:#bdb7ea}
+.df-picker-preview-dialog{width:min(800px,calc(100vw - 24px));max-height:calc(100dvh - 24px);border:1px solid #e1e6ef;border-radius:20px;background:white;padding:0;box-shadow:0 26px 85px rgba(8,19,45,.3);color:#18263e;overflow:hidden}
+.df-picker-preview-dialog::backdrop{background:rgba(14,23,45,.63);backdrop-filter:blur(4px)}
+.df-picker-preview-dialog>header,.df-picker-preview-dialog>footer{display:flex;justify-content:space-between;align-items:center;padding:14px 18px;gap:10px;background:white}
+.df-picker-preview-dialog>header{border-bottom:1px solid #e2e5ee}
+.df-picker-preview-dialog>header h2{font-size:19px;letter-spacing:-.03em;margin:0}
+.df-picker-preview-dialog>footer{justify-content:flex-end;border-top:1px solid #e2e5ee}
+.df-picker-preview-dialog button{min-height:44px;border-radius:11px;font-weight:760}
+.df-picker-preview-dialog .df-picker-preview-canvas{min-height:110px;max-height:64dvh;overflow:auto;background:#eff2f7;padding:17px;display:grid;place-items:start center}
+.df-picker-preview-dialog canvas{display:block;max-width:100%;height:auto!important;background:white;box-shadow:0 6px 21px rgba(16,30,57,.15)}
+.df-picker-preview-dialog>p{font-size:12px;color:#566680;padding:8px 18px;margin:0;min-height:35px}
+@media(max-width:780px){
+  .df-picker-head{padding:15px 14px;gap:8px}
+  .df-picker-head h2{font-size:19px}
+  .df-picker-head>p{font-size:11px}
+  .df-picker-actions{padding:9px 12px;gap:7px}
+  .df-picker-actions>span{flex-basis:100%;margin:0;font-size:10px}
+  .df-picker-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;padding:11px;height:min(43dvh,340px);max-height:43dvh}
+  .df-picker-card{padding:7px;gap:6px;border-radius:12px}
+  .df-picker-select{min-height:144px;padding:9px 4px}
+  .df-picker-select canvas{max-height:100px;min-height:65px}
+  .df-picker-number{font-size:10px}
+  .df-picker-head>[data-picker-count]{font-size:11px;padding:8px}
+}
+@media(max-width:360px){
+  .df-picker-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}
+  .df-picker-select{min-height:132px}
+  .df-picker-select canvas{max-height:88px}
+}
+@media(prefers-reduced-motion:reduce){.df-picker-card,.df-picker-selected-mark{transition:none!important;transform:none!important}}
