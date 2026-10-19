@@ -1,5 +1,6 @@
 import { openLocalPdf } from '../pdf/pdfjsPolicy';
 import { validateInputBudget } from '../pdf/resourceBudget';
+import { syncMergeStoryboard } from './mergeStoryboard';
 import * as pdfjs from 'pdfjs-dist';
 
 pdfjs.GlobalWorkerOptions.workerSrc = new URL('pdfjs-dist/build/pdf.worker.min.mjs', import.meta.url).toString();
@@ -380,6 +381,24 @@ function syncState(state: ParityState): void {
   syncFooter(state);
   syncSettingsStatus(state);
   applyDownloadName(state);
+  syncMergeStoryboard(state.root, state.files, state.metadata, {
+    move: (from, to) => {
+      if (state.rebuilding || from < 0 || to < 0 || from >= state.files.length || to >= state.files.length || from === to) return;
+      state.root.dispatchEvent(new CustomEvent('docflow-reorder-sources', { bubbles: true, detail: { from, to } }));
+    },
+    remove: index => {
+      const buttons = [...state.root.querySelectorAll<HTMLButtonElement>('#file-list [data-remove]')];
+      buttons[index]?.click();
+    },
+    preview: index => {
+      const sources = [...state.root.querySelectorAll<HTMLButtonElement>('[data-pre-edit-source]')];
+      const button = sources[index];
+      button?.click();
+      state.root.querySelector<HTMLElement>('.pre-edit-canvas-shell')?.scrollIntoView({
+        block: 'nearest', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth'
+      });
+    }
+  });
 }
 
 function ensureState(root: HTMLElement): ParityState {

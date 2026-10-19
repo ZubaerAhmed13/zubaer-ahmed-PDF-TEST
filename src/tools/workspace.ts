@@ -168,7 +168,7 @@ export function mountWorkspace(container: HTMLDivElement, tool: ToolDefinition):
   const renderFiles = (): void => {
     runtime.inputs(records.map(record => record.file));
     list.innerHTML = records.map(({file,id}, index) => `<div class="file-row"><span><strong>${escapeHtml(file.name)}</strong><small>${humanBytes(file.size)}</small></span><button type="button" data-remove="${id}" aria-label="Remove ${escapeHtml(file.name)}">Remove</button>${tool.id === 'images-to-pdf' ? `<span class="order">#${index + 1}</span><button type="button" data-up="${id}" aria-label="Move ${escapeHtml(file.name)} up" ${index === 0 ? 'disabled' : ''}>↑</button><button type="button" data-down="${id}" aria-label="Move ${escapeHtml(file.name)} down" ${index === records.length - 1 ? 'disabled' : ''}>↓</button>` : ''}</div>`).join('');
-    if (tool.id === 'images-to-pdf') queueMicrotask(() => { if (!disposed) container.dispatchEvent(new CustomEvent('docflow-source-files', { bubbles: true, detail: records.slice() })); });
+    if (tool.id === 'images-to-pdf' || tool.id === 'merge') queueMicrotask(() => { if (!disposed) container.dispatchEvent(new CustomEvent('docflow-source-files', { bubbles: true, detail: records.slice() })); });
     const totalBytes = records.reduce((sum, record) => sum + record.file.size, 0);
     const memory = navigator as Navigator & { deviceMemory?: number };
     const risky = totalBytes > 250 * 1024 * 1024 || ((memory.deviceMemory ?? 8) <= 4 && totalBytes > 100 * 1024 * 1024);
@@ -229,6 +229,20 @@ export function mountWorkspace(container: HTMLDivElement, tool: ToolDefinition):
   for (const eventName of ['dragenter','dragover']) drop.addEventListener(eventName, (event) => { event.preventDefault(); drop.classList.add('dragging'); });
   for (const eventName of ['dragleave','drop']) drop.addEventListener(eventName, (event) => { event.preventDefault(); drop.classList.remove('dragging'); });
   drop.addEventListener('drop', (event) => { if (event.dataTransfer?.files) addFiles(event.dataTransfer.files); });
+  // Reorder the authoritative worker input records; never simulate remove/add
+  // cycles, which can duplicate PDFs and corrupt the intended merge sequence.
+  container.addEventListener('docflow-reorder-sources', event => {
+    if (tool.id !== 'merge' || running || disposed) return;
+    const move = (event as CustomEvent<{ from: number; to: number }>).detail;
+    const from = move?.from, to = move?.to;
+    if (typeof from !== 'number' || typeof to !== 'number' ||
+        !Number.isInteger(from) || !Number.isInteger(to) ||
+        from < 0 || to < 0 || from >= records.length || to >= records.length || from === to) return;
+    const [file] = records.splice(from, 1);
+    if (!file) return;
+    records.splice(to, 0, file);
+    renderFiles();
+  });
   list.addEventListener('click', (event) => {
     const target = (event.target as HTMLElement).closest<HTMLElement>('button');
     const move = target?.dataset.up ?? target?.dataset.down;
