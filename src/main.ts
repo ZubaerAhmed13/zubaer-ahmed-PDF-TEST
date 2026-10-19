@@ -18,6 +18,7 @@ import './styles/mobile-offline.css';
 import './styles/document-quality.css';
 import './styles/product-finish.css';
 import './styles/page-journey.css';
+import './styles/design-u2.css';
 import { installMobileViewport } from './app/mobileViewport';
 import { createApp } from './app/createApp';
 import { finishEmailConfirmation } from './app/cloudSync';
