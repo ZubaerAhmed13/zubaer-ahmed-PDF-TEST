@@ -46,6 +46,11 @@ export class PageJourney {
     this.bar.innerHTML = `<button type="button" class="secondary" data-page-home aria-label="Back to all tools">← All tools</button><strong data-page-tool></strong><button type="button" class="secondary page-favorite" data-page-favorite aria-label="Pin tool" aria-pressed="false">☆</button><nav class="page-steps" aria-label="Task progress"><span data-step="upload">1 <b>Select file</b></span><span data-step="edit">2 <b>Work on PDF</b></span><span data-step="result">3 <b>Download</b></span></nav><details class="settings-menu page-support"><summary>Help</summary><div class="settings-menu-items"><button type="button" data-action="help">Find tools and help</button><button type="button" data-action="offline">Help & offline</button></div></details><p class="page-notice" data-page-notice role="alert"></p>`;
     this.upload = document.createElement('section'); this.upload.className = 'page-upload'; this.upload.dataset.uploadStage = '';
     this.upload.innerHTML = `<div class="upload-glyph" aria-hidden="true">↥</div><p class="eyebrow">Your document, your next step</p><h1 tabindex="-1"></h1><p data-upload-description></p><button type="button" class="primary" data-select-source disabled>Select PDF file</button><p class="upload-drop-hint">or drop your file here</p><p data-upload-formats></p><p class="processing-label"><span aria-hidden="true">●</span> Processed on your device</p><p class="upload-scope">Your original stays unchanged. Review the output before sharing.</p><button type="button" class="secondary" data-configure-workflow hidden>Manage workflow recipes</button><p data-upload-status role="status"></p>`;
+    const recoverySlot = document.createElement('div'); recoverySlot.dataset.uploadRecovery = ''; this.upload.append(recoverySlot);
+    workspace.addEventListener('docflow-recovery-ready', event => {
+      const panel = (event as CustomEvent<HTMLElement>).detail;
+      if (!this.sourceCount && panel?.isConnected) recoverySlot.replaceChildren(panel);
+    });
     this.result = document.createElement('section'); this.result.className = 'page-result'; this.result.dataset.resultPage = ''; this.result.hidden = true;
     dialog.prepend(this.bar, this.upload); dialog.append(this.result);
     const mobileTools = document.createElement('div'); mobileTools.className = 'page-mobile-tools';
@@ -115,6 +120,7 @@ export class PageJourney {
       const tool = tools.find(t => t.id === route.toolId); if (!tool) return false;
       if (!reuse) {
         this.tool = tool; this.sourceCount = 0; this.sources = []; this.busy = false; this.bar.dataset.busy = 'false'; this.loadFailed = false; this.configuring = false; this.invalidate();
+        this.upload.querySelector('[data-upload-recovery]')!.replaceChildren();
         this.refreshFavorite();
         this.upload.querySelector<HTMLElement>('[data-configure-workflow]')!.hidden = tool.id !== 'workflow';
         this.upload.querySelector('h1')!.textContent = tool.name;
@@ -176,6 +182,8 @@ export class PageJourney {
     }
     this.sourceCount = files.length;
     this.sources = [...files];
+    const recovery = this.upload.querySelector<HTMLElement>('[data-recovery-panel]');
+    if (files.length && recovery) this.options.workspace.append(recovery);
     this.invalidate();
     if (this.options.root.dataset.page !== 'home') this.present('tool');
     if (this.route.kind === 'result' && this.tool) void this.open(this.tool.id);

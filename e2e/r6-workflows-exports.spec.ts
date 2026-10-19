@@ -77,6 +77,7 @@ test('review comparison retains the original source when a different input is se
   await dialog.locator('#workspace-file').setInputFiles(await sample('new.pdf', 2));
   await review.locator('summary').click();
   await review.getByRole('button', { name: 'Compare with original', exact: true }).click();
+  await page.getByRole('dialog', { name: 'Leave unapplied tool changes?', exact: true }).getByRole('button', { name: 'Leave tool', exact: true }).click();
   await expect(dialog.locator('#file-list .file-row')).toHaveCount(2);
   await expect(dialog.locator('#file-list')).toContainText('old.pdf');
   await expect(dialog.locator('#file-list')).not.toContainText('new.pdf');

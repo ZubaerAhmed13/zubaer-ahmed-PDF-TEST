@@ -57,6 +57,8 @@ test('chains two local operations on two PDFs with downloads and ZIP', async ({ 
   expect(text).toMatch(/Page\s*1|1\s*\/\s*2/);
 
   await dialog.getByRole('button', { name: 'Prepare ZIP' }).click();
+  await expect(page.locator('[data-result-page]')).toBeVisible();
+  await returnToEditor(page);
   const zipLink = dialog.locator('#wf-results a[download="docflow-workflow-results.zip"]');
   await expect(zipLink).toBeVisible();
   const zip = await download(page, zipLink);
@@ -80,8 +82,7 @@ test('reorder and save a workflow preset without storing PDF bytes or filenames'
   expect(stored).toContain('Quarterly preparation');
   expect(stored).not.toContain('PDF-BYTES');
   await page.reload();
-  await page.getByLabel('Search tools').fill('workflow builder');
-  await page.locator('#tool-grid [data-open-tool="workflow"]').click();
+  await page.locator('[data-configure-workflow]').click();
   const reopened = page.getByRole('region', { name: 'Workspace' });
   await reopened.locator('#wf-recipes').selectOption({ label: 'Quarterly preparation · saved' });
   await reopened.getByRole('button', { name: 'Load recipe' }).click();

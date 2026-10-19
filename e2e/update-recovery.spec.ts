@@ -1,3 +1,4 @@
+import { returnToEditor } from './helpers/editorReturn';
 import { test, expect } from '@playwright/test';
 import { createServer } from 'node:http';
 import { readFile } from 'node:fs/promises';
@@ -74,6 +75,8 @@ test('production worker rejects a broken install and safely forward-recovers a s
     await page.locator('#tool-grid [data-open-tool=rotate]').click();
     await page.locator('#workspace-file').setInputFiles({ name: 'retry.pdf', mimeType: 'application/pdf', buffer: source });
     await page.locator('#run-operation').click();
+    await expect(page.locator('[data-result-page]')).toBeVisible();
+    await returnToEditor(page);
     const result = page.locator('#result a.download').first(); await expect(result).toBeVisible();
     const wait = page.waitForEvent('download'); await result.click(); const file = await wait;
     const reopened = await PDFDocument.load(await readFile((await file.path())!));
