@@ -15,12 +15,12 @@ test('all 29 tools load their deployed workspaces with no uncaught errors', asyn
   for (const tool of tools) {
     await test.step(tool.name, async () => {
       await page.locator('#tool-grid [data-open-tool="' + tool.id + '"]').click({ timeout: 8_000 });
-      const dialog = page.getByRole('dialog', { name: 'Workspace' });
+      const dialog = page.getByRole('region', { name: 'Workspace' });
       await expect(dialog).toBeVisible();
       await expect(dialog.locator('.workspace-loading')).toHaveCount(0);
       await expect(dialog.locator('[data-load-error-for]')).toHaveCount(0);
       await expect(dialog.getByRole('heading', { name: tool.name, exact: true })).toBeVisible();
-      await dialog.getByRole('button', { name: 'Close workspace' }).click({ timeout: 8_000 });
+      await dialog.getByRole('button', { name: 'Back to all tools' }).click({ timeout: 8_000 });
       await expect(dialog).toBeHidden();
     });
   }
@@ -43,7 +43,7 @@ test('records a reproducible desktop/mobile automation baseline and checks serio
   for (const width of [360, 1280]) {
     await page.setViewportSize({ width, height: 900 });
     await page.goto('/zubaer-ahmed-PDF-TEST/');
-    await expect(page.getByRole('heading', { name: /Private PDF tools/ })).toBeVisible();
+    await expect(page.getByRole('heading', { name: /Your PDFs/ })).toBeVisible();
     const metrics = await page.evaluate(() => {
       const nav = performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming | undefined;
       return {

@@ -1,3 +1,4 @@
+import { returnToEditor } from './helpers/editorReturn';
 import { expect, test, type Page } from '@playwright/test';
 import { PDFDocument, PDFName, PDFNumber, PDFRawStream, StandardFonts, rgb } from 'pdf-lib';
 import { readFile } from 'node:fs/promises';
@@ -86,13 +87,14 @@ test('professional optimizer selectively recompresses RGB JPEG XObjects without 
 
   await page.getByLabel('Search tools').fill('optimize');
   await page.locator('#tool-grid [data-open-tool="compress"]').click();
-  const dialog = page.getByRole('dialog', { name: 'Workspace' });
+  const dialog = page.getByRole('region', { name: 'Workspace' });
   await expect(dialog.getByText('Selective JPEG image recompression')).toBeVisible();
   await dialog.locator('#workspace-file').setInputFiles({ name: 'image-heavy.pdf', mimeType: 'application/pdf', buffer: source });
   await dialog.locator('input[name="imageQuality"]').fill('0.70');
   await dialog.locator('input[name="maxImageDimension"]').fill('1000');
   await dialog.getByRole('button', { name: 'Run Optimize PDF' }).click();
   await expect(dialog.locator('#stage')).toHaveText('Complete', { timeout: 60_000 });
+  await returnToEditor(page);
   await expect(dialog.locator('#result')).toContainText('recompressedImages');
 
   const downloadPromise = page.waitForEvent('download');
@@ -112,10 +114,10 @@ test('professional optimizer selectively recompresses RGB JPEG XObjects without 
   expect(outputImages[0]!.bytes).toBeLessThan(sourceImages[0]!.bytes * 0.8);
   expect(outputBytes.byteLength).toBeLessThan(source.byteLength * 0.9);
 
-  await dialog.getByRole('button', { name: 'Close workspace' }).click();
+  await dialog.getByRole('button', { name: 'Back to all tools' }).click();
   await page.getByLabel('Search tools').fill('view pdf');
   await page.locator('#tool-grid [data-open-tool="preview"]').click();
-  const preview = page.getByRole('dialog', { name: 'Workspace' });
+  const preview = page.getByRole('region', { name: 'Workspace' });
   await preview.locator('#workspace-file').setInputFiles({ name: 'optimized.pdf', mimeType: 'application/pdf', buffer: outputBytes });
   await preview.getByRole('button', { name: 'Run View PDF' }).click();
   await expect(preview.locator('#stage')).toHaveText('Preview ready');

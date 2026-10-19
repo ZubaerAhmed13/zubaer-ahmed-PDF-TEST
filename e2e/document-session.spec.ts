@@ -23,7 +23,8 @@ async function begin(page: Page, bytes = fixture()): Promise<void> {
 }
 async function next(page: Page, id: string): Promise<void> {
   await page.getByRole('combobox', { name: 'Next tool', exact: true }).selectOption(id);
-  await expect(page.getByRole('dialog', { name: 'Workspace', exact: true }).getByRole('heading', { name: tools.find(tool => tool.id === id)!.name, exact: true })).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Workspace', exact: true }).getByRole('heading', { name: tools.find(tool => tool.id === id)!.name, exact: true })).toBeVisible();
+  if ((page.viewportSize()?.width ?? 1280) <= 760 && await page.locator('.legacy-settings-pane').count()) await page.locator('[data-mobile-panel="options"]').click();
 }
 async function apply(page: Page): Promise<void> {
   await expect(page.getByRole('button', { name: 'Use result', exact: true })).toBeEnabled();
@@ -74,7 +75,7 @@ test('one import supports organize → annotate → number → export and exact 
   await page.getByRole('button', { name: 'View original', exact: true }).click();
   await expect(page.locator('.session-identity')).toContainText('Viewing original');
   expect(await exportCurrent(page)).toEqual(final);
-  await page.getByRole('button', { name: 'Close workspace', exact: true }).click();
+  await page.getByRole('button', { name: 'Back to all tools', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Resume document', exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Resume document', exact: true }).click();
   expect(await exportCurrent(page)).toEqual(final);
@@ -115,7 +116,7 @@ test('unapplied edits require an explicit leave choice and the narrow session sh
   const confirmation = page.getByRole('dialog', { name: 'Leave unapplied tool changes?', exact: true });
   await expect(confirmation).toBeVisible();
   await confirmation.getByRole('button', { name: 'Keep working', exact: true }).click();
-  await expect(page.getByRole('dialog', { name: 'Workspace', exact: true }).getByRole('heading', { name: 'Annotate PDF', exact: true })).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Workspace', exact: true }).getByRole('heading', { name: 'Annotate PDF', exact: true })).toBeVisible();
   await expect(page.getByRole('combobox', { name: 'Next tool', exact: true })).toHaveValue('annotate');
   await expect(page.locator('textarea[name="text"]')).toHaveValue('UNAPPLIED PRIVATE NOTE');
   const issues = await new AxeBuilder({ page }).analyze();
@@ -124,7 +125,7 @@ test('unapplied edits require an explicit leave choice and the narrow session sh
   expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(1);
   await page.getByRole('combobox', { name: 'Next tool', exact: true }).selectOption('rotate');
   await confirmation.getByRole('button', { name: 'Leave tool', exact: true }).click();
-  await expect(page.getByRole('dialog', { name: 'Workspace', exact: true }).getByRole('heading', { name: 'Rotate pages', exact: true })).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Workspace', exact: true }).getByRole('heading', { name: 'Rotate pages', exact: true })).toBeVisible();
   const saved = await page.evaluate(() => JSON.stringify(localStorage));
   expect(saved).not.toContain('UNAPPLIED PRIVATE NOTE');
 });
@@ -145,11 +146,11 @@ test('closing active redaction offers keep/stop and cannot stage late partial ou
   });
   await page.getByRole('button', { name: 'Apply permanent redactions', exact: true }).click();
   await expect(page.locator('html')).toHaveAttribute('data-r1-encoding', 'pending');
-  await page.getByRole('button', { name: 'Close workspace', exact: true }).click();
+  await page.getByRole('button', { name: 'Back to all tools', exact: true }).click();
   const confirmation = page.getByRole('dialog', { name: 'Stop processing?', exact: true });
   await confirmation.getByRole('button', { name: 'Keep working', exact: true }).click();
-  await expect(page.getByRole('dialog', { name: 'Workspace', exact: true })).toBeVisible();
-  await page.getByRole('button', { name: 'Close workspace', exact: true }).click();
+  await expect(page.getByRole('region', { name: 'Workspace', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Back to all tools', exact: true }).click();
   await confirmation.getByRole('button', { name: 'Stop and leave', exact: true }).click();
   await page.evaluate(() => document.dispatchEvent(new Event('r1-continue-encoding')));
   await page.getByRole('button', { name: 'Resume document', exact: true }).click();
@@ -195,15 +196,15 @@ test('result validation keeps the workspace open until its atomic revision commi
   });
   await page.getByRole('button', { name: 'Use result', exact: true }).click();
   await expect(page.locator('html')).toHaveAttribute('data-r1-validation', 'pending');
-  await page.getByRole('button', { name: 'Close workspace', exact: true }).click();
-  await expect(page.getByRole('dialog', { name: 'Workspace', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Back to all tools', exact: true }).click();
+  await expect(page.getByRole('region', { name: 'Workspace', exact: true })).toBeVisible();
   await expect(page.locator('.session-notice')).toContainText('Please wait before leaving');
   await expect(page.getByRole('dialog', { name: 'Stop processing?', exact: true })).toHaveCount(0);
   await page.evaluate(() => document.dispatchEvent(new Event('r1-complete-validation')));
   await expect(page.getByText('Result ready · not yet applied', { exact: true })).toHaveCount(0);
   await expect(page.locator('.session-notice')).not.toContainText('Please wait before leaving');
-  await page.getByRole('button', { name: 'Close workspace', exact: true }).click();
-  await expect(page.getByRole('dialog', { name: 'Workspace', exact: true })).toBeHidden();
+  await page.getByRole('button', { name: 'Back to all tools', exact: true }).click();
+  await expect(page.getByRole('region', { name: 'Workspace', exact: true })).toBeHidden();
   await page.getByRole('button', { name: 'Resume document', exact: true }).click();
   const result = await PDFDocument.load(await exportCurrent(page));
   expect(result.getPage(0).getRotation().angle).toBe(90);

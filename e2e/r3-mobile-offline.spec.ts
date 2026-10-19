@@ -1,3 +1,4 @@
+import { returnToEditor } from './helpers/editorReturn';
 import { test, expect, type Page, type BrowserContext } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 import { PDFDocument } from 'pdf-lib';
@@ -51,9 +52,10 @@ async function offlinePanel(page: Page): Promise<void> {
 }
 async function open(page: Page, tool: string): Promise<void> {
   await page.locator(`#tool-grid [data-open-tool="${tool}"]`).click();
-  await expect(page.getByRole('dialog', { name: 'Workspace', exact: true })).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Workspace', exact: true })).toBeVisible();
 }
 async function exported(page: Page, name: string | RegExp): Promise<Buffer> {
+  await returnToEditor(page);
   const pending = page.waitForEvent('download');
   await page.getByRole('link', { name, exact: typeof name === 'string' }).click();
   const path = await (await pending).path();
@@ -85,7 +87,7 @@ test('prepared mobile core edits and exports with offline Chromium/Firefox and s
     await page.reload();
     expect(await page.evaluate(async () => { try { await fetch('./offline-probe?test=' + Date.now(), { cache: 'no-store' }); return false; } catch { return true; } })).toBe(true);
   }
-  await expect(page.getByRole('heading', { name: /Private PDF tools/ })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /Your PDFs/ })).toBeVisible();
   await open(page, 'edit-pdf');
   await page.locator('#workspace-file').setInputFiles({ name: 'mobile.pdf', mimeType: 'application/pdf', buffer: await fixture() });
   await expect(page.locator('#stage')).toContainText('Editing page 1');
@@ -226,6 +228,7 @@ test('same-named batch inputs retain distinct downloads, sharing bytes and ZIP e
   await expect(page.locator('.batch-row')).toHaveCount(2);
   await page.getByRole('button', { name: 'Run batch', exact: true }).click();
   await expect(page.locator('#batch-stage')).toHaveText('Batch complete · 2 of 2 succeeded');
+  await returnToEditor(page);
   const names = await page.locator('#batch-results a[download]').evaluateAll(links => links.map(a => (a as HTMLAnchorElement).download));
   expect(names).toEqual(['same-rotated.pdf', 'same-rotated-2.pdf']);
   const bytes = await exported(page, /^Download same-rotated-2\.pdf/);
@@ -234,6 +237,7 @@ test('same-named batch inputs retain distinct downloads, sharing bytes and ZIP e
   await expect(page.locator('html')).toHaveAttribute('data-batch-share-hash', createHash('sha256').update(bytes).digest('hex'));
   await page.getByRole('button', { name: 'Prepare ZIP', exact: true }).click();
   await expect(page.locator('#batch-stage')).toHaveText('ZIP ready · 2 outputs');
+  await returnToEditor(page);
   const archive = await JSZip.loadAsync(await exported(page, /^Download docflow-batch-results\.zip/));
   expect(Object.keys(archive.files).sort()).toEqual([...names].sort());
   expect((await PDFDocument.load(await archive.file(names[1]!)!.async('uint8array'))).getPageCount()).toBe(2);

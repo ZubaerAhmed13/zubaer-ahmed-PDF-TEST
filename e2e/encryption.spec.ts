@@ -1,3 +1,4 @@
+import { returnToEditor } from './helpers/editorReturn';
 import { expect, test } from '@playwright/test';
 import { PDFDocument } from 'pdf-lib';
 import { readFile } from 'node:fs/promises';
@@ -32,7 +33,7 @@ test('protects with AES-256, rejects a wrong password, and unlocks to a reopenab
 
   await page.getByLabel('Search tools').fill('protect');
   await page.locator('#tool-grid [data-open-tool="protect-pdf"]').click();
-  const dialog = page.getByRole('dialog', { name: 'Workspace' });
+  const dialog = page.getByRole('region', { name: 'Workspace' });
   await expect(dialog).toBeVisible();
   await dialog.locator('#workspace-file').setInputFiles({ name: 'security-fixture.pdf', mimeType: 'application/pdf', buffer: source });
   await expect(dialog.getByText('security-fixture.pdf',{exact:true})).toBeVisible();
@@ -40,6 +41,7 @@ test('protects with AES-256, rejects a wrong password, and unlocks to a reopenab
   await dialog.locator('#encryption-password-confirm').fill(PASSWORD);
   await dialog.getByRole('button', { name: 'Run Protect PDF' }).click();
   await expect(dialog.locator('#stage')).toHaveText('Complete', { timeout: 60_000 });
+  await returnToEditor(page);
   await expect(dialog.locator('#encryption-password')).toHaveValue('');
   await expect(dialog.locator('#encryption-password-confirm')).toHaveValue('');
 
@@ -80,7 +82,7 @@ test('protects with AES-256, rejects a wrong password, and unlocks to a reopenab
   }, PASSWORD);
   expect(persistedSecret).toBe(false);
 
-  await page.keyboard.press('Escape');
+  await page.getByRole('button', { name: 'Back to all tools', exact: true }).click();
   await expect(dialog).toBeHidden();
   await page.getByLabel('Search tools').fill('unlock');
   await page.locator('#tool-grid [data-open-tool="unlock-pdf"]').click();
@@ -97,6 +99,7 @@ test('protects with AES-256, rejects a wrong password, and unlocks to a reopenab
   await dialog.locator('#encryption-password').fill(PASSWORD);
   await dialog.getByRole('button', { name: 'Run Unlock PDF' }).click();
   await expect(dialog.locator('#stage')).toHaveText('Complete', { timeout: 60_000 });
+  await returnToEditor(page);
   const unlockedDownload = page.waitForEvent('download');
   await dialog.getByRole('link', { name: /Download protected-unlocked\.pdf/ }).click();
   const unlockedPath = await (await unlockedDownload).path();
@@ -141,16 +144,17 @@ test('certifies offline encryption execution or qpdf precache coverage', async (
   await context.setOffline(true);
   try {
     await page.reload();
-    await expect(page.getByRole('heading', { name: /Private PDF tools/ })).toBeVisible();
+    await expect(page.getByRole('heading', { name: /Your PDFs/ })).toBeVisible();
     await page.getByLabel('Search tools').fill('protect');
     await page.locator('#tool-grid [data-open-tool="protect-pdf"]').click();
-    const dialog = page.getByRole('dialog', { name: 'Workspace' });
+    const dialog = page.getByRole('region', { name: 'Workspace' });
     await expect(dialog).toBeVisible();
     await dialog.locator('#workspace-file').setInputFiles({ name: 'offline-security.pdf', mimeType: 'application/pdf', buffer: await pdfFixture() });
     await dialog.locator('#encryption-password').fill(PASSWORD);
     await dialog.locator('#encryption-password-confirm').fill(PASSWORD);
     await dialog.getByRole('button', { name: 'Run Protect PDF' }).click();
     await expect(dialog.locator('#stage')).toHaveText('Complete', { timeout: 60_000 });
+    await returnToEditor(page);
 
     const downloadPromise = page.waitForEvent('download');
     await dialog.getByRole('link', { name: /Download offline-security-protected\.pdf/ }).click();

@@ -1,3 +1,4 @@
+import { returnToEditor } from './helpers/editorReturn';
 import { test, expect, type Page, type Locator } from '@playwright/test';
 import { PDFDocument, PDFName, StandardFonts } from 'pdf-lib';
 import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs';
@@ -21,11 +22,12 @@ async function open(page: Page, label: string, id: string): Promise<Locator> {
   await page.goto('/zubaer-ahmed-PDF-TEST/');
   await page.getByLabel('Search tools').fill(label);
   await page.locator('#tool-grid [data-open-tool="' + id + '"]').click();
-  const dialog = page.getByRole('dialog',{name:'Workspace'});
+  const dialog = page.getByRole('region',{name:'Workspace'});
   await expect(dialog).toBeVisible();
   return dialog;
 }
 async function downloaded(page: Page, link: Locator): Promise<Buffer> {
+  await returnToEditor(page);
   const event = page.waitForEvent('download');
   await link.click();
   const file = await event;
@@ -47,6 +49,7 @@ test('permanent redaction exports image-only PDF, no original text or metadata',
   await dialog.locator('#pro-confirm').check();
   await dialog.getByRole('button',{name:'Apply permanent redactions'}).click();
   await expect(dialog.locator('#pro-stage')).toHaveText('Complete',{timeout:90000});
+  await returnToEditor(page);
   const output = await downloaded(page, dialog.locator('#pro-results a.download'));
   const doc = await PDFDocument.load(output);
   expect(doc.getPageCount()).toBe(2);
@@ -129,6 +132,7 @@ test('redacted pixels cover the intended viewport region at every rotation and r
   await dialog.locator('#pro-confirm').check();
   await dialog.getByRole('button', { name: 'Apply permanent redactions' }).click();
   await expect(dialog.locator('#pro-stage')).toHaveText('Complete', { timeout: 90_000 });
+  await returnToEditor(page);
   const output = await downloaded(page, dialog.locator('#pro-results a.download'));
   const parsed = await PDFDocument.load(output);
   expect(parsed.getForm().getFields()).toHaveLength(0);
@@ -165,6 +169,7 @@ for (const damage of ['wrong-startxref', 'missing-xref'] as const) {
     await dialog.locator('#pro-pdf').setInputFiles({ name: damage + '.pdf', mimeType: 'application/pdf', buffer: source });
     await dialog.getByRole('button', { name: 'Attempt structural repair' }).click();
     await expect(dialog.locator('#pro-stage')).toHaveText('Complete', { timeout: 90_000 });
+    await returnToEditor(page);
     await expect(dialog.locator('.pro-warning')).toContainText('warnings');
     const result = await downloaded(page, dialog.locator('#pro-results a.download'));
     const document = await getDocument({ data: new Uint8Array(result), stopAtErrors: true }).promise;

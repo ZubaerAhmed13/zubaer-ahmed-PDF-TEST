@@ -1,3 +1,4 @@
+import { returnToEditor } from './helpers/editorReturn';
 import { test, expect, type Page, type Locator } from '@playwright/test';
 import { PDFDocument, StandardFonts } from 'pdf-lib';
 import { readFile } from 'node:fs/promises';
@@ -20,11 +21,12 @@ async function opened(page: Page, id: string, label: string): Promise<Locator> {
   await page.goto(app);
   await page.getByLabel('Search tools').fill(label);
   await page.locator('#tool-grid [data-open-tool="' + id + '"]').click();
-  const dialog = page.getByRole('dialog', { name: 'Workspace' });
+  const dialog = page.getByRole('region', { name: 'Workspace' });
   await expect(dialog).toBeVisible();
   return dialog;
 }
 async function downloaded(page: Page, dialog: Locator, filename: RegExp): Promise<Buffer> {
+  await returnToEditor(page);
   const pending = page.waitForEvent('download');
   await dialog.getByRole('link', { name: filename }).click();
   const item = await pending;

@@ -45,7 +45,7 @@ test('repeated preview cycles terminate dedicated workers and release canvas DOM
   for (let cycle = 0; cycle < 6; cycle += 1) {
     await page.getByLabel('Search tools').fill('view pdf');
     await page.locator('#tool-grid [data-open-tool="preview"]').click();
-    const dialog = page.getByRole('dialog', { name: 'Workspace' });
+    const dialog = page.getByRole('region', { name: 'Workspace' });
     await dialog.locator('#workspace-file').setInputFiles({ name: `preview-${cycle}.pdf`, mimeType: 'application/pdf', buffer: fixture });
     await dialog.getByRole('button', { name: 'Run View PDF' }).click();
 
@@ -58,7 +58,7 @@ test('repeated preview cycles terminate dedicated workers and release canvas DOM
     await next.click({ timeout: 20_000 });
     await expect(dialog.locator('#viewer-status')).toHaveText('Page 2 of 12', { timeout: 20_000 });
 
-    await dialog.getByRole('button', { name: 'Close workspace' }).click();
+    await dialog.getByRole('button', { name: 'Back to all tools' }).click();
     await expect(dialog).toBeHidden({ timeout: 20_000 });
     await expect.poll(
       async () => page.evaluate(() => (window as Window & { __docflowWorkerStats?: { active: number } }).__docflowWorkerStats?.active ?? -1),

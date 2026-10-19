@@ -1,3 +1,4 @@
+import { returnToEditor } from './helpers/editorReturn';
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import { PDFDocument } from 'pdf-lib';
 
@@ -20,14 +21,14 @@ async function openTool(page: Page, query: string, toolId: string): Promise<Loca
   const openButton = page.locator(`#tool-grid [data-open-tool="${toolId}"]`);
   await expect(openButton).toHaveCount(1);
   await openButton.click();
-  const dialog = page.getByRole('dialog', { name: 'Workspace' });
+  const dialog = page.getByRole('region', { name: 'Workspace' });
   await expect(dialog).toBeVisible();
   return dialog;
 }
 
 test.beforeEach(async ({ page }) => {
   await page.goto(appPath);
-  await expect(page.getByRole('heading', { name: /Private PDF tools/ })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /Your PDFs/ })).toBeVisible();
 });
 
 test('document information reports standard metadata and page count from a real PDF fixture', async ({ page }) => {
@@ -39,6 +40,7 @@ test('document information reports standard metadata and page count from a real 
   });
   await dialog.getByRole('button', { name: 'Run Document information' }).click();
   await expect(dialog.locator('#stage')).toHaveText('Complete');
+  await returnToEditor(page);
 
   const infoText = await dialog.locator('.info-result').textContent();
   if (!infoText) throw new Error('Metadata result was not rendered.');

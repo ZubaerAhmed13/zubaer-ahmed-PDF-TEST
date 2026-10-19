@@ -3,6 +3,7 @@ import '../styles/export-review.css';
 import { workspaceRuntime } from './workspaceRuntime';
 
 export interface OutputAction { action: 'review' | 'continue' | 'compare'; file: File; source?: File; status: HTMLElement }
+export interface OutputReady { link: HTMLAnchorElement; blob: Blob; source?: File; toolId: string }
 export function outputFilename(value: string, original: string): string {
   const extension = original.match(/\.[a-z0-9]{1,8}$/i)?.[0] ?? '';
   const clean = [...value].map(character => character.charCodeAt(0) < 32 || character.charCodeAt(0) === 127 || /[<>:"/\\|?*]/.test(character) ? '-' : character).join('').trim().replace(/^\.+|[. ]+$/g, '');
@@ -24,12 +25,14 @@ export function addExportReview(link: HTMLAnchorElement, blob: Blob, source?: Fi
   const label = document.createElement('label'); label.textContent = 'Output filename';
   const name = document.createElement('input'); name.type = 'text'; name.value = link.download; name.maxLength = 110; name.autocomplete = 'off';
   label.append(name);
-  name.addEventListener('input', () => {
-    const filename = outputFilename(name.value, originalName);
+  const renameOutput = (value: string): void => {
+    const filename = outputFilename(value, originalName);
     link.download = rename?.(filename) ?? filename;
     link.textContent = 'Download ' + link.download;
     link.dispatchEvent(new Event('docflow-output-renamed', { bubbles: true }));
-  });
+  };
+  name.addEventListener('input', () => renameOutput(name.value));
+  link.addEventListener('docflow-output-name-request', event => { renameOutput((event as CustomEvent<string>).detail); name.value = link.download; });
   name.addEventListener('change', () => { name.value = link.download; });
   const summary = document.createElement('p');
   summary.textContent = blob.type === 'application/pdf' ? preservationConsequences(tool).join(' ') : 'This output uses the selected format. Download it to open it in a compatible application. A report or archive does not replace your source PDF.';
@@ -50,4 +53,5 @@ export function addExportReview(link: HTMLAnchorElement, blob: Blob, source?: Fi
     summary.textContent = 'Encrypted PDF: download and open it with its password. Unlock a copy before continuing to edit. Encryption does not remove original active content or attachments.';
   }
   link.after(details);
+  root.dispatchEvent(new CustomEvent<OutputReady>('docflow-output-ready', { bubbles: true, detail: { link, blob, source: capturedSource, toolId: tool } }));
 }

@@ -1,3 +1,4 @@
+import { returnToEditor } from './helpers/editorReturn';
 import { expect, test } from '@playwright/test';
 import JSZip from 'jszip';
 import { PDFDocument } from 'pdf-lib';
@@ -18,7 +19,7 @@ test('extracts decoded embedded raster images without rendering whole pages', as
   await expect(page.getByRole('heading', { name: 'Extract images' })).toBeVisible();
   await page.getByRole('button', { name: 'Open tool' }).click();
 
-  const dialog = page.getByRole('dialog', { name: 'Workspace' });
+  const dialog = page.getByRole('region', { name: 'Workspace' });
   await expect(dialog).toBeVisible();
   await dialog.locator('#workspace-file').setInputFiles({
     name: 'embedded-image.pdf',
@@ -27,6 +28,7 @@ test('extracts decoded embedded raster images without rendering whole pages', as
   });
   await dialog.getByRole('button', { name: 'Run Extract images' }).click();
   await expect(dialog.locator('#stage')).toHaveText('Complete');
+  await returnToEditor(page);
   await expect(dialog.locator('#result').getByText(/^1 embedded raster image extracted$/)).toBeVisible();
 
   const link = dialog.getByRole('link', { name: /Download embedded-images\.zip/ });

@@ -1,3 +1,4 @@
+import { returnToEditor } from './helpers/editorReturn';
 import { test, expect, type Locator, type Page } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 import { PDFDocument, StandardFonts } from 'pdf-lib';
@@ -16,12 +17,14 @@ async function open(page: Page): Promise<Locator> {
   await page.goto('/zubaer-ahmed-PDF-TEST/');
   await page.getByLabel('Search tools').fill('workflow builder');
   await page.locator('#tool-grid [data-open-tool="workflow"]').click();
-  const dialog = page.getByRole('dialog', { name: 'Workspace' });
+  const dialog = page.getByRole('region', { name: 'Workspace' });
   await expect(dialog).toBeVisible();
+  await dialog.getByRole('button', { name: 'Manage workflow recipes', exact: true }).click();
   await expect(dialog.locator('#wf-steps .wf-step')).toHaveCount(2);
   return dialog;
 }
 async function download(page: Page, link: Locator): Promise<Buffer> {
+  await returnToEditor(page);
   const event = page.waitForEvent('download');
   await link.click();
   const item = await event;
@@ -38,6 +41,7 @@ test('chains two local operations on two PDFs with downloads and ZIP', async ({ 
   ]);
   await dialog.getByRole('button', { name: 'Run workflow' }).click();
   await expect(dialog.locator('#wf-stage')).toContainText('Finished', { timeout: 90_000 });
+  await returnToEditor(page);
   await expect(dialog.locator('.batch-row[data-state=complete]')).toHaveCount(2);
   const links = dialog.locator('#wf-results a.download');
   await expect(links).toHaveCount(2);
@@ -78,7 +82,7 @@ test('reorder and save a workflow preset without storing PDF bytes or filenames'
   await page.reload();
   await page.getByLabel('Search tools').fill('workflow builder');
   await page.locator('#tool-grid [data-open-tool="workflow"]').click();
-  const reopened = page.getByRole('dialog', { name: 'Workspace' });
+  const reopened = page.getByRole('region', { name: 'Workspace' });
   await reopened.locator('#wf-recipes').selectOption({ label: 'Quarterly preparation · saved' });
   await reopened.getByRole('button', { name: 'Load recipe' }).click();
   await expect(reopened.locator('.wf-step').first().locator('.wf-step-top strong')).toContainText('Optimise PDF');
@@ -99,6 +103,7 @@ test('keeps successful batch results while allowing failed files to retry', asyn
   ]);
   await dialog.getByRole('button', { name: 'Run workflow' }).click();
   await expect(dialog.locator('#wf-stage')).toContainText('Finished', { timeout: 90_000 });
+  await returnToEditor(page);
   await expect(dialog.locator('.batch-row[data-state=failed]')).toHaveCount(1);
   await expect(dialog.locator('.batch-row[data-state=complete]')).toHaveCount(1);
   const completed = dialog.locator('#wf-results a.download');
@@ -106,6 +111,7 @@ test('keeps successful batch results while allowing failed files to retry', asyn
   expect((await PDFDocument.load(await download(page, completed))).getPageCount()).toBe(1);
   await dialog.getByRole('button', { name: 'Retry failed' }).click();
   await expect(dialog.locator('#wf-stage')).toContainText('Finished', { timeout: 90_000 });
+  await returnToEditor(page);
   await expect(dialog.locator('.batch-row[data-state=complete]')).toHaveCount(1);
   await expect(dialog.locator('.batch-row[data-state=failed]')).toHaveCount(1);
   await expect(dialog.locator('#wf-results a.download')).toHaveCount(1);

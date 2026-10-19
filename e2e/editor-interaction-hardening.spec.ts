@@ -9,7 +9,7 @@ async function pdfFixture(pageCount: number, width = 595.28, height = 841.89): P
 
 async function openTool(page: import('@playwright/test').Page, toolId: string): Promise<import('@playwright/test').Locator> {
   await page.locator(`[data-open-tool="${toolId}"]`).first().click();
-  const dialog = page.getByRole('dialog', { name: 'Workspace' });
+  const dialog = page.getByRole('region', { name: 'Workspace' });
   await expect(dialog).toBeVisible();
   return dialog;
 }
@@ -208,7 +208,7 @@ test('workspace favorite synchronizes with Home immediately in both directions',
   await expect(homeFavorite).toHaveCount(0);
 
   await page.locator('[data-open-tool="rotate"]').first().click();
-  await expect(page.getByRole('dialog', { name: 'Workspace' }).locator('.legacy-favorite-button[aria-pressed]')).toHaveAttribute('aria-pressed', 'false');
+  await expect(page.getByRole('region', { name: 'Workspace' }).locator('.legacy-favorite-button[aria-pressed]')).toHaveAttribute('aria-pressed', 'false');
 });
 
 test('failed lazy tool load leaves a recoverable error instead of endless Loading', async ({ page, browserName }) => {
@@ -224,7 +224,7 @@ test('failed lazy tool load leaves a recoverable error instead of endless Loadin
   });
 
   await page.locator('[data-open-tool="merge"]').first().click();
-  const dialog = page.getByRole('dialog', { name: 'Workspace' });
+  const dialog = page.getByRole('region', { name: 'Workspace' });
   await expect(dialog).toBeVisible();
   await expect(dialog.locator('.workspace-loading')).toHaveCount(0);
   await expect(dialog.getByRole('heading', { name: 'Unable to open Merge PDF' })).toBeVisible();
@@ -251,11 +251,11 @@ test('closing during lazy load invalidates the stale open session', async ({ pag
     await route.continue();
   });
 
-  const dialog = page.getByRole('dialog', { name: 'Workspace' });
+  const dialog = page.getByRole('region', { name: 'Workspace' });
   try {
     await page.locator('[data-open-tool="merge"]').first().click();
-    await expect(dialog.locator('.workspace-loading')).toBeVisible();
-    await page.keyboard.press('Escape');
+    await expect(dialog.locator('.workspace-loading')).toBeAttached();
+    await page.getByRole('button', { name: 'Back to all tools', exact: true }).click();
     await expect(dialog).toBeHidden();
     releaseOnce();
     await page.waitForTimeout(250);
@@ -267,5 +267,5 @@ test('closing during lazy load invalidates the stale open session', async ({ pag
 
   await page.unroute('**/*.js');
   await page.locator('[data-open-tool="merge"]').first().click();
-  await expect(page.getByRole('dialog', { name: 'Workspace' }).getByRole('heading', { name: 'Merge PDF' })).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Workspace' }).getByRole('heading', { name: 'Merge PDF' })).toBeVisible();
 });

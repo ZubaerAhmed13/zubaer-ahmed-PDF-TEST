@@ -20,7 +20,7 @@ test('detects a valid PDF with an XFA stream and reports the unsupported-form bo
   await page.goto('/zubaer-ahmed-PDF-TEST/');
   await page.getByLabel('Search tools').fill('acroform');
   await page.locator('#tool-grid [data-open-tool="forms"]').click();
-  const dialog = page.getByRole('dialog', { name: 'Workspace' });
+  const dialog = page.getByRole('region', { name: 'Workspace' });
   await dialog.locator('#workspace-file').setInputFiles({
     name: 'xfa-form.pdf',
     mimeType: 'application/pdf',

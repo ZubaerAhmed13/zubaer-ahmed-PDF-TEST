@@ -778,6 +778,7 @@ export function mountWorkspace(
   let observedWidth = 0;
   const observer = new ResizeObserver((entries) => {
     const width = entries[0]?.contentRect.width ?? 0;
+    if (width <= 0) return; // The dedicated result page temporarily hides this mounted editor.
     if (Math.abs(width - observedWidth) < 1) return;
     observedWidth = width;
     if (

@@ -2,6 +2,7 @@ import { expect, test } from '@playwright/test';
 import JSZip from 'jszip';
 import { PDFDocument } from 'pdf-lib';
 import { readFile } from 'node:fs/promises';
+import { returnToEditor } from './helpers/editorReturn';
 
 async function pdfFixture(width: number): Promise<Buffer> {
   const doc = await PDFDocument.create();
@@ -14,7 +15,7 @@ test('batch queue rotates multiple PDFs sequentially and packages reopenable out
   await page.goto('/zubaer-ahmed-PDF-TEST/');
   await page.getByLabel('Search tools').fill('batch');
   await page.locator('#tool-grid [data-open-tool="batch"]').click();
-  const dialog = page.getByRole('dialog', { name: 'Workspace' });
+  const dialog = page.getByRole('region', { name: 'Workspace' });
 
   await dialog.locator('#batch-files').setInputFiles([
     { name: 'alpha.pdf', mimeType: 'application/pdf', buffer: await pdfFixture(300) },
@@ -27,6 +28,7 @@ test('batch queue rotates multiple PDFs sequentially and packages reopenable out
   await dialog.getByRole('button', { name: 'Run batch' }).click();
 
   await expect(dialog.locator('#batch-stage')).toHaveText('Batch complete · 3 of 3 succeeded');
+  await returnToEditor(page);
   await expect(dialog.locator('.batch-row[data-state="complete"]')).toHaveCount(3);
   await expect(dialog.getByRole('link', { name: /^Download alpha-rotated\.pdf/ })).toBeVisible();
   await expect(dialog.getByRole('link', { name: /^Download beta-rotated\.pdf/ })).toBeVisible();
@@ -34,6 +36,7 @@ test('batch queue rotates multiple PDFs sequentially and packages reopenable out
 
   await dialog.getByRole('button', { name: 'Prepare ZIP' }).click();
   await expect(dialog.locator('#batch-stage')).toHaveText('ZIP ready · 3 outputs');
+  await returnToEditor(page);
   const downloadPromise = page.waitForEvent('download');
   await dialog.getByRole('link', { name: /^Download docflow-batch-results\.zip/ }).click();
   const download = await downloadPromise;
@@ -55,7 +58,7 @@ test('batch queue continues after one malformed PDF and keeps successful outputs
   await page.goto('/zubaer-ahmed-PDF-TEST/');
   await page.getByLabel('Search tools').fill('batch');
   await page.locator('#tool-grid [data-open-tool="batch"]').click();
-  const dialog = page.getByRole('dialog', { name: 'Workspace' });
+  const dialog = page.getByRole('region', { name: 'Workspace' });
 
   await dialog.locator('#batch-files').setInputFiles([
     { name: 'broken.pdf', mimeType: 'application/pdf', buffer: Buffer.from('%PDF-1.7\nthis is deliberately malformed') },
@@ -64,6 +67,7 @@ test('batch queue continues after one malformed PDF and keeps successful outputs
   await dialog.getByRole('button', { name: 'Run batch' }).click();
 
   await expect(dialog.locator('#batch-stage')).toHaveText('Batch complete · 1 of 2 succeeded');
+  await returnToEditor(page);
   await expect(dialog.locator('.batch-row[data-state="failed"]')).toHaveCount(1);
   await expect(dialog.locator('.batch-row[data-state="complete"]')).toHaveCount(1);
   await expect(dialog.locator('.batch-row[data-state="failed"] .batch-state')).toContainText('INVALID_PDF');
@@ -75,7 +79,7 @@ test('batch cancellation stops an active queue and leaves no pending items runni
   await page.goto('/zubaer-ahmed-PDF-TEST/');
   await page.getByLabel('Search tools').fill('batch');
   await page.locator('#tool-grid [data-open-tool="batch"]').click();
-  const dialog = page.getByRole('dialog', { name: 'Workspace' });
+  const dialog = page.getByRole('region', { name: 'Workspace' });
 
   // Use enough sequential worker jobs that the queue remains genuinely active long enough
   // for the cancellation interaction on slower and faster browser engines alike.
@@ -92,6 +96,7 @@ test('batch cancellation stops an active queue and leaves no pending items runni
   await cancel.click();
 
   await expect(dialog.locator('#batch-stage')).toContainText('Batch cancelled');
+  await returnToEditor(page);
   await expect(dialog.locator('.batch-row[data-state="running"]')).toHaveCount(0);
   await expect(dialog.locator('.batch-row[data-state="pending"]')).toHaveCount(0);
   await expect(dialog.getByRole('button', { name: 'Run batch' })).toBeEnabled();

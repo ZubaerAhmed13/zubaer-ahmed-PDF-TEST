@@ -1,3 +1,4 @@
+import { returnToEditor } from './helpers/editorReturn';
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import { PDFDocument } from 'pdf-lib';
 import { readFile } from 'node:fs/promises';
@@ -40,12 +41,13 @@ async function openForms(page: Page): Promise<Locator> {
   const openButton = page.locator('#tool-grid [data-open-tool="forms"]');
   await expect(openButton).toHaveCount(1);
   await openButton.click();
-  const dialog = page.getByRole('dialog', { name: 'Workspace' });
+  const dialog = page.getByRole('region', { name: 'Workspace' });
   await expect(dialog).toBeVisible();
   return dialog;
 }
 
 async function downloadFilled(dialog: Locator, page: Page): Promise<Buffer> {
+  await returnToEditor(page);
   const downloadPromise = page.waitForEvent('download');
   await dialog.getByRole('link', { name: /^Download filled-form\.pdf/ }).click();
   const download = await downloadPromise;
@@ -56,7 +58,7 @@ async function downloadFilled(dialog: Locator, page: Page): Promise<Buffer> {
 
 test.beforeEach(async ({ page }) => {
   await page.goto(appPath);
-  await expect(page.getByRole('heading', { name: /Private PDF tools/ })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /Your PDFs/ })).toBeVisible();
 });
 
 test('certifies all currently supported AcroForm field types through inspect, fill, export and reopen', async ({ page }) => {
@@ -80,6 +82,7 @@ test('certifies all currently supported AcroForm field types through inspect, fi
   }));
   await dialog.getByRole('button', { name: 'Run Fill PDF forms' }).click();
   await expect(dialog.locator('#stage')).toHaveText('Complete');
+  await returnToEditor(page);
 
   const bytes = await downloadFilled(dialog, page);
   const output = await PDFDocument.load(bytes);
@@ -103,6 +106,7 @@ test('flattening applies values and removes interactive AcroForm fields from the
   await dialog.locator('input[name="flatten"]').check();
   await dialog.getByRole('button', { name: 'Run Fill PDF forms' }).click();
   await expect(dialog.locator('#stage')).toHaveText('Complete');
+  await returnToEditor(page);
 
   const bytes = await downloadFilled(dialog, page);
   const output = await PDFDocument.load(bytes);
@@ -144,6 +148,7 @@ test('delayed form discovery never replaces an active advanced JSON selection', 
   await dialog.locator('input[name="flatten"]').check();
   await dialog.getByRole('button', { name: 'Run Fill PDF forms' }).click();
   await expect(dialog.locator('#stage')).toHaveText('Complete');
+  await returnToEditor(page);
   const output = await PDFDocument.load(await downloadFilled(dialog, page));
   expect(output.getForm().getFields()).toHaveLength(0);
 });
@@ -167,6 +172,7 @@ test('automatically discovers fields and exports a form filled using visual cont
 
   await dialog.getByRole('button', { name: 'Run Fill PDF forms' }).click();
   await expect(dialog.locator('#stage')).toHaveText('Complete');
+  await returnToEditor(page);
   const bytes = await downloadFilled(dialog, page);
   const form = (await PDFDocument.load(bytes)).getForm();
   expect(form.getTextField('CustomerName').getText()).toBe('Visual input');

@@ -1,3 +1,4 @@
+import { returnToEditor } from './helpers/editorReturn';
 import { expect, test } from '@playwright/test';
 import { PDFDocument } from 'pdf-lib';
 import { readFile } from 'node:fs/promises';
@@ -15,7 +16,7 @@ test('visual organizer synchronizes duplicate, multi-select delete, undo and mov
   await page.goto('/zubaer-ahmed-PDF-TEST/');
   await page.getByLabel('Search tools').fill('organize pages');
   await page.locator('#tool-grid [data-open-tool="organize"]').click();
-  const dialog = page.getByRole('dialog', { name: 'Workspace' });
+  const dialog = page.getByRole('region', { name: 'Workspace' });
   const order = dialog.locator('input[name="order"]');
 
   await dialog.locator('#workspace-file').setInputFiles({
@@ -47,6 +48,7 @@ test('visual organizer synchronizes duplicate, multi-select delete, undo and mov
 
   await dialog.getByRole('button', { name: 'Run Organize pages' }).click();
   await expect(dialog.locator('#stage')).toHaveText('Complete');
+  await returnToEditor(page);
   const downloadPromise = page.waitForEvent('download');
   await dialog.getByRole('link', { name: /^Download organized\.pdf/ }).click();
   const download = await downloadPromise;
@@ -62,7 +64,7 @@ test('advanced deterministic order input remains supported and synchronizes the 
   await page.goto('/zubaer-ahmed-PDF-TEST/');
   await page.getByLabel('Search tools').fill('organize pages');
   await page.locator('#tool-grid [data-open-tool="organize"]').click();
-  const dialog = page.getByRole('dialog', { name: 'Workspace' });
+  const dialog = page.getByRole('region', { name: 'Workspace' });
   await dialog.locator('#workspace-file').setInputFiles({
     name: 'organizer-advanced.pdf',
     mimeType: 'application/pdf',

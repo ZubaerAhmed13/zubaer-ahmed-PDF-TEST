@@ -1,3 +1,4 @@
+import { returnToEditor } from './helpers/editorReturn';
 import { expect, test, type Page } from '@playwright/test';
 import { PDFDocument } from 'pdf-lib';
 import { readFile } from 'node:fs/promises';
@@ -70,7 +71,7 @@ test('previews and structurally edits a three-page A4 300-DPI raster scan withou
 
   await page.getByLabel('Search tools').fill('view pdf');
   await page.locator('#tool-grid [data-open-tool="preview"]').click();
-  const dialog = page.getByRole('dialog', { name: 'Workspace' });
+  const dialog = page.getByRole('region', { name: 'Workspace' });
   await dialog.locator('#workspace-file').setInputFiles({
     name: 'a4-300dpi-raster-scan.pdf',
     mimeType: 'application/pdf',
@@ -84,7 +85,7 @@ test('previews and structurally edits a three-page A4 300-DPI raster scan withou
   await dialog.getByRole('button', { name: 'Next', exact: true }).click();
   await expect(dialog.locator('#viewer-status')).toHaveText('Page 3 of 3');
 
-  await page.keyboard.press('Escape');
+  await page.getByRole('button', { name: 'Back to all tools', exact: true }).click();
   await expect(dialog).toBeHidden();
 
   await page.getByLabel('Search tools').fill('rotate');
@@ -98,6 +99,7 @@ test('previews and structurally edits a three-page A4 300-DPI raster scan withou
   await dialog.locator('select[name="degrees"]').selectOption('90');
   await dialog.getByRole('button', { name: 'Run Rotate pages' }).click();
   await expect(dialog.locator('#stage')).toHaveText('Complete', { timeout: 60_000 });
+  await returnToEditor(page);
 
   const downloadPromise = page.waitForEvent('download');
   await dialog.getByRole('link', { name: /Download rotated\.pdf/ }).click();

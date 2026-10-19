@@ -19,7 +19,7 @@ test.beforeEach(async ({ page }) => {
 
 test('same-named sources stay exact through move, replace and remove', async ({ page }) => {
   await page.locator('[data-open-tool="merge"]').first().click();
-  const dialog = page.getByRole('dialog', { name: 'Workspace' });
+  const dialog = page.getByRole('region', { name: 'Workspace' });
   await expect(dialog).toBeVisible();
 
   await dialog.locator('#workspace-file').setInputFiles([

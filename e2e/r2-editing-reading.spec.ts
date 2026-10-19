@@ -1,3 +1,4 @@
+import { returnToEditor } from './helpers/editorReturn';
 import { test, expect, type Page } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
 import {
@@ -86,6 +87,7 @@ async function open(page: Page, id: string, buffer: Buffer): Promise<void> {
       .click();
 }
 async function download(page: Page, name: string): Promise<Buffer> {
+  await returnToEditor(page);
   const waiting = page.waitForEvent("download");
   await page
     .getByRole("link", { name: new RegExp("^" + name.replace(/\./g, "\\.")) })
@@ -402,6 +404,7 @@ test("on-page forms sync with the field list, navigate pages, respect read-only 
     .getByRole("button", { name: "Run Fill PDF forms", exact: true })
     .click();
   await expect(page.locator("#stage")).toHaveText("Complete");
+  await returnToEditor(page);
   const bytes = await download(page, "Download filled-form.pdf");
   const reopened = await PDFDocument.load(bytes);
   expect(reopened.getForm().getTextField("Name").getText()).toBe("Ada");

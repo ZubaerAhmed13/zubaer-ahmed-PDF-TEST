@@ -17,7 +17,7 @@ async function openRotateTool(page: import('@playwright/test').Page): Promise<vo
 test('persists lightweight project metadata and settings without storing file contents', async ({ page }) => {
   await page.goto('/zubaer-ahmed-PDF-TEST/');
   await openRotateTool(page);
-  let dialog = page.getByRole('dialog', { name: 'Workspace' });
+  let dialog = page.getByRole('region', { name: 'Workspace' });
 
   await dialog.locator('#workspace-file').setInputFiles({
     name: 'recovery-fixture.pdf',
@@ -52,12 +52,12 @@ test('persists lightweight project metadata and settings without storing file co
   const storedFiles = stored.files as Array<Record<string, unknown>>;
   expect(Object.keys(storedFiles[0] ?? {}).sort()).toEqual(['lastModified', 'name', 'size', 'type']);
 
-  await dialog.getByRole('button', { name: 'Close workspace' }).click();
+  await dialog.getByRole('button', { name: 'Back to all tools' }).click();
   await expect(dialog).toBeHidden();
 
   await page.reload();
   await openRotateTool(page);
-  dialog = page.getByRole('dialog', { name: 'Workspace' });
+  dialog = page.getByRole('region', { name: 'Workspace' });
   const recovery = dialog.locator('[data-recovery-panel]');
   await expect(recovery).toBeVisible();
   await expect(recovery).toContainText('recovery-fixture.pdf');

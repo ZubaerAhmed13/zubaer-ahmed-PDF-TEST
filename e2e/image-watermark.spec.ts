@@ -1,3 +1,4 @@
+import { returnToEditor } from './helpers/editorReturn';
 import { expect, test } from '@playwright/test';
 import { PDFDict, PDFDocument, PDFName } from 'pdf-lib';
 import { readFile } from 'node:fs/promises';
@@ -14,7 +15,7 @@ test('adds a PNG image watermark through the UI and reopens a structurally valid
   await page.goto('/zubaer-ahmed-PDF-TEST/');
   await page.getByLabel('Search tools').fill('watermark');
   await page.locator('#tool-grid [data-open-tool="watermark"]').click();
-  const dialog = page.getByRole('dialog', { name: 'Workspace' });
+  const dialog = page.getByRole('region', { name: 'Workspace' });
 
   await dialog.locator('#workspace-file').setInputFiles({ name: 'source.pdf', mimeType: 'application/pdf', buffer: await pdfFixture() });
   await dialog.getByLabel('Watermark type').selectOption('image');
@@ -27,6 +28,7 @@ test('adds a PNG image watermark through the UI and reopens a structurally valid
 
   await dialog.getByRole('button', { name: 'Run Add watermark' }).click();
   await expect(dialog.locator('#stage')).toHaveText('Complete');
+  await returnToEditor(page);
   const downloadPromise = page.waitForEvent('download');
   await dialog.getByRole('link', { name: /^Download watermarked-image\.pdf/ }).click();
   const download = await downloadPromise;

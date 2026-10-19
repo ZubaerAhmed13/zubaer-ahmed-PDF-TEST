@@ -10,7 +10,7 @@ async function previewFixture(): Promise<Buffer> {
 async function previewCycle(page: import('@playwright/test').Page, fixture: Buffer, cycle: number): Promise<void> {
   await page.getByLabel('Search tools').fill('view pdf');
   await page.locator('#tool-grid [data-open-tool="preview"]').click();
-  const dialog = page.getByRole('dialog', { name: 'Workspace' });
+  const dialog = page.getByRole('region', { name: 'Workspace' });
   await dialog.locator('#workspace-file').setInputFiles({ name: `heap-${cycle}.pdf`, mimeType: 'application/pdf', buffer: fixture });
   await dialog.getByRole('button', { name: 'Run View PDF' }).click();
   await expect(dialog.locator('#stage')).toHaveText('Preview ready');
@@ -18,7 +18,7 @@ async function previewCycle(page: import('@playwright/test').Page, fixture: Buff
   await expect(dialog.locator('#viewer-status')).toHaveText('Page 2 of 16');
   await dialog.getByRole('button', { name: 'Next', exact: true }).click();
   await expect(dialog.locator('#viewer-status')).toHaveText('Page 3 of 16');
-  await dialog.getByRole('button', { name: 'Close workspace' }).click();
+  await dialog.getByRole('button', { name: 'Back to all tools' }).click();
   await expect(dialog).toBeHidden();
 }
 

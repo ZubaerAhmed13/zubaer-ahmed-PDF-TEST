@@ -8,12 +8,12 @@ test('keyboard-only dialog flows keep focus contained and return it to the exact
   await expect(openMerge).toBeFocused();
   await page.keyboard.press('Enter');
 
-  const workspace = page.getByRole('dialog', { name: 'Workspace' });
+  const workspace = page.getByRole('region', { name: 'Workspace' });
   await expect(workspace).toBeVisible();
   expect(await page.evaluate(() => document.querySelector('#workspace-dialog')?.contains(document.activeElement))).toBe(true);
-  await page.keyboard.press('Escape');
+  await page.getByRole('button', { name: 'Back to all tools', exact: true }).click();
   await expect(workspace).toBeHidden();
-  await expect(openMerge).toBeFocused();
+  await expect(page.getByLabel('Search tools')).toBeFocused();
 
   const privacy = page.locator('.topbar-nav').getByRole('button', { name: 'Privacy' });
   await privacy.focus();

@@ -10,7 +10,7 @@ async function pdfFixture(pageCount: number): Promise<Buffer> {
 test('opens a large preview automatically before rotating pages', async ({ page }) => {
   await page.goto('/zubaer-ahmed-PDF-TEST/');
   await page.locator('[data-open-tool="rotate"]').click();
-  const dialog = page.getByRole('dialog', { name: 'Workspace' });
+  const dialog = page.getByRole('region', { name: 'Workspace' });
 
   await dialog.locator('#workspace-file').setInputFiles({
     name: 'rotate-source.pdf',
@@ -43,7 +43,7 @@ test('lets Merge PDF switch between every selected source before merging', async
   await page.goto('/zubaer-ahmed-PDF-TEST/');
   await page.getByLabel('Search tools').fill('merge');
   await page.getByRole('button', { name: 'Open tool' }).click();
-  const dialog = page.getByRole('dialog', { name: 'Workspace' });
+  const dialog = page.getByRole('region', { name: 'Workspace' });
 
   await dialog.locator('#workspace-file').setInputFiles([
     { name: 'first.pdf', mimeType: 'application/pdf', buffer: await pdfFixture(2) },

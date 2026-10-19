@@ -1,3 +1,4 @@
+import { returnToEditor } from './helpers/editorReturn';
 import { expect, test, type Page } from '@playwright/test';
 import JSZip from 'jszip';
 import { PDFDocument, rgb } from 'pdf-lib';
@@ -14,12 +15,13 @@ async function colorFixture(): Promise<Buffer> {
 async function exportImage(page: Page, format: 'png' | 'jpeg', fixture: Buffer): Promise<Buffer> {
   await page.getByLabel('Search tools').fill('pdf to images');
   await page.locator('#tool-grid [data-open-tool="pdf-to-images"]').click();
-  const dialog = page.getByRole('dialog', { name: 'Workspace' });
+  const dialog = page.getByRole('region', { name: 'Workspace' });
   await dialog.locator('#workspace-file').setInputFiles({ name: 'srgb-patches.pdf', mimeType: 'application/pdf', buffer: fixture });
   await dialog.locator('select[name="format"]').selectOption(format);
   await dialog.locator('select[name="scale"]').selectOption('1');
   await dialog.getByRole('button', { name: 'Run PDF to images' }).click();
   await expect(dialog.locator('#stage')).toHaveText('Complete');
+  await returnToEditor(page);
   const downloadPromise = page.waitForEvent('download');
   await dialog.getByRole('link', { name: /^Download pdf-images\.zip/ }).click();
   const download = await downloadPromise;
@@ -30,7 +32,7 @@ async function exportImage(page: Page, format: 'png' | 'jpeg', fixture: Buffer):
   const name = Object.keys(zip.files).find((entry) => entry.endsWith(extension));
   if (!name) throw new Error(`No ${extension} page export found in ZIP.`);
   const bytes = Buffer.from(await zip.file(name)!.async('uint8array'));
-  await dialog.getByRole('button', { name: 'Close workspace' }).click();
+  await dialog.getByRole('button', { name: 'Back to all tools' }).click();
   await expect(dialog).toBeHidden();
   return bytes;
 }
