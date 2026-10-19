@@ -154,7 +154,7 @@ html #workspace-dialog.workspace-page[open] {background:var(--df-canvas);color:v
 .workspace-page .page-steps {margin:auto;gap:10px;}
 .workspace-page .page-steps span {
   position:relative;border-radius:999px;padding:9px 13px;gap:7px;background:#f2f4f9;
-  color:#66718a;font-size:12px;
+  color:#5b657b;font-size:12px;
 }
 .workspace-page .page-steps span[aria-current="step"] {background:#edeaff;color:var(--df-purple-deep);}
 .workspace-page .page-steps span[aria-current="step"] b {color:var(--df-purple-deep);}
@@ -231,7 +231,9 @@ html #workspace-dialog.workspace-page .legacy-editor-shell {
   #app .hero {width:calc(100% - 20px);margin-top:10px;padding:21px 18px 17px;border-radius:24px;}
   #app .hero h1 {font-size:clamp(32px,9vw,45px);margin:10px 0;}
   #app .hero .lede {font-size:14px;}
-  #app .hero-actions {gap:9px;margin:15px 0 11px;}
+  #app .hero-actions {gap:9px;margin:13px 0 8px;}
+  #app .hero .hero-microcopy {display:none;}
+  #app .hero {padding-top:16px;padding-bottom:12px;}
   #app .hero-actions button {flex:1 1 135px;width:auto;padding:11px 12px;min-height:48px;font-size:13px;}
   #app .hero-microcopy {gap:7px;font-size:10px;}
   #app .hero-shortcuts {justify-content:flex-start;margin-top:10px;gap:7px;flex-wrap:nowrap;max-width:100%;overflow-x:auto;scrollbar-width:thin;padding:2px 0 5px;}
