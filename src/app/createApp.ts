@@ -384,7 +384,7 @@ export function createApp(root: HTMLDivElement | null): void {
     event.preventDefault();
     const next = event.key === 'Home' ? 0 : event.key === 'End' ? tabs.length - 1 :
       (focused + (event.key === 'ArrowRight' ? 1 : -1) + tabs.length) % tabs.length;
-    const button = tabs[next];
+    const button = tabs[next]!;
     activateCategory(button);
     button.focus();
     button.scrollIntoView({ block: 'nearest', inline: 'nearest' });
