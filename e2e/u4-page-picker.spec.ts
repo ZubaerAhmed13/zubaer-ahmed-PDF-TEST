@@ -61,7 +61,7 @@ test('all-pages remove is blocked before execution; mobile page preview keeps fo
   await expect(page.locator('.df-page-picker [data-picker-alert]')).toContainText('Keep at least one page');
   await expect(page.locator('[data-result-page]')).toBeHidden();
   await page.locator('.df-picker-card').nth(1).locator('[data-pick-select]').click();
-  const previewButton = page.getByRole('button',{name:'Preview page 2'});
+  const previewButton = page.getByRole('button',{name:'Enlarge page 2'});
   await previewButton.click();
   const modal = page.getByRole('dialog',{name:'Page preview'});
   await expect(modal).toBeVisible();
