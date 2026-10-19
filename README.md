@@ -6,14 +6,14 @@ Production: https://zubaerahmed13.github.io/zubaer-ahmed-PDF-TEST/
 
 ## Current release
 
-**A1.1 / v0.10.0** begins the advanced programme with editable PDF region highlights in the existing editor. The [release record](docs/A1_1_RELEASE.md) and [engine decision](docs/A1_FEASIBILITY.md) define its tested scope. All 29 tools and browser-local processing remain.
+**U1 / v0.11.0** introduces dedicated tool and result pages across all 29 tools. Choose a tool, select a file, edit or configure it, then review and download the actual output on a separate page. Return to editing keeps the mounted workspace. See the [release record](docs/U1_RELEASE.md).
 
-- Add native highlights with review comments; reopen supported highlights to move, resize, recolor, duplicate or delete them, with undo/redo.
-- Keep the existing baked-in highlight option. Neither highlight option removes original content.
-- Keep unsupported highlights unchanged and show a clear notice; preserve searchable original text on the native-highlight path.
-- No new dependency, remote processing, application license or hosting change.
+- Compact discovery with early phone search, desktop tool grids and accessible settings/help menus.
+- Direct tool URLs, guarded Back/Forward navigation, phone file/options panels and a bounded preview.
+- Exact-byte downloads with safe filenames, sharing where supported and honest expired-result recovery.
+- Existing editing, highlights, sessions, OCR, workflows and PDF engine limits remain. This release adds no document-upload backend; backend processing is permitted for a future benchmarked capability increment.
 
-Earlier releases: [R7 product finish](docs/R7_RELEASE.md), [R6 repeat work and exports](docs/R6_RELEASE.md), [R5 preservation/safety](docs/R5_RELEASE.md), [R4 OCR/photos/comparison](docs/R4_RELEASE.md), [R3 mobile/offline](docs/R3_RELEASE.md), [R2 editing/reader/forms](docs/R2_RELEASE.md), [R1 document session](docs/R1_RELEASE.md), [R0 baseline](docs/R0_RELEASE.md).
+Earlier releases: [A1.1 native highlights](docs/A1_1_RELEASE.md), [R7 product finish](docs/R7_RELEASE.md), [R6 repeat work and exports](docs/R6_RELEASE.md), [R5 preservation/safety](docs/R5_RELEASE.md), [R4 OCR/photos/comparison](docs/R4_RELEASE.md), [R3 mobile/offline](docs/R3_RELEASE.md), [R2 editing/reader/forms](docs/R2_RELEASE.md), [R1 document session](docs/R1_RELEASE.md), [R0 baseline](docs/R0_RELEASE.md).
 
 ## Tools
 - View, merge, split, remove/extract/organise/rotate and crop pages.

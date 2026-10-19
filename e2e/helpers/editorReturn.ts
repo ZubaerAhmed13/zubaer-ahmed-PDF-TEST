@@ -11,3 +11,10 @@ export async function returnToEditor(page: Page): Promise<void> {
     await expect(result).toBeHidden();
   }
 }
+
+export async function closeToolPage(page: Page): Promise<void> {
+  await page.locator('[data-page-home]').first().click();
+  const confirmation = page.getByRole('dialog', { name: 'Leave unapplied tool changes?', exact: true });
+  if (await confirmation.isVisible()) await confirmation.getByRole('button', { name: 'Leave tool', exact: true }).click();
+  await expect(page.locator('#workspace-dialog')).toBeHidden();
+}

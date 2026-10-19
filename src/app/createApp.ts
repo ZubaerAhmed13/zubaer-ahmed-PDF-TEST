@@ -182,13 +182,14 @@ export function createApp(root: HTMLDivElement | null): void {
   root.querySelector('.hero')!.insertAdjacentElement('afterend', discovery);
 
   let disposeInfo: (() => void) | null = null;
+  let infoReturnFocus: HTMLElement | null = null;
   // A search input consumes native Escape to clear its value. In this modal,
   // Escape consistently dismisses help instead of leaving an invisible blocker.
   infoDialog.addEventListener('keydown', event => {
     if (event.key !== 'Escape') return;
     event.preventDefault(); event.stopPropagation(); infoDialog.close();
   }, true);
-  infoDialog.addEventListener('close', () => { disposeInfo?.(); disposeInfo = null; });
+  infoDialog.addEventListener('close', () => { disposeInfo?.(); disposeInfo = null; const target = infoReturnFocus; infoReturnFocus = null; queueMicrotask(() => { if (target?.isConnected && !infoDialog.open) target.focus({ preventScroll: true }); }); });
   let category = 'all';
   let workspaceGeneration = 0;
   let workspaceTrigger: HTMLElement | null = null;
@@ -361,7 +362,10 @@ export function createApp(root: HTMLDivElement | null): void {
     if (homeLink) { event.preventDefault(); void journey!.home().then(() => { if (homeLink.hash === '#tools') search.focus(); }); return; }
     const actionTarget = (event.target as HTMLElement).closest<HTMLElement>('[data-action]');
     const action = actionTarget?.dataset.action;
-    if (actionTarget) root.querySelector<HTMLDetailsElement>('.settings-menu')?.removeAttribute('open');
+    if (actionTarget) {
+      infoReturnFocus = actionTarget.closest('details.settings-menu')?.querySelector<HTMLElement>('summary') ?? null;
+      root.querySelectorAll<HTMLDetailsElement>('.settings-menu').forEach(menu => menu.removeAttribute('open'));
+    }
     if (action === 'focus-search') {
       search.focus();
       search.scrollIntoView({ behavior: 'smooth', block: 'center' });

@@ -447,6 +447,7 @@ test("direct edits join document revisions and new marks invalidate a stale pend
   await expect(
     page.getByRole("button", { name: "Use result", exact: true }),
   ).toBeEnabled();
+  await returnToEditor(page);
   await page.getByRole("button", { name: "Add comment", exact: true }).click();
   await expect(
     page.getByRole("button", { name: "Use result", exact: true }),

@@ -88,8 +88,8 @@ test('professional optimizer selectively recompresses RGB JPEG XObjects without 
   await page.getByLabel('Search tools').fill('optimize');
   await page.locator('#tool-grid [data-open-tool="compress"]').click();
   const dialog = page.getByRole('region', { name: 'Workspace' });
-  await expect(dialog.getByText('Selective JPEG image recompression')).toBeVisible();
   await dialog.locator('#workspace-file').setInputFiles({ name: 'image-heavy.pdf', mimeType: 'application/pdf', buffer: source });
+  await expect(dialog.getByText('Selective JPEG image recompression')).toBeVisible();
   await dialog.locator('input[name="imageQuality"]').fill('0.70');
   await dialog.locator('input[name="maxImageDimension"]').fill('1000');
   await dialog.getByRole('button', { name: 'Run Optimize PDF' }).click();

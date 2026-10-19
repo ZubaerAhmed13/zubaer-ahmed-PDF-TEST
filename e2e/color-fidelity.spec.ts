@@ -1,4 +1,4 @@
-import { returnToEditor } from './helpers/editorReturn';
+import { returnToEditor, closeToolPage } from './helpers/editorReturn';
 import { expect, test, type Page } from '@playwright/test';
 import JSZip from 'jszip';
 import { PDFDocument, rgb } from 'pdf-lib';
@@ -32,8 +32,7 @@ async function exportImage(page: Page, format: 'png' | 'jpeg', fixture: Buffer):
   const name = Object.keys(zip.files).find((entry) => entry.endsWith(extension));
   if (!name) throw new Error(`No ${extension} page export found in ZIP.`);
   const bytes = Buffer.from(await zip.file(name)!.async('uint8array'));
-  await dialog.getByRole('button', { name: 'Back to all tools' }).click();
-  await expect(dialog).toBeHidden();
+  await closeToolPage(page);
   return bytes;
 }
 

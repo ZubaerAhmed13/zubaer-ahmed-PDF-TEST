@@ -1,3 +1,4 @@
+import { returnToEditor } from './helpers/editorReturn';
 import { expect, test, type Page } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 import { PDFDocument, PDFName } from 'pdf-lib';
@@ -47,6 +48,7 @@ test('redaction reviews individual areas and previews exact export bytes at the 
   await expect(dialog.locator('#pro-results a.download')).toHaveCount(0);
   const download=page.waitForEvent('download');
   await dialog.getByRole('button',{name:'Apply permanent redactions'}).click();
+  await returnToEditor(page);
   await dialog.locator('#pro-results a.download').click();
   const location=await (await download).path(); if(!location)throw Error('No download');
   const bytes=await readFile(location);

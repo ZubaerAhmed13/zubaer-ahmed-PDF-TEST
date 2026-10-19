@@ -4,6 +4,7 @@ import { parsePageRoute, pageRouteHash, type PageRoute } from './pageRoutes';
 import { addShareButton } from './fileExport';
 import type { OutputReady, OutputAction } from './exportReview';
 import { preservationConsequences } from '../pdf/preservationPolicy';
+import { isFavorite, subscribeFavorites, toggleFavorite } from './favoriteStore';
 
 const sourceSelector = '#workspace-file,#pro-pdf,#wf-input,#batch-files';
 const escape = (value: string): string => value.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!));
@@ -27,8 +28,10 @@ export class PageJourney {
   private outputs = new PageResults();
   private urls: string[] = [];
   private sourceCount = 0;
+  private sources: readonly File[] = [];
   private loadFailed = false;
   private configuring = false;
+  private captureFailed = false;
   private hiddenHome = new Map<HTMLElement, boolean>();
   private popHash = '';
   private upload: HTMLElement;
@@ -40,7 +43,7 @@ export class PageJourney {
     dialog.classList.add('workspace-page');
     dialog.setAttribute('role', 'region'); dialog.removeAttribute('aria-modal');
     this.bar = document.createElement('div'); this.bar.className = 'page-toolbar';
-    this.bar.innerHTML = `<button type="button" class="secondary" data-page-home aria-label="Back to all tools">← All tools</button><strong data-page-tool></strong><nav class="page-steps" aria-label="Task progress"><span data-step="upload">1 <b>Select file</b></span><span data-step="edit">2 <b>Work on PDF</b></span><span data-step="result">3 <b>Download</b></span></nav><button type="button" class="secondary" data-action="help">Help</button>`;
+    this.bar.innerHTML = `<button type="button" class="secondary" data-page-home aria-label="Back to all tools">← All tools</button><strong data-page-tool></strong><button type="button" class="secondary page-favorite" data-page-favorite aria-label="Pin tool" aria-pressed="false">☆</button><nav class="page-steps" aria-label="Task progress"><span data-step="upload">1 <b>Select file</b></span><span data-step="edit">2 <b>Work on PDF</b></span><span data-step="result">3 <b>Download</b></span></nav><details class="settings-menu page-support"><summary>Help</summary><div class="settings-menu-items"><button type="button" data-action="help">Find tools and help</button><button type="button" data-action="offline">Help & offline</button></div></details><p class="page-notice" data-page-notice role="alert"></p>`;
     this.upload = document.createElement('section'); this.upload.className = 'page-upload'; this.upload.dataset.uploadStage = '';
     this.upload.innerHTML = `<div class="upload-glyph" aria-hidden="true">↥</div><p class="eyebrow">Your document, your next step</p><h1 tabindex="-1"></h1><p data-upload-description></p><button type="button" class="primary" data-select-source disabled>Select PDF file</button><p class="upload-drop-hint">or drop your file here</p><p data-upload-formats></p><p class="processing-label"><span aria-hidden="true">●</span> Processed on your device</p><p class="upload-scope">Your original stays unchanged. Review the output before sharing.</p><button type="button" class="secondary" data-configure-workflow hidden>Manage workflow recipes</button><p data-upload-status role="status"></p>`;
     this.result = document.createElement('section'); this.result.className = 'page-result'; this.result.dataset.resultPage = ''; this.result.hidden = true;
@@ -54,6 +57,7 @@ export class PageJourney {
       if (target?.closest('[data-select-source]')) workspace.querySelector<HTMLInputElement>(sourceSelector)?.click();
       if (target?.closest('[data-return-editor]') && this.tool) void this.open(this.tool.id);
       if (target?.closest('[data-configure-workflow]')) { this.configuring = true; this.present('tool'); }
+      if (target?.closest('[data-page-favorite]') && this.tool) toggleFavorite(this.tool.id);
       const panel = target?.closest<HTMLButtonElement>('[data-mobile-panel]');
       if (panel) {
         const selected = dialog.dataset.mobilePanel === panel.dataset.mobilePanel ? '' : panel.dataset.mobilePanel;
@@ -72,6 +76,7 @@ export class PageJourney {
       input.files = transfer.files; input.dispatchEvent(new Event('change', { bubbles: true }));
     });
     workspace.addEventListener('docflow-output-ready', event => this.output((event as CustomEvent<OutputReady>).detail));
+    subscribeFavorites(() => this.refreshFavorite());
     window.addEventListener('popstate', event => {
       this.popHash = location.hash;
       void this.navigate(parsePageRoute(location.hash, new Set(tools.map(t => t.id))), { position: event.state?.dfPageIndex });
@@ -109,7 +114,8 @@ export class PageJourney {
     if (route.kind === 'tool') {
       const tool = tools.find(t => t.id === route.toolId); if (!tool) return false;
       if (!reuse) {
-        this.tool = tool; this.sourceCount = 0; this.busy = false; this.loadFailed = false; this.configuring = false; this.invalidate();
+        this.tool = tool; this.sourceCount = 0; this.sources = []; this.busy = false; this.loadFailed = false; this.configuring = false; this.invalidate();
+        this.refreshFavorite();
         this.upload.querySelector<HTMLElement>('[data-configure-workflow]')!.hidden = tool.id !== 'workflow';
         this.upload.querySelector('h1')!.textContent = tool.name;
         this.upload.querySelector('[data-upload-description]')!.textContent = tool.description;
@@ -163,13 +169,16 @@ export class PageJourney {
   }
 
   inputs(files: readonly File[]): void {
+    if (files.length === this.sources.length && files.every((file, index) => file === this.sources[index])) return;
     if (!this.sourceCount && files.length && matchMedia('(max-width:760px)').matches) {
       const inspector = this.options.workspace.querySelector<HTMLDetailsElement>('.direct-inspector');
       if (inspector) inspector.open = false;
     }
     this.sourceCount = files.length;
+    this.sources = [...files];
     this.invalidate();
     if (this.options.root.dataset.page !== 'home') this.present('tool');
+    if (this.route.kind === 'result' && this.tool) void this.open(this.tool.id);
   }
   processing(value: boolean): void {
     this.busy = value;
@@ -178,17 +187,20 @@ export class PageJourney {
     else queueMicrotask(() => this.finish());
   }
   invalidate(): void {
-    this.releaseURLs(); this.outputs.invalidate(); this.resultToken = '';
+    this.releaseURLs(); this.outputs.invalidate(); this.resultToken = ''; this.captureFailed = false;
+    this.bar.querySelector('[data-page-notice]')!.textContent = '';
   }
   private output(detail: OutputReady): void {
-    if (!detail?.link.isConnected || detail.toolId !== this.tool?.id) return;
+    // Queue/draft redraws also rebuild old download links. Only a running export
+    // may move the user to a new result page.
+    if (!this.busy || !detail?.link.isConnected || detail.toolId !== this.tool?.id) return;
     if (!this.resultToken) this.resultToken = this.outputs.start(detail.toolId);
     try { this.outputs.add(this.resultToken, { blob: detail.blob, name: detail.link.download, source: detail.source, identity: detail.link, link: detail.link }); }
-    catch (error) { this.upload.querySelector('[data-upload-status]')!.textContent = String(error); return; }
+    catch (error) { this.captureFailed = true; this.bar.querySelector('[data-page-notice]')!.textContent = error instanceof Error ? error.message : String(error); return; }
     queueMicrotask(() => this.finish());
   }
   private finish(): void {
-    if (this.busy || !this.outputs.get(this.resultToken)) return;
+    if (this.busy || this.captureFailed || !this.outputs.get(this.resultToken)) return;
     if (this.route.kind === 'result' && this.route.id === this.resultToken) { this.renderResult(this.resultToken); return; }
     void this.navigate({ kind: 'result', id: this.resultToken });
   }
@@ -219,7 +231,8 @@ export class PageJourney {
       this.result.innerHTML = `<div class="result-symbol" aria-hidden="true">↺</div><h1 tabindex="-1">This result is no longer available</h1><p>Documents and results stay in this tab. Select your file again after a reload, or return to your current editor.</p><button type="button" class="primary" data-page-home>Choose a tool</button>${this.tool ? '<button type="button" class="secondary" data-return-editor>Return to editing</button>' : ''}`;
       return;
     }
-    this.result.innerHTML = `<div class="result-symbol success" aria-hidden="true">✓</div><p class="eyebrow">${escape(this.tool?.name ?? 'PDF operation')} complete</p><h1 tabindex="-1">Your ${group.outputs.length === 1 ? 'file is' : 'files are'} ready</h1><p>Review your result, then save a copy to your device.</p><div class="page-output-list"></div><div class="result-return"><button type="button" class="secondary" data-return-editor>Return to editing</button><button type="button" class="secondary" data-page-home>Choose another tool</button></div><p class="result-lifetime">This result stays in this tab until you change the source, edit again or close/reload. Your original file is unchanged.</p>`;
+    const status = this.options.workspace.querySelector('#stage,#wf-stage,#batch-stage,#pro-stage')?.textContent ?? '';
+    this.result.innerHTML = `<div class="result-symbol success" aria-hidden="true">✓</div><p class="eyebrow">${escape(this.tool?.name ?? 'PDF operation')} · result</p><h1 tabindex="-1">Your ${group.outputs.length === 1 ? 'file is' : 'files are'} ready</h1><p>Review your result, then save a copy to your device.</p>${/cancel|failed|succeeded|Finished/i.test(status) ? '<p class="result-job-summary">' + escape(status) + '</p>' : ''}<div class="page-output-list"></div><div class="result-return"><button type="button" class="secondary" data-return-editor>Return to editing</button><button type="button" class="secondary" data-page-home>Choose another tool</button></div><p class="result-lifetime">This result stays in this tab until you change the source, edit again or close/reload. Your original file is unchanged.</p>`;
     const list = this.result.querySelector('.page-output-list')!;
     for (const output of group.outputs) this.renderOutput(list, output, group.toolId);
   }
@@ -259,4 +272,11 @@ export class PageJourney {
     list.append(card);
   }
   private releaseURLs(): void { this.urls.forEach(url => URL.revokeObjectURL(url)); this.urls = []; }
+  private refreshFavorite(): void {
+    const button = this.bar.querySelector<HTMLButtonElement>('[data-page-favorite]')!;
+    const active = Boolean(this.tool && isFavorite(this.tool.id));
+    button.disabled = !this.tool; button.textContent = active ? '★' : '☆';
+    button.setAttribute('aria-pressed', String(active));
+    button.setAttribute('aria-label', (active ? 'Unpin ' : 'Pin ') + (this.tool?.name ?? 'tool'));
+  }
 }

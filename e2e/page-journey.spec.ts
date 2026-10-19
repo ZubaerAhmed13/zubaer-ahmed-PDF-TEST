@@ -4,9 +4,9 @@ import AxeBuilder from '@axe-core/playwright';
 import { tools } from '../src/tools/registry';
 
 const base = '/zubaer-ahmed-PDF-TEST/';
-async function sample() {
+async function sample(count = 1) {
   const pdf = await PDFDocument.create(), font = await pdf.embedFont(StandardFonts.Helvetica);
-  pdf.addPage([400, 560]).drawText('Page journey original', { x: 30, y: 500, font, size: 16 });
+  for (let index = 0; index < count; index++) pdf.addPage([400 + index, 560]).drawText('Page journey original ' + (index + 1), { x: 30, y: 500, font, size: 16 });
   return { name: 'journey.pdf', mimeType: 'application/pdf', buffer: Buffer.from(await pdf.save()) };
 }
 
@@ -64,6 +64,30 @@ test('expired result links provide recovery without a fabricated download', asyn
   await expect(page.locator('[data-result-page] a[download]')).toHaveCount(0);
   await page.getByRole('button', { name: 'Choose a tool', exact: true }).click();
   await expect(page.locator('#tool-search')).toBeVisible();
+});
+
+test('split results retain distinct bytes and safe names on the dedicated download page', async ({ page }) => {
+  await page.goto(base);
+  await page.getByRole('button', { name: 'Open a PDF', exact: true }).click();
+  await page.locator('#workspace-file').setInputFiles(await sample(2));
+  await expect(page.locator('#stage')).toContainText('Preview ready');
+  await page.getByRole('combobox', { name: 'Next tool', exact: true }).selectOption('split');
+  await page.locator('input[name="ranges"]').fill('1;2');
+  await page.locator('#run-operation').click();
+  const results = page.locator('[data-result-page]');
+  await expect(results).toBeVisible();
+  const cards = results.locator('.page-output');
+  await expect(cards).toHaveCount(2);
+  await cards.nth(0).getByRole('textbox', { name: 'Output filename' }).fill('same');
+  await cards.nth(1).getByRole('textbox', { name: 'Output filename' }).fill('same');
+  await expect(cards.nth(0).getByRole('link', { name: 'Download PDF', exact: true })).toHaveAttribute('download', 'same.pdf');
+  await expect(cards.nth(1).getByRole('link', { name: 'Download PDF', exact: true })).toHaveAttribute('download', 'same-2.pdf');
+  const pending = page.waitForEvent('download');
+  await cards.nth(1).getByRole('link', { name: 'Download PDF', exact: true }).click();
+  const download = await pending;
+  const stream = await download.createReadStream(), chunks: Buffer[] = [];
+  for await (const chunk of stream!) chunks.push(Buffer.from(chunk));
+  expect((await PDFDocument.load(Buffer.concat(chunks))).getPage(0).getWidth()).toBe(401);
 });
 
 test('every stable tool opens its own page and accepts a direct link', async ({ page }) => {

@@ -43,6 +43,7 @@ test('compare two PDFs and report textual and visual changes with a screenshot o
   ]);
   await dialog.getByRole('button', { name: 'Run Compare PDFs' }).click();
   await expect(dialog.locator('#stage')).toHaveText('Comparison complete', { timeout: 45_000 });
+  await returnToEditor(page);
   const summary = dialog.locator('#pdf-comparison-results');
   await expect(summary).toContainText('1 changed page');
   await expect(summary).toContainText('text changed');

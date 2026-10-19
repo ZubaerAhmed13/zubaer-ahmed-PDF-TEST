@@ -92,6 +92,7 @@ test('prepared mobile core edits and exports with offline Chromium/Firefox and s
   await page.locator('#workspace-file').setInputFiles({ name: 'mobile.pdf', mimeType: 'application/pdf', buffer: await fixture() });
   await expect(page.locator('#stage')).toContainText('Editing page 1');
   expect(await page.evaluate(() => window.dispatchEvent(new Event('beforeunload', { cancelable: true })))).toBe(false);
+  await page.locator('.page-support > summary').click();
   await page.getByRole('button', { name: 'Help & offline', exact: true }).click();
   if (browserName !== 'webkit') await expect(page.locator('[data-network]')).toContainText('offline');
   await page.getByRole('dialog', { name: 'Offline and storage' }).getByRole('button', { name: 'Close', exact: true }).click();
@@ -103,6 +104,7 @@ test('prepared mobile core edits and exports with offline Chromium/Firefox and s
   const x = Number(await page.locator('[data-properties] [name=x]').inputValue());
   await page.getByRole('button', { name: 'Move right', exact: true }).click();
   await expect(page.locator('[data-properties] [name=x]')).toHaveValue(String(x + 5));
+  await page.locator('.direct-inspector > summary').click();
   await page.getByRole('button', { name: 'Pan page', exact: true }).click();
   await expect(page.locator('.direct-overlay')).toHaveAttribute('data-pan', 'true');
   const touchAction = await page.locator('.direct-overlay').evaluate(el => getComputedStyle(el).touchAction);
@@ -180,7 +182,7 @@ test('system sharing keeps user activation, shares exact export bytes, and retai
   await page.getByRole('button', { name: 'Run Edit PDF', exact: true }).click();
   await expect(page.locator('#stage')).toContainText('Edits ready');
   await page.getByRole('button', { name: 'Save / share edited.pdf', exact: true }).click();
-  await expect(page.locator('.file-share-status')).toContainText('Sharing cancelled');
+  await expect(page.locator('[data-result-page] .file-share-status')).toContainText('Sharing cancelled');
   await expect(page.locator('html')).toHaveAttribute('data-share-gesture', 'true');
   const bytes = await exported(page, 'Download edited PDF');
   await expect(page.locator('html')).toHaveAttribute('data-share-bytes', String(bytes.length));
@@ -205,7 +207,12 @@ test('cancelled pointer movement restores its starting geometry and keyboard pro
   await page.getByRole('button', { name: 'Object properties', exact: true }).click();
   await expect(page.locator('.direct-inspector summary')).toBeFocused();
   await page.setViewportSize({ width: 640, height: 390 });
-  expect((await page.locator('#workspace-dialog').boundingBox())!.height).toBeLessThanOrEqual(390);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
+  const inspector = page.locator('.direct-inspector');
+  expect((await inspector.boundingBox())!.height).toBeLessThanOrEqual(390 * .65 + 1);
+  await inspector.locator('summary').click();
+  await page.getByRole('button', { name: 'Run Edit PDF', exact: true }).scrollIntoViewIfNeeded();
+  await expect(page.getByRole('button', { name: 'Run Edit PDF', exact: true })).toBeVisible();
 });
 
 

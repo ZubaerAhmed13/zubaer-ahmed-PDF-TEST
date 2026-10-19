@@ -1,3 +1,4 @@
+import { returnToEditor } from './helpers/editorReturn';
 import { test, expect } from '@playwright/test';
 import { PDFDocument } from 'pdf-lib';
 import { readFile } from 'node:fs/promises';
@@ -66,6 +67,8 @@ test('workspace finder preserves the captured document on dismissal and exports 
   await expect(info).toBeHidden();
   await expect(workspace.locator('#file-list')).toContainText('private-source.pdf');
   await workspace.locator('#run-operation').click();
+  await expect(page.locator('[data-result-page]')).toBeVisible();
+  await returnToEditor(page);
   const link = workspace.locator('#result a.download').first();
   await expect(link).toBeVisible();
   const wait = page.waitForEvent('download'); await link.click();

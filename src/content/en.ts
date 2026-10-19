@@ -18,8 +18,8 @@ export const productCopy = {
   } as Record<string, string[]>,
   limits: 'Existing page-text replacement, Office conversion, certificate signing, PDF/A and PDF/UA export are not available. Added text and visual signatures have their own tools.',
   release: {
-    title: 'A1.1 · Editable PDF highlights',
-    changes: ['Editable region highlights with review comments in Edit PDF.', 'Reopen supported highlights to move, resize, recolor, duplicate or delete them, with undo/redo.', 'Unsupported highlights are kept unchanged. Original page text stays searchable; highlights do not remove content.']
+    title: 'U1 · A clearer document journey',
+    changes: ['Choose a tool, select your file and work on a dedicated page.', 'Review, rename and download real outputs on a separate result page; return to editing without starting over.', 'All 29 tools remain, with focused desktop layouts and phone panels.']
   },
   acceptance: 'Automated browser checks cover declared scenarios. Physical-device, manual screen-reader, Safari offline execution, real-account cloud and moderated usability acceptance remain unverified.'
 } as const;

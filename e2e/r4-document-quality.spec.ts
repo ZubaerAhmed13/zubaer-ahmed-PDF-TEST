@@ -18,7 +18,7 @@ test('R4 aligns inserted/moved pages and navigates word changes and a safe repor
     { name: 'before.pdf', mimeType: 'application/pdf', buffer: await pdfTexts(['Alpha contract total 100 euros', 'Beta delivery tomorrow', 'Gamma final terms']) },
     { name: 'after.pdf', mimeType: 'application/pdf', buffer: await pdfTexts(['New cover', 'Gamma final terms', 'Alpha contract total 120 euros', 'Beta delivery tomorrow']) }
   ]);
-  await dialog.getByRole('button', { name: 'Run Compare PDFs' }).click(); await expect(dialog.locator('#stage')).toHaveText('Comparison complete');
+  await dialog.getByRole('button', { name: 'Run Compare PDFs' }).click(); await expect(dialog.locator('#stage')).toHaveText('Comparison complete'); await returnToEditor(page);
   const results = dialog.locator('#pdf-comparison-results');
   await expect(results).toContainText('missing-left'); await expect(results).toContainText('moved');
   await results.getByLabel('Matched pages', { exact: true }).selectOption({ label: 'A 1 ↔ B 3: different' });
@@ -84,7 +84,7 @@ test('R4 incomplete comparison and literal Markdown extraction remain explicit',
   const dialog = await open(page, 'compare', 'compare'); await dialog.getByLabel('Source files', { exact: true }).setInputFiles([
     { name: 'a.pdf', mimeType: 'application/pdf', buffer: await pdfTexts(['Alpha', 'Beta']) }, { name: 'b.pdf', mimeType: 'application/pdf', buffer: await pdfTexts(['Alpha', 'Beta']) }
   ]);
-  await dialog.locator('input[name=maxPages]').fill('1'); await dialog.getByRole('button', { name: 'Run Compare PDFs' }).click(); await expect(dialog.locator('#stage')).toHaveText('Comparison complete'); await expect(dialog.locator('#pdf-comparison-results')).toContainText('Incomplete comparison');
+  await dialog.locator('input[name=maxPages]').fill('1'); await dialog.getByRole('button', { name: 'Run Compare PDFs' }).click(); await expect(dialog.locator('#stage')).toHaveText('Comparison complete'); await returnToEditor(page); await expect(dialog.locator('#pdf-comparison-results')).toContainText('Incomplete comparison');
   page.on('dialog', d => d.accept()); await page.goto(app); const extraction = await open(page, 'text-search', 'extract text'); await extraction.getByLabel('Source files', { exact: true }).setInputFiles({ name: 'literal.pdf', mimeType: 'application/pdf', buffer: await pdfTexts(['# title <script> [link](x)', 'Second page']) });
   await extraction.getByRole('button', { name: /Run Search/ }).click(); await expect(extraction.locator('#stage')).toHaveText('Complete'); const markdown = (await download(page, extraction, /^Download extracted-text\.md/)).toString(); expect(markdown).toContain('\\# title \\<script\\>'); expect(markdown).toContain('## Page 2');
   await returnToEditor(page);
