@@ -1,4 +1,3 @@
-import { returnToEditor } from './helpers/editorReturn';
 import { test, expect } from '@playwright/test';
 import { createServer } from 'node:http';
 import { readFile } from 'node:fs/promises';
@@ -62,6 +61,13 @@ test('production worker rejects a broken install and safely forward-recovers a s
     revision = 'recovered';
     await page.evaluate(async () => { const registration = await navigator.serviceWorker.ready; await registration.update(); });
     await expect(page.locator('[data-apply-update]')).toBeVisible({ timeout: 45000 });
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.getByRole('button', { name: 'Resume document', exact: true }).click();
+    await expect(page.locator('#stage')).toHaveText('Preview ready');
+    await page.getByRole('combobox', { name: 'Next tool', exact: true }).selectOption('rotate');
+    await page.getByRole('button', { name: 'Run Rotate pages', exact: true }).click({ timeout: 5000 });
+    await expect(page.locator('[data-result-page]')).toBeVisible();
+    await page.getByRole('button', { name: 'Back to all tools', exact: true }).click();
     await page.locator('[data-apply-update]').click();
     const guard = page.getByRole('dialog', { name: 'Clear this tab’s work?' });
     await guard.getByRole('button', { name: 'Keep working', exact: true }).click();
@@ -76,8 +82,7 @@ test('production worker rejects a broken install and safely forward-recovers a s
     await page.locator('#workspace-file').setInputFiles({ name: 'retry.pdf', mimeType: 'application/pdf', buffer: source });
     await page.locator('#run-operation').click();
     await expect(page.locator('[data-result-page]')).toBeVisible();
-    await returnToEditor(page);
-    const result = page.locator('#result a.download').first(); await expect(result).toBeVisible();
+    const result = page.locator('[data-result-page]').getByRole('link', { name: 'Download PDF', exact: true }); await expect(result).toBeVisible();
     const wait = page.waitForEvent('download'); await result.click(); const file = await wait;
     const reopened = await PDFDocument.load(await readFile((await file.path())!));
     expect(reopened.getPageCount()).toBe(1); expect(reopened.getPage(0).getWidth()).toBe(331);

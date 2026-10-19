@@ -52,7 +52,7 @@ function showUpdate(registration: ServiceWorkerRegistration): void {
     navigator.serviceWorker.addEventListener('message', onMessage);
     waiting.postMessage({ type: 'SKIP_WAITING' });
   });
-  document.body.append(banner);
+  document.body.prepend(banner);
 }
 
 function watchForUpdates(registration: ServiceWorkerRegistration): void {

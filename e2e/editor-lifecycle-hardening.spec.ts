@@ -16,6 +16,9 @@ test('lazy-load failure is recoverable and Retry really opens the editor', async
       await route.abort('failed');
       return;
     }
+    if (new URL(page.url()).searchParams.has('docflowRetry')) {
+      await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
+    }
     await route.continue();
   });
   await page.goto(appUrl);
@@ -36,7 +39,8 @@ test('lazy-load failure is recoverable and Retry really opens the editor', async
   await expect(dialog.getByRole('heading', { name: 'Merge PDF', exact: true })).toBeVisible();
   await expect(dialog.locator('.workspace-loading')).toHaveCount(0);
   await expect(dialog.locator('[data-load-error-for="merge"]')).toHaveCount(0);
-  expect(await page.evaluate(() => sessionStorage.getItem('docflow.retry-tool.v1'))).toBeNull();
+  await expect.poll(() => page.evaluate(() => sessionStorage.getItem('docflow.retry-tool.v1'))).toBeNull();
+  await expect(page.locator('[data-select-source]')).toBeEnabled();
 });
 
 test('closing during a delayed lazy load permanently invalidates that open session', async ({ page }) => {

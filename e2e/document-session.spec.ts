@@ -24,7 +24,7 @@ async function begin(page: Page, bytes = fixture()): Promise<void> {
 async function next(page: Page, id: string): Promise<void> {
   await page.getByRole('combobox', { name: 'Next tool', exact: true }).selectOption(id);
   await expect(page.getByRole('region', { name: 'Workspace', exact: true }).getByRole('heading', { name: tools.find(tool => tool.id === id)!.name, exact: true })).toBeVisible();
-  if ((page.viewportSize()?.width ?? 1280) <= 760 && await page.locator('.legacy-settings-pane').count()) await page.locator('[data-mobile-panel="options"]').click();
+  if ((page.viewportSize()?.width ?? 1280) <= 760) await page.locator('[data-mobile-panel="options"]').click();
 }
 async function apply(page: Page): Promise<void> {
   await expect(page.getByRole('button', { name: 'Use result', exact: true })).toBeEnabled();
