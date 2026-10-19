@@ -10,8 +10,9 @@ export function parsePageChoice(value: string, count: number): Set<number> | nul
   if (!count || !/^\d+(?:-\d+)?(?:\s*,\s*\d+(?:-\d+)?)*$/.test(value.trim())) return null;
   for (const entry of value.split(',')) {
     const [start, end] = entry.trim().split('-').map(Number);
+    if (start === undefined || !Number.isSafeInteger(start) || start < 1) return null;
     const last = end ?? start;
-    if (!start || !Number.isSafeInteger(start) || !Number.isSafeInteger(last) || start < 1 || last < start || last > count) return null;
+    if (!Number.isSafeInteger(last) || last < start || last > count) return null;
     for (let page = start; page <= last; page++) selection.add(page);
   }
   return selection;
