@@ -10,7 +10,9 @@ test('home consistently exposes a retained document after leaving a dedicated to
     name: 'my-document.pdf', mimeType: 'application/pdf', buffer: Buffer.from(await pdf.save())
   });
   await expect(page.locator('.session-identity')).toContainText('my-document.pdf');
+  await expect(page.locator('#stage')).toContainText('Preview ready');
   await page.getByRole('button', { name: 'Back to all tools', exact: true }).click();
+  await expect(page).toHaveURL(/\/zubaer-ahmed-PDF-TEST\/$/);
   await expect(page.getByRole('button', { name: 'Resume document', exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Resume document', exact: true }).click();
   await expect(page.locator('.session-identity')).toContainText('my-document.pdf');
