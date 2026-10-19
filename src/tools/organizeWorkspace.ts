@@ -1,5 +1,6 @@
 import { workspaceRuntime } from '../app/workspaceRuntime';
 import '../styles/organize.css';
+import '../styles/organize-u3.css';
 import type { ToolDefinition } from './registry';
 import { mountWorkspace as mountRecoveredWorkspace } from './workspaceWithRecovery';
 import { createPreview, type PreviewController } from '../pdf/render';
@@ -50,10 +51,29 @@ export function mountWorkspace(container: HTMLDivElement, tool: ToolDefinition):
       <button type="button" class="secondary" data-organizer-action="undo" disabled>Undo</button>
       <button type="button" class="secondary" data-organizer-action="redo" disabled>Redo</button>
     </div>
+    <p class="organizer-selection-hint">Select pages by tapping a thumbnail. Hold Shift to select a range. Drag to reorder, or use the Move buttons.</p>
     <div class="organizer-loading" data-organizer-status role="status" aria-live="polite">Choose a PDF to build page thumbnails.</div>
     <div class="organizer-grid" data-organizer-grid aria-label="PDF pages"></div>
   `;
   form.insertAdjacentElement('afterbegin', panel);
+
+  // Keep the native modal detached until Preview is explicitly requested.
+  // Unopened dialogs must not alter the existing PDF session or form lifecycle.
+  const previewDialog = document.createElement('dialog');
+  previewDialog.className = 'organizer-preview-dialog';
+  previewDialog.setAttribute('aria-labelledby', 'organizer-preview-heading');
+  previewDialog.innerHTML = `
+      <header>
+        <div><p class="organizer-preview-kicker">PAGE PREVIEW</p><h2 id="organizer-preview-heading" data-preview-title>Preview page</h2></div>
+        <button type="button" class="secondary" data-preview-close aria-label="Close page preview">✕</button>
+      </header>
+      <div class="organizer-preview-canvas-wrap"><canvas data-preview-canvas aria-label="Enlarged PDF page" role="img"></canvas></div>
+      <p data-preview-status role="status"></p>
+      <footer>
+        <button type="button" class="secondary" data-preview-select>Select this page</button>
+        <button type="button" class="primary" data-preview-close>Done</button>
+      </footer>
+  `;
 
   const summary = panel.querySelector<HTMLElement>('.organizer-summary');
   const status = panel.querySelector<HTMLElement>('[data-organizer-status]');
@@ -62,7 +82,9 @@ export function mountWorkspace(container: HTMLDivElement, tool: ToolDefinition):
   const redoButton = panel.querySelector<HTMLButtonElement>('[data-organizer-action="redo"]');
   const duplicateSelectedButton = panel.querySelector<HTMLButtonElement>('[data-organizer-action="duplicate-selected"]');
   const deleteSelectedButton = panel.querySelector<HTMLButtonElement>('[data-organizer-action="delete-selected"]');
-  if (!summary || !status || !grid || !undoButton || !redoButton || !duplicateSelectedButton || !deleteSelectedButton) return;
+  const previewCanvas = previewDialog?.querySelector<HTMLCanvasElement>('[data-preview-canvas]');
+  const previewStatus = previewDialog?.querySelector<HTMLElement>('[data-preview-status]');
+  if (!summary || !status || !grid || !undoButton || !redoButton || !duplicateSelectedButton || !deleteSelectedButton || !previewDialog || !previewCanvas || !previewStatus) return;
 
   let sourceFile: File | null = null;
   let previewController: PreviewController | null = null;
@@ -73,6 +95,10 @@ export function mountWorkspace(container: HTMLDivElement, tool: ToolDefinition):
   let syncingOrder = false;
   let draggingId: string | null = null;
   const selectedIds = new Set<string>();
+  let selectionAnchorId: string | null = null;
+  let previewItemId: string | null = null;
+  let previewReturnFocus: HTMLElement | null = null;
+  let previewGeneration = 0;
   const undoStack: number[][] = [];
   const redoStack: number[][] = [];
   let disposed = false;
@@ -86,7 +112,21 @@ export function mountWorkspace(container: HTMLDivElement, tool: ToolDefinition):
     deleteSelectedButton.disabled = selectedIds.size === 0;
   };
 
+  const syncSelectionUI = (): void => {
+    for (const card of grid.querySelectorAll<HTMLElement>('.organizer-card')) {
+      const selected = selectedIds.has(card.dataset.itemId ?? '');
+      card.dataset.selected = String(selected);
+      const checkbox = card.querySelector<HTMLInputElement>('[data-select-item]');
+      if (checkbox) checkbox.checked = selected;
+      card.querySelector<HTMLButtonElement>('[data-toggle-item]')?.setAttribute('aria-pressed', String(selected));
+    }
+    const previewButton = previewDialog.querySelector<HTMLButtonElement>('[data-preview-select]');
+    if (previewButton && previewItemId) {
+      previewButton.textContent = selectedIds.has(previewItemId) ? 'Deselect this page' : 'Select this page';
+    }
+  };
   const updateSummary = (): void => {
+    syncSelectionUI();
     summary.textContent = `${items.length} output page${items.length === 1 ? '' : 's'} from ${sourcePageCount} source page${sourcePageCount === 1 ? '' : 's'} · ${selectedIds.size} selected`;
     updateButtons();
     runtime.selection(items.filter(item => selectedIds.has(item.id)).map(item => item.sourcePage));
@@ -168,8 +208,13 @@ export function mountWorkspace(container: HTMLDivElement, tool: ToolDefinition):
           <label><input class="organizer-select" type="checkbox" data-select-item="${item.id}" ${selectedIds.has(item.id) ? 'checked' : ''}> Select</label>
           <strong>#${index + 1}</strong>
         </div>
-        <canvas data-source-page="${item.sourcePage}" data-thumbnail-state="idle" aria-hidden="true"></canvas>
-        <div><strong>Source page ${item.sourcePage}</strong></div>
+        <div class="organizer-thumbnail-wrap">
+          <button type="button" class="organizer-page-select" data-toggle-item="${item.id}" aria-label="Select output page ${index + 1}, source page ${item.sourcePage}" aria-pressed="${selectedIds.has(item.id)}">
+            <canvas data-source-page="${item.sourcePage}" data-thumbnail-state="idle" aria-hidden="true"></canvas>
+            <span class="organizer-thumbnail-legend">Page ${item.sourcePage}</span>
+          </button>
+          <button type="button" class="organizer-preview-trigger" data-preview-item="${item.id}" aria-label="Preview source page ${item.sourcePage}">⤢ <span>Preview</span></button>
+        </div>
         <div class="organizer-card-actions">
           <button type="button" class="secondary" data-card-action="left" aria-label="Move source page ${item.sourcePage} left" ${index === 0 ? 'disabled' : ''}>← Move</button>
           <button type="button" class="secondary" data-card-action="right" aria-label="Move source page ${item.sourcePage} right" ${index === items.length - 1 ? 'disabled' : ''}>Move →</button>
@@ -282,12 +327,54 @@ export function mountWorkspace(container: HTMLDivElement, tool: ToolDefinition):
     renderGrid();
   };
 
+  const toggleSelection = (itemId: string, shift = false): void => {
+    const position = items.findIndex(item => item.id === itemId);
+    if (position < 0) return;
+    const anchor = items.findIndex(item => item.id === selectionAnchorId);
+    if (shift && anchor >= 0) {
+      for (let i = Math.min(anchor, position); i <= Math.max(anchor, position); i += 1) {
+        selectedIds.add(items[i]!.id);
+      }
+    } else {
+      if (selectedIds.has(itemId)) selectedIds.delete(itemId);
+      else selectedIds.add(itemId);
+      selectionAnchorId = itemId;
+    }
+    updateSummary();
+  };
+
+  const openPagePreview = async (itemId: string, trigger: HTMLElement): Promise<void> => {
+    const item = items.find(page => page.id === itemId);
+    const controller = previewController;
+    if (!item || !controller || disposed) return;
+    const generation = ++previewGeneration;
+    previewItemId = itemId;
+    previewReturnFocus = trigger;
+    previewDialog.querySelector<HTMLElement>('[data-preview-title]')!.textContent =
+      `Source page ${item.sourcePage}`;
+    previewStatus.textContent = 'Rendering larger preview…';
+    updateSummary();
+    if (!previewDialog.isConnected) document.body.append(previewDialog);
+    if (!previewDialog.open) previewDialog.showModal();
+    try {
+      const rendered = await controller.renderThumbnail(item.sourcePage, previewCanvas, 0.76);
+      if (disposed || generation !== previewGeneration || !previewDialog.open) return;
+      previewStatus.textContent = rendered ? `Source page ${item.sourcePage} · click Done to return` : 'Preview unavailable. You can still select and move this page.';
+    } catch {
+      if (generation === previewGeneration && previewDialog.open) previewStatus.textContent = 'Preview unavailable. You can still select and move this page.';
+    }
+  };
+
   const onGridClick = (event: MouseEvent): void => {
     const target = event.target instanceof Element ? event.target : null;
-    const actionButton = target?.closest<HTMLElement>('[data-card-action]');
     const card = target?.closest<HTMLElement>('.organizer-card');
-    if (!actionButton || !card) return;
-    applyCardAction(card, actionButton.dataset.cardAction ?? '');
+    if (!card) return;
+    const preview = target?.closest<HTMLButtonElement>('[data-preview-item]');
+    if (preview?.dataset.previewItem) { void openPagePreview(preview.dataset.previewItem, preview); return; }
+    const selector = target?.closest<HTMLButtonElement>('[data-toggle-item]');
+    if (selector?.dataset.toggleItem) { toggleSelection(selector.dataset.toggleItem, event.shiftKey); return; }
+    const actionButton = target?.closest<HTMLElement>('[data-card-action]');
+    if (actionButton) applyCardAction(card, actionButton.dataset.cardAction ?? '');
   };
 
   const onGridChange = (event: Event): void => {
@@ -295,9 +382,24 @@ export function mountWorkspace(container: HTMLDivElement, tool: ToolDefinition):
     if (!checkbox?.dataset.selectItem) return;
     if (checkbox.checked) selectedIds.add(checkbox.dataset.selectItem);
     else selectedIds.delete(checkbox.dataset.selectItem);
-    const card = checkbox.closest<HTMLElement>('.organizer-card');
-    if (card) card.dataset.selected = String(checkbox.checked);
+    selectionAnchorId = checkbox.dataset.selectItem;
     updateSummary();
+  };
+
+  const onPreviewClick = (event: MouseEvent): void => {
+    const target = event.target instanceof Element ? event.target : null;
+    if (target?.closest('[data-preview-close]')) previewDialog.close();
+    if (target?.closest('[data-preview-select]') && previewItemId) {
+      toggleSelection(previewItemId);
+      previewDialog.close();
+    }
+  };
+  const onPreviewClose = (): void => {
+    previewGeneration += 1;
+    previewCanvas.width = previewCanvas.height = 1;
+    const focus = previewReturnFocus;
+    previewReturnFocus = null;
+    if (focus?.isConnected) queueMicrotask(() => focus.focus({ preventScroll: true }));
   };
 
   const onToolbarClick = (event: MouseEvent): void => {
@@ -357,7 +459,7 @@ export function mountWorkspace(container: HTMLDivElement, tool: ToolDefinition):
 
   const onDragStart = (event: DragEvent): void => {
     const target = event.target instanceof Element ? event.target : null;
-    if (target?.closest('button,input')) return;
+    if (target?.closest('[data-card-action],[data-preview-item],input')) return;
     const card = target?.closest<HTMLElement>('.organizer-card');
     if (!card?.dataset.itemId) return;
     draggingId = card.dataset.itemId;
@@ -422,6 +524,8 @@ export function mountWorkspace(container: HTMLDivElement, tool: ToolDefinition):
 
   grid.addEventListener('click', onGridClick);
   grid.addEventListener('change', onGridChange);
+  previewDialog.addEventListener('click', onPreviewClick);
+  previewDialog.addEventListener('close', onPreviewClose);
   grid.addEventListener('dragstart', onDragStart);
   grid.addEventListener('dragover', onDragOver);
   grid.addEventListener('drop', onDrop);
@@ -440,6 +544,10 @@ export function mountWorkspace(container: HTMLDivElement, tool: ToolDefinition):
     const controller = previewController;
     previewController = null;
     if (controller) void controller.destroy().catch(() => undefined);
+    if (previewDialog.open) previewDialog.close();
+    previewDialog.remove();
+    previewDialog.removeEventListener('click', onPreviewClick);
+    previewDialog.removeEventListener('close', onPreviewClose);
     grid.removeEventListener('click', onGridClick);
     grid.removeEventListener('change', onGridChange);
     grid.removeEventListener('dragstart', onDragStart);
