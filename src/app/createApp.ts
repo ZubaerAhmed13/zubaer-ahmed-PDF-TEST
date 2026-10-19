@@ -64,6 +64,13 @@ export function createApp(root: HTMLDivElement | null): void {
               <button class="primary" type="button" data-action="open">Open a PDF</button>
               <button class="secondary" type="button" data-action="focus-search">Explore all tools</button>
             </div>
+            <div class="hero-shortcuts" aria-label="Popular PDF tools">
+              <span>Jump into a tool</span>
+              <button type="button" data-open-tool="merge"><span aria-hidden="true">⊕</span> Merge PDFs</button>
+              <button type="button" data-open-tool="compress"><span aria-hidden="true">⇲</span> Compress PDF</button>
+              <button type="button" data-open-tool="edit-pdf"><span aria-hidden="true">✎</span> Edit PDF</button>
+              <button type="button" data-open-tool="organize"><span aria-hidden="true">▦</span> Organize pages</button>
+            </div>
             <div class="hero-microcopy" aria-label="Product benefits">
               <span><b class="hero-check" aria-hidden="true">✓</b> ${tools.length} focused tools</span>
               <span><b class="hero-check" aria-hidden="true">✓</b> Original files preserved</span>
@@ -124,8 +131,8 @@ export function createApp(root: HTMLDivElement | null): void {
             </label>
           </div>
           <div class="category-tabs" role="tablist" aria-label="Tool categories">
-            <button role="tab" aria-selected="true" data-category="all">All tools</button>
-            ${toolCategories.map((category) => `<button role="tab" aria-selected="false" data-category="${category.id}">${category.label}</button>`).join('')}
+            <button role="tab" aria-selected="true" aria-controls="tool-grid" data-category="all">All tools</button>
+            ${toolCategories.map((category) => `<button role="tab" aria-selected="false" aria-controls="tool-grid" data-category="${category.id}">${category.label}</button>`).join('')}
           </div>
           <p class="discovery-count" role="status" data-discovery-count></p><div id="tool-grid" class="tool-grid"></div>
         </section>
@@ -349,12 +356,34 @@ export function createApp(root: HTMLDivElement | null): void {
   };
 
   search.addEventListener('input', render);
-  root.querySelector('.category-tabs')?.addEventListener('click', (event) => {
-    const button = (event.target as HTMLElement).closest<HTMLButtonElement>('[data-category]');
-    if (!button?.dataset.category) return;
+  const activateCategory = (button: HTMLButtonElement): void => {
+    if (!button.dataset.category) return;
     category = button.dataset.category;
-    root.querySelectorAll<HTMLButtonElement>('[role="tab"]').forEach((tab) => tab.setAttribute('aria-selected', String(tab === button)));
+    root.querySelectorAll<HTMLButtonElement>('.category-tabs [role="tab"]').forEach(tab => {
+      const selected = tab === button;
+      tab.setAttribute('aria-selected', String(selected));
+      tab.tabIndex = selected ? 0 : -1;
+    });
     render();
+  };
+  const categoryTabs = root.querySelector<HTMLElement>('.category-tabs');
+  categoryTabs?.querySelectorAll<HTMLButtonElement>('[role="tab"]').forEach((tab, index) => { tab.tabIndex = index === 0 ? 0 : -1; });
+  categoryTabs?.addEventListener('click', (event) => {
+    const button = (event.target as HTMLElement).closest<HTMLButtonElement>('[data-category]');
+    if (button) activateCategory(button);
+  });
+  categoryTabs?.addEventListener('keydown', event => {
+    if (!['ArrowRight', 'ArrowLeft', 'Home', 'End'].includes(event.key)) return;
+    const tabs = [...categoryTabs.querySelectorAll<HTMLButtonElement>('[role="tab"]')];
+    const focused = event.target instanceof HTMLButtonElement ? tabs.indexOf(event.target) : -1;
+    if (focused < 0) return;
+    event.preventDefault();
+    const next = event.key === 'Home' ? 0 : event.key === 'End' ? tabs.length - 1 :
+      (focused + (event.key === 'ArrowRight' ? 1 : -1) + tabs.length) % tabs.length;
+    const button = tabs[next];
+    activateCategory(button);
+    button.focus();
+    button.scrollIntoView({ block: 'nearest', inline: 'nearest' });
   });
 
   root.addEventListener('click', (event) => {
