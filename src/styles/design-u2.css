@@ -286,3 +286,24 @@ html #workspace-dialog.workspace-page .legacy-editor-shell {
 /* The catalogue icon and quality chips need AA-level text contrast, not only decorative colour. */
 #app .tool-card .tool-meta span {color:#485771!important;}
 #app .tool-card .tool-category-label {color:var(--tool-accent);}
+
+/* The direct editor's page controls and mode buttons share one concise
+   desktop control row where space allows. This keeps the PDF canvas above the
+   fold (including WebKit) without removing controls or constraining zoom. */
+@media (min-width: 761px) {
+  .workspace-page .direct-editor > .direct-navigation,
+  .workspace-page .direct-editor > .direct-pan-controls {
+    display: inline-flex;
+    vertical-align: middle;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 7px;
+    margin: 4px 11px 8px 0;
+  }
+}
+@media (max-width: 760px) {
+  .workspace-page .direct-editor > .direct-navigation,
+  .workspace-page .direct-editor > .direct-pan-controls {
+    display: flex;
+  }
+}
