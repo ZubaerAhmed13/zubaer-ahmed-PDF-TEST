@@ -1,7 +1,7 @@
 import { runWorkerOperation } from '../pdf/workerClient';
 import type { OperationResult, WorkerOperation } from '../pdf/types';
 import { createPreview, type PreviewController } from '../pdf/render';
-import { activeTools, categoryLabel, getTool, groups, v2Tools, type V2Tool } from './catalog';
+import { activeTools, getTool, groups, v2Tools, type V2Tool } from './catalog';
 
 const esc=(value:string):string=>value.replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]!));
 const bytes=(value:number):string=>value<1024?value+' B':value<1048576?(value/1024).toFixed(1)+' KB':(value/1048576).toFixed(1)+' MB';
@@ -46,7 +46,6 @@ function range(pages:Iterable<number>):string{
   parts.push(start===last?String(start):start+'-'+last);
   return parts.join(',');
 }
-const defaultFeatured=['merge','split','organize','compress','edit-pdf','forms'];
 class DocFlowV2 {
   private files:File[]=[];
   private result:OperationResult|null=null;
