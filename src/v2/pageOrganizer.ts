@@ -13,7 +13,7 @@ export function mountPageOrganizer(
 ): PageOrganizer {
   type Snapshot = number[];
   let order=Array.from({length:count},(_,i)=>i+1);
-  let history: Snapshot[]=[];
+  const history: Snapshot[]=[];
   let future: Snapshot[]=[];
   let focusIndex=-1;
   host.classList.add('df2-page-plan');
