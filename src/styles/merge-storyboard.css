@@ -1,0 +1,71 @@
+/* U5: honest, document-first PDF merge storyboard. Native PDF reader and the
+ * unchanged worker remain available below; only presentation/file order changes. */
+.workspace[data-tool-id="merge"] .legacy-live-preview:has(> .df-merge-storyboard) {
+  display:grid;grid-template-rows:auto minmax(0,1fr);overflow:hidden;background:#f4f6fc;
+}
+.workspace[data-tool-id="merge"] .legacy-live-preview>.pre-edit-preview {
+  grid-row:2;min-height:0;overflow:hidden;
+}
+.df-merge-storyboard {
+  grid-row:1;min-height:0;max-height:min(37dvh,285px);
+  overflow:hidden;background:#fff;border-bottom:1px solid #e0e5ef;
+}
+.df-merge-storyboard[hidden]{display:none!important;}
+.df-merge-storyboard-header {
+  padding:11px 18px 8px;display:flex;justify-content:space-between;align-items:center;gap:12px;
+  color:#1a2942;background:#fff;
+}
+.df-merge-storyboard-header>div{min-width:0;display:flex;flex-direction:column;gap:4px;}
+.df-merge-storyboard-header strong{font-size:15px;font-weight:830;letter-spacing:-.02em;}
+.df-merge-storyboard-header>div>span{font-size:11px;color:#596780;line-height:1.4;}
+.df-merge-storyboard-header>[data-storyboard-count]{
+  flex:0 0 auto;font-size:11px;color:#5144b0;background:#f0eeff;
+  padding:8px 11px;border-radius:999px;font-weight:770;
+}
+.df-merge-storyboard-grid {
+  display:flex;gap:12px;overflow-x:auto;overflow-y:hidden;
+  overscroll-behavior-x:contain;scroll-snap-type:x proximity;
+  min-height:194px;padding:6px 17px 16px;scrollbar-width:thin;
+}
+.df-merge-card {
+  position:relative;display:flex;flex-direction:column;gap:4px;
+  flex:0 0 169px;max-width:calc(100% - 18px);min-width:0;min-height:174px;
+  border:1px solid #dfe3ee;border-radius:15px;background:#fff;padding:9px;
+  scroll-snap-align:start;box-shadow:0 3px 9px rgba(18,37,80,.045);
+}
+.df-merge-card:hover{border-color:#bcb5ed;box-shadow:0 6px 17px rgba(22,36,86,.09);}
+.df-merge-card.df-merge-drop-target{outline:3px solid #6a5cdb;outline-offset:2px;background:#f8f6ff;}
+.df-merge-card-top{display:flex;align-items:center;justify-content:space-between;gap:5px;min-height:20px;}
+.df-merge-sequence{display:grid;place-items:center;width:27px;height:27px;border-radius:8px;background:#eeeaff;color:#5042b7;font-size:12px;font-weight:830;}
+.df-merge-drag-handle{cursor:grab;user-select:none;-webkit-user-select:none;padding:4px 10px;border-radius:8px;background:#f1f2f8;color:#55617a;font-size:19px;line-height:1;touch-action:none;}
+.df-merge-drag-handle:active{cursor:grabbing;}
+.df-merge-card-picture{height:78px;display:grid;place-items:center;position:relative;background:#f0f2f8;border:1px solid #e6eaf2;border-radius:10px;overflow:hidden;}
+.df-merge-card-picture canvas{display:block;z-index:1;max-height:72px;max-width:100%;height:auto!important;width:auto!important;background:#fff;box-shadow:0 2px 8px rgba(21,35,64,.1);}
+.df-merge-pdf-fallback{position:absolute;color:#958ba8;font-size:20px;font-weight:850;letter-spacing:.1em;}
+.df-merge-card-name{font-size:11px;line-height:1.25;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:750;color:#28374f;}
+.df-merge-card-detail{color:#626f86;font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.df-merge-card-actions{display:grid;grid-template-columns:minmax(0,1.7fr) repeat(3,minmax(0,.6fr));gap:4px;margin-top:auto;}
+.df-merge-card-actions button {
+  min-width:0;min-height:36px;display:grid;place-items:center;padding:4px 2px;
+  border:1px solid #e0e4ed;border-radius:8px;background:#fff;color:#2b3953;
+  font-weight:740;font-size:11px;
+}
+.df-merge-card-actions button:hover:not(:disabled){background:#f3f1ff;border-color:#b9b2eb;}
+.df-merge-card-actions button:disabled{opacity:.38;cursor:not-allowed;}
+.df-merge-card-actions [data-storyboard-remove]{color:#9f3c3c;}
+.df-merge-card-actions [data-storyboard-remove]:hover{background:#fff1f1;}
+.df-merge-card-actions [data-storyboard-left],.df-merge-card-actions [data-storyboard-right]{font-size:16px;}
+.df-merge-card-actions button:focus-visible{outline:3px solid #4f43c8;outline-offset:2px;}
+@media(max-width:760px){
+  .workspace[data-tool-id="merge"] .legacy-live-preview:has(> .df-merge-storyboard){display:flex;flex-direction:column;overflow:visible;}
+  .workspace[data-tool-id="merge"] .legacy-live-preview>.pre-edit-preview{height:auto;min-height:0;flex:1 1 auto;}
+  .df-merge-storyboard{flex:0 0 auto;max-height:290px;}
+  .df-merge-storyboard-header{padding:10px 12px 7px;gap:8px;}
+  .df-merge-storyboard-header strong{font-size:14px;}
+  .df-merge-storyboard-header>div>span{font-size:10px;}
+  .df-merge-storyboard-header>[data-storyboard-count]{font-size:10px;padding:6px 8px;}
+  .df-merge-storyboard-grid{padding:7px 11px 13px;gap:8px;min-height:190px;}
+  .df-merge-card{flex-basis:152px;padding:7px;}
+  .df-merge-card-actions button{min-height:44px;}
+}
+@media(prefers-reduced-motion:reduce){.df-merge-storyboard-grid{scroll-behavior:auto;}}
