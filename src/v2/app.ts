@@ -166,7 +166,7 @@ class DocFlowV2 {
       this.cancel();this.busy=false;
     }
     const next=route();
-    if(next.id!==this.tool?.id){this.files=[];this.selected.clear();this.result=null;this.review=null;this.disposeReview?.();this.disposeReview=null;this.freeLinks();this.organizer?.dispose();this.organizer=null;this.imagePreview?.dispose();this.imagePreview=null;this.thumbnailRail?.dispose();this.thumbnailRail=null;this.editor?.dispose();this.editor=null;this.disposeReview?.();this.disposeReview=null;this.review=null;await this.freePreview();}
+    if(next.id!==this.tool?.id){this.files=[];this.selected.clear();this.result=null;this.review=null;this.disposeReview?.();this.disposeReview=null;this.freeLinks();this.organizer?.dispose();this.organizer=null;this.imagePreview?.dispose();this.imagePreview=null;this.thumbnailRail?.dispose();this.thumbnailRail=null;this.editor?.dispose();this.editor=null;await this.freePreview();}
     this.tool=next.id?getTool(next.id)??null:null;
     this.stage=next.stage;
     if(!this.tool){this.home();return;}
@@ -344,28 +344,29 @@ class DocFlowV2 {
     }
   }
   private async execute():Promise<void>{
-    if(this.busy||(!this.tool?.operation&&!['pdf-to-images','text-search','compare'].includes(this.tool?.id??''))||!this.files.length)return;
-    if(this.tool.id==='merge'&&this.files.length<2){this.message('Choose at least two PDFs to merge.');return;}
-    if(this.tool.id==='compare'&&this.files.length!==2){this.message('Choose exactly two PDFs, A then B, to compare.');return;}
+    const tool=this.tool;
+    if(this.busy||!tool||(!tool.operation&&!['pdf-to-images','text-search','compare'].includes(tool.id))||!this.files.length)return;
+    if(tool.id==='merge'&&this.files.length<2){this.message('Choose at least two PDFs to merge.');return;}
+    if(tool.id==='compare'&&this.files.length!==2){this.message('Choose exactly two PDFs, A then B, to compare.');return;}
     const form=this.root.querySelector<HTMLFormElement>('[data-options]');
     if(!form)return;
     const options=readOptions(form);
     this.disposeReview?.();this.disposeReview=null;this.review=null;
-    if(this.tool.id==='edit-pdf'){
+    if(tool.id==='edit-pdf'){
       if(!this.editor){this.message('Wait for the document editor to finish loading.');return;}
       options.plan=this.editor.currentPlan;
     }
-    if(this.tool.id==='organize'){
+    if(tool.id==='organize'){
       if(!this.organizer){this.message('Wait for the page preview to finish loading.');return;}
       options.order=this.organizer.getOrder().join(',');
     }
-    if(this.tool.id==='compress'){
+    if(tool.id==='compress'){
       const preset=String(options.compressionPreset??'balanced');
       const settings=preset==='quality'?{imageQuality:.91,maxImageDimension:3500}:
         preset==='small'?{imageQuality:.61,maxImageDimension:1400}:{imageQuality:.79,maxImageDimension:2200};
       Object.assign(options,settings);
     }
-    if(['remove-pages','extract-pages'].includes(this.tool.id)&&!String(options.pages??'').trim()){
+    if(['remove-pages','extract-pages'].includes(tool.id)&&!String(options.pages??'').trim()){
       this.message('Select at least one page before continuing.');return;
     }
     const button=this.root.querySelector<HTMLButtonElement>('[data-run]');
@@ -373,14 +374,14 @@ class DocFlowV2 {
     this.busy=true;if(button)button.disabled=true;this.message('Preparing files…');
     try{
       const input=await Promise.all(this.files.map(async f=>({name:f.name,type:f.type,buffer:await f.arrayBuffer()})));
-      if(this.tool.id==='edit-pdf' && this.editor?.containsText){
+      if(tool.id==='edit-pdf' && this.editor?.containsText){
         const response=await fetch(`${import.meta.env.BASE_URL}fonts/DocFlowSans.woff`);
         if(!response.ok)throw Error('Editor font unavailable. Reconnect and retry.');
         input.push({name:'DocFlowSans.woff',type:'font/ttf',buffer:await response.arrayBuffer()});
       }
       if(generation!==this.processingGeneration)return;
       let result:OperationResult;
-      if(this.tool.id==='text-search'){
+      if(tool.id==='text-search'){
         let cancelled=false;
         this.cancel=()=>{cancelled=true;};
         const query=String(options.query??'').trim();
@@ -390,7 +391,7 @@ class DocFlowV2 {
         if(cancelled||generation!==this.processingGeneration)return;
         result=extracted.result;
         this.review={kind:'text',query,hits:extracted.hits,pageCount:extracted.pageCount,scannedPages:extracted.scannedPages};
-      }else if(this.tool.id==='compare'){
+      }else if(tool.id==='compare'){
         let cancelled=false;
         this.cancel=()=>{cancelled=true;};
         const comparison=await comparePdfs(input[0]!.buffer,input[1]!.buffer,
@@ -406,7 +407,7 @@ class DocFlowV2 {
         ]);
         result={outputs,info:{leftPages:comparison.leftPages,rightPages:comparison.rightPages,
           pagesCompared:comparison.pagesCompared,changedPages:comparison.changedPages,limited:comparison.limited}};
-      }else if(this.tool.id==='pdf-to-images'){
+      }else if(tool.id==='pdf-to-images'){
         let cancelled=false;
         this.cancel=()=>{cancelled=true;};
         const format=options.format==='jpeg'?'jpeg':'png';
@@ -417,7 +418,7 @@ class DocFlowV2 {
         result={outputs:[{name:'pdf-pages.zip',type:'application/zip',buffer:await blob.arrayBuffer()}],
           info:{format,pageCount:this.preview?.pageCount??0}};
       }else{
-        const operation=this.tool.operation as WorkerOperation;
+        const operation=tool.operation as WorkerOperation;
         const running=runWorkerOperation(operation,input,options,p=>this.message(p.message+' · '+p.percent+'%'));
         this.cancel=running.cancel;
         result=await running.result;
@@ -427,7 +428,7 @@ class DocFlowV2 {
       this.busy=false;
       this.cancel=()=>{};
       // Hashchange is the single authority for transition to result stage.
-      location.hash=base+this.tool.id+'/result';
+      location.hash=base+tool.id+'/result';
     }catch(error){if(generation===this.processingGeneration)this.message(error instanceof Error?'Could not finish: '+error.message:'Processing failed.');}
     finally {if(generation===this.processingGeneration){this.busy=false;if(button)button.disabled=false;this.cancel=()=>{};}}
   }
