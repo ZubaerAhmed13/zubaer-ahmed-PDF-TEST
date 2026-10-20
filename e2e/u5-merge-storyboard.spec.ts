@@ -55,5 +55,13 @@ test('merge storyboard drag handles reorder sources without rearranging pages wi
   const target = page.locator('.df-merge-card').nth(1);
   await source.dragTo(target);
   await expect(page.locator('#file-list .file-row').first()).toContainText('beta.pdf');
+  await expect(page.locator('.df-merge-card').first()).toContainText('beta.pdf');
+  // Reverse with a second real pointer drag to catch stale index handling.
+  await page.locator('.df-merge-card').nth(0).locator('[data-storyboard-drag]')
+    .dragTo(page.locator('.df-merge-card').nth(1));
+  await expect(page.locator('#file-list .file-row').first()).toContainText('alpha.pdf');
+  await page.locator('.df-merge-card').nth(0).locator('[data-storyboard-drag]')
+    .dragTo(page.locator('.df-merge-card').nth(1));
+  await expect(page.locator('#file-list .file-row').first()).toContainText('beta.pdf');
   expect(await exportedWidths(page)).toEqual([420,310]);
 });
