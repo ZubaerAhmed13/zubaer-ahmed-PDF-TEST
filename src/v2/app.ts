@@ -4,6 +4,7 @@ import { createPreview, type PreviewController } from '../pdf/render';
 import { activeTools, getTool, groups, v2Tools, type V2Tool } from './catalog';
 import { mountPageOrganizer, type PageOrganizer } from './pageOrganizer';
 import { V2ImagePreview } from './imagePreview';
+import { mountPdfThumbnailRail, type ThumbnailRail } from './thumbnailRail';
 
 const esc=(value:string):string=>value.replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]!));
 const bytes=(value:number):string=>value<1024?value+' B':value<1048576?(value/1024).toFixed(1)+' KB':(value/1048576).toFixed(1)+' MB';
@@ -58,6 +59,7 @@ class DocFlowV2 {
   private preview:PreviewController|null=null;
   private organizer:PageOrganizer|null=null;
   private imagePreview:V2ImagePreview|null=null;
+  private thumbnailRail:ThumbnailRail|null=null;
   private processingGeneration=0;
   private renderId=0;
   private currentPage=1;
@@ -154,7 +156,7 @@ class DocFlowV2 {
       this.cancel();this.busy=false;
     }
     const next=route();
-    if(next.id!==this.tool?.id){this.files=[];this.selected.clear();this.result=null;this.freeLinks();this.organizer?.dispose();this.organizer=null;this.imagePreview?.dispose();this.imagePreview=null;await this.freePreview();}
+    if(next.id!==this.tool?.id){this.files=[];this.selected.clear();this.result=null;this.freeLinks();this.organizer?.dispose();this.organizer=null;this.imagePreview?.dispose();this.imagePreview=null;this.thumbnailRail?.dispose();this.thumbnailRail=null;await this.freePreview();}
     this.tool=next.id?getTool(next.id)??null:null;
     this.stage=next.stage;
     if(!this.tool){this.home();return;}
@@ -221,6 +223,7 @@ class DocFlowV2 {
     const tool=this.tool!;
     this.organizer?.dispose();this.organizer=null;
     this.imagePreview?.dispose();this.imagePreview=null;
+    this.thumbnailRail?.dispose();this.thumbnailRail=null;
     this.root.innerHTML=this.header()+`<main id="df2-main" class="df2-work">
       <div class="df2-worktop">${this.crumbs()}<div class="df2-work-actions"><button class="df2-subtle" data-change-files>＋ Add files</button><button class="df2-subtle" data-reset>Start over</button></div></div>
       <div class="df2-workflow">
@@ -276,18 +279,8 @@ class DocFlowV2 {
         const host=this.root.querySelector<HTMLElement>('[data-organizer-host]');
         if(host)this.organizer=mountPageOrganizer(host,controller.pageCount,page=>{void this.showPage(page);});
       }
-      const host=this.root.querySelector<HTMLElement>('.df2-page-thumbs');if(!host)return;
-      // R0 bounds thumbnail count; R1 adds virtualization for all pages.
-      for(let n=1;n<=Math.min(controller.pageCount,16);n++){
-        if(generation!==this.renderId)break;
-        const btn=document.createElement('button');
-        btn.className='df2-thumb';btn.dataset.page=String(n);btn.setAttribute('aria-label','Select page '+n);
-        btn.setAttribute('aria-pressed','false');
-        const tiny=document.createElement('canvas'),label=document.createElement('span');
-        label.textContent='Page '+n;btn.append(tiny,label);host.append(btn);
-        try {await controller.renderThumbnail(n,tiny,.18);}catch{label.textContent='Page '+n;}
-      }
-      if(controller.pageCount>16){const more=document.createElement('p');more.className='df2-rail-note';more.textContent='Showing the first 16 page previews. Use page navigation for the rest.';host.append(more);}
+      const host=this.root.querySelector<HTMLElement>('.df2-page-thumbs');
+      if(host && generation===this.renderId)this.thumbnailRail=mountPdfThumbnailRail(host,controller);
     }catch(error){if(generation===this.renderId&&status)status.textContent=error instanceof Error?error.message:'Preview unavailable';}
   }
   private async showPage(page:number):Promise<void> {
@@ -383,7 +376,7 @@ class DocFlowV2 {
     if(target.closest('[data-open-search]')){location.hash='#/';queueMicrotask(()=>this.root.querySelector<HTMLInputElement>('[data-tool-search]')?.focus());return;}
     const t=target.closest<HTMLElement>('[data-card-tool]');
     if(t&&getTool(t.dataset.cardTool??'')?.readiness!=='active'){event.preventDefault();const tool=getTool(t.dataset.cardTool??'');if(tool){this.tool=tool;this.unavailable();}return;}
-    if(target.closest('[data-reset],[data-again]')){this.files=[];this.selected.clear();this.result=null;this.freeLinks();this.imagePreview?.dispose();this.imagePreview=null;this.organizer?.dispose();this.organizer=null;await this.freePreview();if(this.tool)location.hash=base+this.tool.id;else location.hash='#/';return;}
+    if(target.closest('[data-reset],[data-again]')){this.files=[];this.selected.clear();this.result=null;this.freeLinks();this.imagePreview?.dispose();this.imagePreview=null;this.organizer?.dispose();this.organizer=null;this.thumbnailRail?.dispose();this.thumbnailRail=null;await this.freePreview();if(this.tool)location.hash=base+this.tool.id;else location.hash='#/';return;}
     if(target.closest('[data-change-files]')){this.root.querySelector<HTMLInputElement>('[data-add-file]')?.click();return;}
     const up=target.closest<HTMLElement>('[data-move-up]'),down=target.closest<HTMLElement>('[data-move-down]'),remove=target.closest<HTMLElement>('[data-remove-file]');
     if(up||down||remove){const index=Number((up??down??remove)?.dataset.moveUp??(down??remove)?.dataset.moveDown??remove?.dataset.removeFile);
