@@ -5,6 +5,7 @@ import { activeTools, getTool, groups, v2Tools, type V2Tool } from './catalog';
 import { mountPageOrganizer, type PageOrganizer } from './pageOrganizer';
 import { V2ImagePreview } from './imagePreview';
 import { mountPdfThumbnailRail, type ThumbnailRail } from './thumbnailRail';
+import { V2PageEditor } from './pageEditor';
 
 const esc=(value:string):string=>value.replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]!));
 const bytes=(value:number):string=>value<1024?value+' B':value<1048576?(value/1024).toFixed(1)+' KB':(value/1048576).toFixed(1)+' MB';
@@ -60,6 +61,7 @@ class DocFlowV2 {
   private organizer:PageOrganizer|null=null;
   private imagePreview:V2ImagePreview|null=null;
   private thumbnailRail:ThumbnailRail|null=null;
+  private editor:V2PageEditor|null=null;
   private processingGeneration=0;
   private renderId=0;
   private currentPage=1;
@@ -156,7 +158,7 @@ class DocFlowV2 {
       this.cancel();this.busy=false;
     }
     const next=route();
-    if(next.id!==this.tool?.id){this.files=[];this.selected.clear();this.result=null;this.freeLinks();this.organizer?.dispose();this.organizer=null;this.imagePreview?.dispose();this.imagePreview=null;this.thumbnailRail?.dispose();this.thumbnailRail=null;await this.freePreview();}
+    if(next.id!==this.tool?.id){this.files=[];this.selected.clear();this.result=null;this.freeLinks();this.organizer?.dispose();this.organizer=null;this.imagePreview?.dispose();this.imagePreview=null;this.thumbnailRail?.dispose();this.thumbnailRail=null;this.editor?.dispose();this.editor=null;await this.freePreview();}
     this.tool=next.id?getTool(next.id)??null:null;
     this.stage=next.stage;
     if(!this.tool){this.home();return;}
@@ -224,6 +226,7 @@ class DocFlowV2 {
     this.organizer?.dispose();this.organizer=null;
     this.imagePreview?.dispose();this.imagePreview=null;
     this.thumbnailRail?.dispose();this.thumbnailRail=null;
+    this.editor?.dispose();this.editor=null;
     this.root.innerHTML=this.header()+`<main id="df2-main" class="df2-work">
       <div class="df2-worktop">${this.crumbs()}<div class="df2-work-actions"><button class="df2-subtle" data-change-files>＋ Add files</button><button class="df2-subtle" data-reset>Start over</button></div></div>
       <div class="df2-workflow">
@@ -275,6 +278,18 @@ class DocFlowV2 {
       if(generation!==this.renderId){await controller.destroy();return;}
       this.preview=controller;
       await this.showPage(1);
+      if(this.tool?.id==='edit-pdf'){
+        const paper=this.root.querySelector<HTMLElement>('.df2-canvas-paper');
+        const panel=this.root.querySelector<HTMLElement>('.df2-inspector');
+        if(paper&&panel){
+          this.message('Inspecting editable PDF page geometry…');
+          const editor=await V2PageEditor.mount(paper,canvas,panel,controller,file);
+          if(generation!==this.renderId){editor.dispose();return;}
+          this.editor=editor;
+          this.editor.show(this.currentPage);
+          this.message('Ready to add text, images and PDF annotations');
+        }
+      }
       if(this.tool?.id==='organize'){
         const host=this.root.querySelector<HTMLElement>('[data-organizer-host]');
         if(host)this.organizer=mountPageOrganizer(host,controller.pageCount,page=>{void this.showPage(page);});
@@ -290,6 +305,7 @@ class DocFlowV2 {
     if(label)label.textContent='Page '+this.currentPage+' / '+controller.pageCount;
     const zoom=this.root.querySelector<HTMLElement>('[data-zoom-label]');if(zoom)zoom.textContent=Math.round(this.zoom*100)+'%';
     await controller.render(this.currentPage,1.08*this.zoom);
+    this.editor?.show(this.currentPage);
   }
   private async freePreview(invalidate=true):Promise<void> {
     if(invalidate)++this.renderId;
@@ -319,6 +335,10 @@ class DocFlowV2 {
     const form=this.root.querySelector<HTMLFormElement>('[data-options]');
     if(!form)return;
     const options=readOptions(form);
+    if(this.tool.id==='edit-pdf'){
+      if(!this.editor){this.message('Wait for the document editor to finish loading.');return;}
+      options.plan=this.editor.currentPlan;
+    }
     if(this.tool.id==='organize'){
       if(!this.organizer){this.message('Wait for the page preview to finish loading.');return;}
       options.order=this.organizer.getOrder().join(',');
@@ -337,6 +357,12 @@ class DocFlowV2 {
     this.busy=true;if(button)button.disabled=true;this.message('Preparing files…');
     try{
       const input=await Promise.all(this.files.map(async f=>({name:f.name,type:f.type,buffer:await f.arrayBuffer()})));
+      if(this.tool.id==='edit-pdf' && this.editor?.containsText){
+        const response=await fetch(`${import.meta.env.BASE_URL}fonts/DocFlowSans.woff`);
+        if(!response.ok)throw Error('Editor font unavailable. Reconnect and retry.');
+        input.push({name:'DocFlowSans.woff',type:'font/ttf',buffer:await response.arrayBuffer()});
+      }
+      if(generation!==this.processingGeneration)return;
       const operation=this.tool.operation as WorkerOperation;
       const running=runWorkerOperation(operation,input,options,p=>this.message(p.message+' · '+p.percent+'%'));
       this.cancel=running.cancel;
@@ -376,7 +402,7 @@ class DocFlowV2 {
     if(target.closest('[data-open-search]')){location.hash='#/';queueMicrotask(()=>this.root.querySelector<HTMLInputElement>('[data-tool-search]')?.focus());return;}
     const t=target.closest<HTMLElement>('[data-card-tool]');
     if(t&&getTool(t.dataset.cardTool??'')?.readiness!=='active'){event.preventDefault();const tool=getTool(t.dataset.cardTool??'');if(tool){this.tool=tool;this.unavailable();}return;}
-    if(target.closest('[data-reset],[data-again]')){this.files=[];this.selected.clear();this.result=null;this.freeLinks();this.imagePreview?.dispose();this.imagePreview=null;this.organizer?.dispose();this.organizer=null;this.thumbnailRail?.dispose();this.thumbnailRail=null;await this.freePreview();if(this.tool)location.hash=base+this.tool.id;else location.hash='#/';return;}
+    if(target.closest('[data-reset],[data-again]')){this.files=[];this.selected.clear();this.result=null;this.freeLinks();this.imagePreview?.dispose();this.imagePreview=null;this.organizer?.dispose();this.organizer=null;this.thumbnailRail?.dispose();this.thumbnailRail=null;this.editor?.dispose();this.editor=null;await this.freePreview();if(this.tool)location.hash=base+this.tool.id;else location.hash='#/';return;}
     if(target.closest('[data-change-files]')){this.root.querySelector<HTMLInputElement>('[data-add-file]')?.click();return;}
     const up=target.closest<HTMLElement>('[data-move-up]'),down=target.closest<HTMLElement>('[data-move-down]'),remove=target.closest<HTMLElement>('[data-remove-file]');
     if(up||down||remove){const index=Number((up??down??remove)?.dataset.moveUp??(down??remove)?.dataset.moveDown??remove?.dataset.removeFile);
