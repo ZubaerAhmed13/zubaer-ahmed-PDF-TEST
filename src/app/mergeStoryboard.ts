@@ -18,6 +18,7 @@ interface Storyboard {
   observer: IntersectionObserver | null;
   rendered: HTMLCanvasElement[];
   dragged: number | null;
+  dropCandidate: number | null;
   actions: MergeStoryboardActions;
   disposed: boolean;
 }
@@ -140,7 +141,7 @@ function install(root: HTMLElement, actions: MergeStoryboardActions): Storyboard
   `;
   center.prepend(panel);
   const cards = panel.querySelector<HTMLElement>('[data-storyboard-grid]')!;
-  const state: Storyboard = { root, panel, cards, files: [], generation: 0, pending: Promise.resolve(), observer: null, rendered: [], dragged: null, actions, disposed: false };
+  const state: Storyboard = { root, panel, cards, files: [], generation: 0, pending: Promise.resolve(), observer: null, rendered: [], dragged: null, dropCandidate: null, actions, disposed: false };
   panel.addEventListener('click', event => {
     const target = event.target instanceof Element ? event.target : null;
     if (!target) return;
@@ -158,6 +159,7 @@ function install(root: HTMLElement, actions: MergeStoryboardActions): Storyboard
     if (!handle) return;
     const source = handle.closest<HTMLElement>('[data-merge-card]');
     state.dragged = source ? Number(source.dataset.mergeCard) : null;
+    state.dropCandidate = null;
     if (state.dragged === null) return;
     event.dataTransfer?.setData('text/plain', String(state.dragged));
     if (event.dataTransfer) event.dataTransfer.effectAllowed = 'move';
@@ -167,23 +169,37 @@ function install(root: HTMLElement, actions: MergeStoryboardActions): Storyboard
     const card = event.target instanceof Element ? event.target.closest<HTMLElement>('[data-merge-card]') : null;
     if (!card) return;
     event.preventDefault();
+    state.dropCandidate = Number(card.dataset.mergeCard);
+    if (event.dataTransfer) event.dataTransfer.dropEffect = 'move';
     cards.querySelectorAll('.df-merge-drop-target').forEach(el => el.classList.remove('df-merge-drop-target'));
     card.classList.add('df-merge-drop-target');
   });
   cards.addEventListener('drop', event => {
     cards.querySelectorAll('.df-merge-drop-target').forEach(el => el.classList.remove('df-merge-drop-target'));
     const card = event.target instanceof Element ? event.target.closest<HTMLElement>('[data-merge-card]') : null;
-    const from = state.dragged;
+    const transferred = event.dataTransfer?.getData('text/plain') ?? '';
+    const from = state.dragged ?? (/^\d+$/.test(transferred) ? Number(transferred) : null);
     state.dragged = null;
+    state.dropCandidate = null;
     if (from === null || !card) return;
     const to = Number(card.dataset.mergeCard);
     if (!Number.isInteger(to) || to === from) return;
     event.preventDefault();
-    actions.move(from, to);
+    state.actions.move(from, to);
   });
-  cards.addEventListener('dragend', () => {
+  cards.addEventListener('dragend', event => {
+    // Native HTML drag/drop occasionally ends without a drop event on
+    // nested buttons/canvases. Reconcile only when the pointer truly ends
+    // above another card; never reorder for a drag released outside the grid.
+    const from = state.dragged;
+    const target = event.clientX > 0 && event.clientY > 0
+      ? document.elementFromPoint(event.clientX, event.clientY)?.closest<HTMLElement>('[data-merge-card]')
+      : null;
+    const to = target ? Number(target.dataset.mergeCard) : null;
     state.dragged = null;
+    state.dropCandidate = null;
     cards.querySelectorAll('.df-merge-drop-target').forEach(el => el.classList.remove('df-merge-drop-target'));
+    if (from !== null && to !== null && Number.isInteger(to) && from !== to) state.actions.move(from, to);
   });
   root.addEventListener('docflow-cleanup', () => {
     state.disposed = true; state.generation++;
