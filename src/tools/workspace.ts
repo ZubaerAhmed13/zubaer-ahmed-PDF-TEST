@@ -10,6 +10,7 @@ import type { InputFile, OperationResult, WorkerOperation } from '../pdf/types';
 import { runWorkerOperation, type RunningOperation } from '../pdf/workerClient';
 import { createPreview, pdfToImages, type PreviewController } from '../pdf/render';
 import { mountVisualFormEditor, type InspectedFormField } from '../app/visualFormEditor';
+import { mountFormFieldBuilder } from '../app/formFieldBuilder';
 import { mountSignaturePad } from '../app/signaturePad';
 
 interface FileRecord {
@@ -43,7 +44,7 @@ function optionMarkup(id: string): string {
     case 'watermark': return `<label>Watermark text<input name="text" value="CONFIDENTIAL"></label><label>Opacity<input name="opacity" type="number" min=".05" max="1" step=".05" value=".18"></label><label>Rotation<input name="rotation" type="number" min="-180" max="180" value="-35"></label><label>Font size<input name="fontSize" type="number" min="12" max="120" value="42"></label>`;
     case 'images-to-pdf': return `<section data-scan-review class="wide"></section><label>Page size<select name="pageSize"><option value="a4">A4</option><option value="letter">US Letter</option><option value="original">Fit to image dimensions</option></select></label><label>Orientation<select name="orientation"><option value="auto">Auto by image</option><option value="portrait">Portrait</option><option value="landscape">Landscape</option></select></label><label>Page margin (pt)<input name="margin" type="number" min="0" max="150" value="24"></label><label class="check"><input type="checkbox" name="upscale"> Upscale small images to fit the page</label><p class="help">Images stay embedded without re-encoding; original-size pages assume 96 pixels per inch. Change orientation and margin before export.</p>`;
     case 'pdf-to-images': return `<label>Format<select name="format"><option value="png">PNG</option><option value="jpeg">JPEG</option></select></label><label>Render scale<select name="scale"><option value="1">1×</option><option value="1.5" selected>1.5×</option><option value="2">2×</option></select></label><p class="warning-text">Image export rasterizes pages and is intentionally lossy with respect to selectable text/vector structure.</p>`;
-    case 'forms': return `<div class="form-inspector"><button type="button" class="secondary" data-inspect-form>Inspect form fields</button><div id="form-field-summary" class="help" role="status" aria-live="polite">Add a PDF form to discover editable fields. XFA documents are reported as unsupported.</div></div><section id="visual-form-editor" class="visual-form-editor" aria-label="Visual PDF form editor"></section><label class="check"><input name="flatten" type="checkbox"> Flatten fields after filling (removes interactive fields)</label><details class="visual-form-advanced"><summary>Advanced JSON values (optional)</summary><label class="wide">Form values as JSON<textarea name="values" rows="7" placeholder='{"CustomerName":"Example","Accepted":true}'></textarea></label><p class="help">For advanced users and compatibility with existing form workflows. Visual fields above update these values automatically.</p></details>`;
+    case 'forms': return `<label class="wide">Form task<select name="formAction"><option value="fill">Fill existing fields</option><option value="create">Create new editable fields</option></select></label><section id="form-field-builder" hidden aria-label="Create PDF form fields"></section><textarea name="fieldDefinitions" hidden aria-hidden="true">[]</textarea><div class="form-inspector"><button type="button" class="secondary" data-inspect-form>Inspect form fields</button><div id="form-field-summary" class="help" role="status" aria-live="polite">Add a PDF form to discover editable fields. XFA documents are reported as unsupported.</div></div><section id="visual-form-editor" class="visual-form-editor" aria-label="Visual PDF form editor"></section><label class="check"><input name="flatten" type="checkbox"> Flatten fields after filling (removes interactive fields)</label><details class="visual-form-advanced"><summary>Advanced JSON values (optional)</summary><label class="wide">Form values as JSON<textarea name="values" rows="7" placeholder='{"CustomerName":"Example","Accepted":true}'></textarea></label><p class="help">For advanced users and compatibility with existing form workflows. Visual fields above update these values automatically.</p></details>`;
     case 'compress': return `<div class="notice"><strong>Limited structural optimization</strong><p>This does not claim professional image compression. It rewrites PDF structure with object streams and reports the before/after size. Images are not intentionally recompressed.</p></div>`;
     case 'preview': return `<p class="help">The PDF.js viewer keeps one full active-page canvas and a virtualized thumbnail window, so large page counts do not create a canvas for every page at once.</p>`;
     case 'metadata': return `<p class="help">Reads standard metadata locally. Encrypted/password-protected files are detected and reported instead of being mislabeled as readable.</p>`;
@@ -147,6 +148,30 @@ export function mountWorkspace(container: HTMLDivElement, tool: ToolDefinition):
   const advancedFormValues = optionsForm.querySelector<HTMLTextAreaElement>('textarea[name=values]');
   let formValuesTouched = false;
   advancedFormValues?.addEventListener('input', () => { formValuesTouched = true; });
+  const formAction = optionsForm.querySelector<HTMLSelectElement>('select[name=formAction]');
+  const builderHost = optionsForm.querySelector<HTMLElement>('#form-field-builder');
+  const builderValues = optionsForm.querySelector<HTMLTextAreaElement>('textarea[name=fieldDefinitions]');
+  const formBuilder = builderHost && builderValues ? mountFormFieldBuilder(builderHost, builderValues) : null;
+  const toggleFormsMode = (): void => {
+    if (tool.id !== 'forms') return;
+    const creating = formAction?.value === 'create';
+    if (builderHost) builderHost.hidden = !creating;
+    if (visualHost) visualHost.hidden = creating;
+    if (formSummary) formSummary.hidden = creating;
+    if (formInspector) formInspector.hidden = creating;
+    optionsForm.querySelector<HTMLElement>('.visual-form-advanced')!.hidden = creating;
+    optionsForm.querySelector<HTMLElement>('label.check:has(input[name=flatten])')!.hidden = creating;
+    run.textContent = creating ? 'Create editable PDF fields' : 'Run Fill PDF forms';
+  };
+  formAction?.addEventListener('change', () => {
+    toggleFormsMode();
+    if (formAction.value === 'fill' && records.length && !visualEditor) void inspectFormFields();
+    else if (formAction.value === 'create' && errorBox.textContent?.includes('NO_FORM_FIELDS')) {
+      errorBox.hidden = true;
+      errorBox.textContent = '';
+    }
+  });
+  toggleFormsMode();
 
   const beforeUnload = (event: BeforeUnloadEvent): void => {
     if (!records.length && !running) return;
@@ -495,12 +520,12 @@ export function mountWorkspace(container: HTMLDivElement, tool: ToolDefinition):
         setProgress('Complete', 100);
         return;
       }
-      const operation = (tool.id === 'forms' ? 'forms-fill' : tool.id === 'compress' ? 'optimize' : tool.id) as WorkerOperation;
+      const selectedOptions = formOptions(optionsForm);
+      const operation = (tool.id === 'forms' ? (selectedOptions.formAction === 'create' ? 'forms-create' : 'forms-fill') : tool.id === 'compress' ? 'optimize' : tool.id) as WorkerOperation;
       if (scanReview) activeAbort = new AbortController();
       const exportFiles = scanReview ? await scanReview.inputs(activeAbort!.signal, (done, total) => setProgress('Correcting photo ' + done + ' of ' + total, done / total * 40)) : records.map(r => r.file);
       const workerFiles = await Promise.all(exportFiles.map(async file => ({ name: file.name, type: file.type, buffer: await file.arrayBuffer() })));
       if (mainCancelled) throw new DOMException('Operation cancelled', 'AbortError');
-      const selectedOptions = formOptions(optionsForm);
       if (tool.id === 'split' && runtime.sessionActive()) selectedOptions.individualPdfResults = true;
       if (tool.id === 'sign-visual') selectedOptions.signaturePng = signaturePad?.getData() ?? '';
       running = runWorkerOperation(operation, workerFiles, selectedOptions, (update) => setProgress(update.message, Math.min(96, update.percent)));
@@ -524,6 +549,7 @@ export function mountWorkspace(container: HTMLDivElement, tool: ToolDefinition):
   run.addEventListener('click', () => { void execute(); });
 
   async function inspectFormFields(): Promise<void> {
+    if (formAction?.value === 'create') return;
     const generation = ++inspectionGeneration;
     inspectionRun?.cancel();
     if (!records.length) { setError('Choose a PDF form first.'); return; }
@@ -592,6 +618,7 @@ export function mountWorkspace(container: HTMLDivElement, tool: ToolDefinition):
     inspectionRun?.cancel();
     formOverlay?.dispose(); formOverlay = null;
     visualEditor?.dispose();
+    formBuilder?.dispose();
     signaturePad?.dispose();
     running?.cancel();
     clearUrls();

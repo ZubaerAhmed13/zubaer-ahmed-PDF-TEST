@@ -1,6 +1,7 @@
 /// <reference lib="webworker" />
 import { addPageNumbers, addWatermark, extractPages, fillForms, imagesToPdf, inspectForms, mergePdf, organizePdf, removePages, rotatePdf, splitPdf } from '../pdf/core';
 import { recompressPdfImages } from '../pdf/imageRecompression';
+import { createFormFields } from '../pdf/formCreation';
 import { cropPdf, editMetadata, annotatePdf, signPdfVisually } from '../pdf/essentialEdits';
 import { addImageWatermark } from '../pdf/imageWatermark';
 import { metadata } from '../pdf/metadata';
@@ -30,6 +31,7 @@ const handlers = {
   metadata,
   'forms-inspect': inspectForms,
   'forms-fill': fillForms,
+  'forms-create': createFormFields,
   crop: cropPdf,
   'metadata-edit': editMetadata,
   annotate: annotatePdf,

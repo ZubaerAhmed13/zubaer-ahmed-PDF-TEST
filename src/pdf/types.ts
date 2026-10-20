@@ -43,6 +43,7 @@ export type WorkerOperation =
   | 'metadata'
   | 'forms-inspect'
   | 'forms-fill'
+  | 'forms-create'
   | 'crop'
   | 'metadata-edit'
   | 'annotate'
