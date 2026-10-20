@@ -59,7 +59,7 @@ test('new phone workspace provides zoom, settings and valid Extract Pages output
 });
 test('unmigrated tools are clearly shown as not yet connected',async({page})=>{
   await page.goto(prefix+'#/');
-  await page.locator('[data-card-tool="edit-pdf"]').click();
+  await page.locator('[data-card-tool="ocr"]').click();
   await expect(page.getByText(/not yet connected to a verified processing experience/)).toBeVisible();
   await expect(page.locator('[data-run]')).toHaveCount(0);
 });
