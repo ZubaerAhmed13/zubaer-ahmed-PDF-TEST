@@ -66,7 +66,6 @@ class DocFlowV2 {
     window.addEventListener('hashchange',()=>void this.navigate());
     this.root.addEventListener('click',event=>void this.click(event));
     this.root.addEventListener('input',event=>this.onInput(event));
-    this.root.addEventListener('change',event=>this.onChange(event));
     window.addEventListener('keydown',event=>{
       if((event.metaKey||event.ctrlKey)&&event.key.toLowerCase()==='k'){
         event.preventDefault();
@@ -203,8 +202,10 @@ class DocFlowV2 {
     if(good.length!==files.length||!good.length){const el=this.root.querySelector<HTMLElement>('.df2-upload-note');if(el)el.textContent='Choose supported '+(tool.accepts.includes('.png')?'JPG/PNG':'PDF')+' files only.';return;}
     this.files=tool.multiple?[...this.files,...good]:good.slice(0,1);
     this.selected.clear();this.currentPage=1;this.result=null;
-    location.hash=base+tool.id+'/work';
-    if(route().stage==='work')await this.navigate();
+    // One hash-route transition owns the mount; never mount the viewer twice.
+    const next=base+tool.id+'/work';
+    if(location.hash!==next)location.hash=next;
+    else await this.navigate();
   }
   private workspace():void {
     const tool=this.tool!;
@@ -325,7 +326,6 @@ class DocFlowV2 {
       target.setSelectionRange(start,start);
     }
   }
-  private onChange(event:Event):void{void event;}
   private async click(event:MouseEvent):Promise<void>{
     const target=event.target instanceof Element?event.target:null;
     if(!target)return;
