@@ -140,7 +140,7 @@ export class V2PageEditor {
   private remove():void{
     if(!this.selectedObject())return;
     // Existing source annotations are not made editable by this release.
-    this.plan.objects=this.plan.objects.filter(o=>o.id!==obj.id);
+    this.plan.objects=this.plan.objects.filter(o=>o.id!==this.selected);
     this.selected=null;this.commit();
   }
   private paint():void{
@@ -174,7 +174,6 @@ export class V2PageEditor {
   }
   private paintPanel():void{
     if(this.destroyed)return;
-    const obj=this.selectedObject();
     const tools=kinds.map(([kind,label])=>`<button type="button" data-editor-add="${kind}">${escaping(label)}</button>`).join('');
     const list=this.plan.objects.filter(o=>o.page===this.page).map(o=>
       `<button type="button" data-editor-select="${o.id}" aria-pressed="${o.id===this.selected}">${escaping(o.kind.replace('-',' '))} · ${escaping((o.text??'Object').slice(0,28))}</button>`).join('');
