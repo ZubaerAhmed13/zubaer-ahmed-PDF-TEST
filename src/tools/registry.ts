@@ -109,7 +109,7 @@ export const tools: ToolDefinition[] = [
     keywords: ['embedded','image','extract','xobject','inline','png'], icon: '◫', quality: 'Potentially lossy', status: 'Migrated', multipleFiles: false,
     load: () => import('./extractImagesWorkspace')
   },
-  tool({ id: 'forms', name: 'Fill PDF forms', category: 'forms', description: 'Edit supported AcroForm fields; XFA is detected and reported as unsupported.', keywords: ['acroform','xfa','fields'], icon: '☑', quality: 'Lossless', status: 'Migrated', multipleFiles: false }),
+  tool({ id: 'forms', name: 'Fill PDF forms', category: 'forms', description: 'Fill existing AcroForm fields, or create real editable text, checkbox and dropdown fields. XFA is unsupported.', keywords: ['acroform','xfa','fields','create form','new fields','checkbox','dropdown'], icon: '☑', quality: 'Lossless', status: 'Migrated', multipleFiles: false }),
   {
     id: 'protect-pdf', name: 'Protect PDF', category: 'security',
     description: 'Encrypt a PDF locally with AES-256 using the pinned qpdf 12.3.2 WebAssembly engine. Passwords are not persisted by DocFlow.',
