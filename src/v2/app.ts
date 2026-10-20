@@ -2,6 +2,7 @@ import { runWorkerOperation } from '../pdf/workerClient';
 import type { OperationResult, WorkerOperation } from '../pdf/types';
 import { createPreview, type PreviewController } from '../pdf/render';
 import { activeTools, getTool, groups, v2Tools, type V2Tool } from './catalog';
+import { mountPageOrganizer, type PageOrganizer } from './pageOrganizer';
 
 const esc=(value:string):string=>value.replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]!));
 const bytes=(value:number):string=>value<1024?value+' B':value<1048576?(value/1024).toFixed(1)+' KB':(value/1048576).toFixed(1)+' MB';
@@ -18,6 +19,8 @@ const field=(name:string,title:string,value:string,kind:'text'|'number'|'textare
 const select=(name:string,title:string,values:[string,string][])=>`<label class="df2-control"><span>${title}</span><select name="${name}">${values.map(([value,label])=>`<option value="${value}">${label}</option>`).join('')}</select></label>`;
 function toolOptions(id:string):string{
   switch(id){
+    case 'organize': return `<div class="df2-page-plan-mount" data-organizer-host></div><p class="df2-organize-warning">Reordering preserves page contents. Duplicated pages may increase file size.</p>`;
+    case 'compress': return select('compressionPreset','Image compression',[['balanced','Balanced quality'],['quality','Higher image quality'],['small','Smaller images']])+ `<p class="df2-organize-warning">Recompresses eligible RGB JPEG images only. No compression guarantee for scans using other encodings. Text and vectors stay as PDF objects.</p>`;
     case 'split':return select('mode','Split method',[['selected','Selected pages'],['ranges','Page ranges'],['individual','Individual pages'],['every','Every N pages']])+field('pages','Pages to extract','1')+field('ranges','Separate ranges (semicolon)','1-2;3-4')+field('every','Pages in each part','5','number');
     case 'remove-pages':return field('pages','Pages to remove','');
     case 'extract-pages':return field('pages','Pages to extract','');
@@ -52,6 +55,8 @@ class DocFlowV2 {
   private links:string[]=[];
   private selected=new Set<number>();
   private preview:PreviewController|null=null;
+  private organizer:PageOrganizer|null=null;
+  private processingGeneration=0;
   private renderId=0;
   private currentPage=1;
   private zoom=1;
@@ -140,11 +145,14 @@ class DocFlowV2 {
     input?.setSelectionRange(this.search.length,this.search.length);
   }
   private async navigate():Promise<void> {
-    if(this.busy){ // Blocking navigation prevents destroying an in-flight worker.
+    if(this.busy){
+      // Route changes cancel processing. A generation token prevents stale
+      // asynchronous results from returning the user to the previous tool.
+      this.processingGeneration++;
       this.cancel();this.busy=false;
     }
     const next=route();
-    if(next.id!==this.tool?.id){this.files=[];this.selected.clear();this.result=null;this.freeLinks();await this.freePreview();}
+    if(next.id!==this.tool?.id){this.files=[];this.selected.clear();this.result=null;this.freeLinks();this.organizer?.dispose();this.organizer=null;await this.freePreview();}
     this.tool=next.id?getTool(next.id)??null:null;
     this.stage=next.stage;
     if(!this.tool){this.home();return;}
@@ -209,6 +217,7 @@ class DocFlowV2 {
   }
   private workspace():void {
     const tool=this.tool!;
+    this.organizer?.dispose();this.organizer=null;
     this.root.innerHTML=this.header()+`<main id="df2-main" class="df2-work">
       <div class="df2-worktop">${this.crumbs()}<div class="df2-work-actions"><button class="df2-subtle" data-change-files>＋ Add files</button><button class="df2-subtle" data-reset>Start over</button></div></div>
       <div class="df2-workflow">
@@ -249,6 +258,10 @@ class DocFlowV2 {
       if(generation!==this.renderId){await controller.destroy();return;}
       this.preview=controller;
       await this.showPage(1);
+      if(this.tool?.id==='organize'){
+        const host=this.root.querySelector<HTMLElement>('[data-organizer-host]');
+        if(host)this.organizer=mountPageOrganizer(host,controller.pageCount,page=>{void this.showPage(page);});
+      }
       const host=this.root.querySelector<HTMLElement>('.df2-page-thumbs');if(!host)return;
       // R0 bounds thumbnail count; R1 adds virtualization for all pages.
       for(let n=1;n<=Math.min(controller.pageCount,16);n++){
@@ -299,7 +312,21 @@ class DocFlowV2 {
     const form=this.root.querySelector<HTMLFormElement>('[data-options]');
     if(!form)return;
     const options=readOptions(form);
+    if(this.tool.id==='organize'){
+      if(!this.organizer){this.message('Wait for the page preview to finish loading.');return;}
+      options.order=this.organizer.getOrder().join(',');
+    }
+    if(this.tool.id==='compress'){
+      const preset=String(options.compressionPreset??'balanced');
+      const settings=preset==='quality'?{imageQuality:.91,maxImageDimension:3500}:
+        preset==='small'?{imageQuality:.61,maxImageDimension:1400}:{imageQuality:.79,maxImageDimension:2200};
+      Object.assign(options,settings);
+    }
+    if(['remove-pages','extract-pages'].includes(this.tool.id)&&!String(options.pages??'').trim()){
+      this.message('Select at least one page before continuing.');return;
+    }
     const button=this.root.querySelector<HTMLButtonElement>('[data-run]');
+    const generation=++this.processingGeneration;
     this.busy=true;if(button)button.disabled=true;this.message('Preparing files…');
     try{
       const input=await Promise.all(this.files.map(async f=>({name:f.name,type:f.type,buffer:await f.arrayBuffer()})));
@@ -307,11 +334,14 @@ class DocFlowV2 {
       const running=runWorkerOperation(operation,input,options,p=>this.message(p.message+' · '+p.percent+'%'));
       this.cancel=running.cancel;
       const result=await running.result;
+      if(generation!==this.processingGeneration)return;
       this.result=result;
+      this.busy=false;
+      this.cancel=()=>{};
+      // Hashchange is the single authority for transition to result stage.
       location.hash=base+this.tool.id+'/result';
-      await this.navigate();
-    }catch(error){this.message(error instanceof Error?'Could not finish: '+error.message:'Processing failed.');}
-    finally {this.busy=false;if(button)button.disabled=false;this.cancel=()=>{};}
+    }catch(error){if(generation===this.processingGeneration)this.message(error instanceof Error?'Could not finish: '+error.message:'Processing failed.');}
+    finally {if(generation===this.processingGeneration){this.busy=false;if(button)button.disabled=false;this.cancel=()=>{};}}
   }
   private message(value:string):void{const node=this.root.querySelector<HTMLElement>('[data-run-status]');if(node)node.textContent=value;}
   private onInput(event:Event):void {
