@@ -3,6 +3,7 @@ import type { OperationResult, WorkerOperation } from '../pdf/types';
 import { createPreview, type PreviewController } from '../pdf/render';
 import { activeTools, getTool, groups, v2Tools, type V2Tool } from './catalog';
 import { mountPageOrganizer, type PageOrganizer } from './pageOrganizer';
+import { V2ImagePreview } from './imagePreview';
 
 const esc=(value:string):string=>value.replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]!));
 const bytes=(value:number):string=>value<1024?value+' B':value<1048576?(value/1024).toFixed(1)+' KB':(value/1048576).toFixed(1)+' MB';
@@ -56,6 +57,7 @@ class DocFlowV2 {
   private selected=new Set<number>();
   private preview:PreviewController|null=null;
   private organizer:PageOrganizer|null=null;
+  private imagePreview:V2ImagePreview|null=null;
   private processingGeneration=0;
   private renderId=0;
   private currentPage=1;
@@ -152,7 +154,7 @@ class DocFlowV2 {
       this.cancel();this.busy=false;
     }
     const next=route();
-    if(next.id!==this.tool?.id){this.files=[];this.selected.clear();this.result=null;this.freeLinks();this.organizer?.dispose();this.organizer=null;await this.freePreview();}
+    if(next.id!==this.tool?.id){this.files=[];this.selected.clear();this.result=null;this.freeLinks();this.organizer?.dispose();this.organizer=null;this.imagePreview?.dispose();this.imagePreview=null;await this.freePreview();}
     this.tool=next.id?getTool(next.id)??null:null;
     this.stage=next.stage;
     if(!this.tool){this.home();return;}
@@ -218,6 +220,7 @@ class DocFlowV2 {
   private workspace():void {
     const tool=this.tool!;
     this.organizer?.dispose();this.organizer=null;
+    this.imagePreview?.dispose();this.imagePreview=null;
     this.root.innerHTML=this.header()+`<main id="df2-main" class="df2-work">
       <div class="df2-worktop">${this.crumbs()}<div class="df2-work-actions"><button class="df2-subtle" data-change-files>＋ Add files</button><button class="df2-subtle" data-reset>Start over</button></div></div>
       <div class="df2-workflow">
@@ -252,7 +255,18 @@ class DocFlowV2 {
     await this.freePreview(false);
     const file=this.files[0],canvas=this.root.querySelector<HTMLCanvasElement>('[data-page-canvas]'),
       status=this.root.querySelector<HTMLElement>('[data-render-status]');
-    if(!file||!canvas||!status||this.tool?.accepts.includes('.png')){if(status)status.textContent='Image input ready';return;}
+    if(!file||!canvas||!status)return;
+    if(this.tool?.id==='images-to-pdf'){
+      const rail=this.root.querySelector<HTMLElement>('.df2-page-thumbs');
+      if(rail){
+        this.imagePreview=new V2ImagePreview(this.files,canvas,status,rail);
+        await this.imagePreview.mount();
+        if(generation!==this.renderId)return;
+        const label=this.root.querySelector<HTMLElement>('[data-page-label]');
+        if(label)label.textContent='Image 1 / '+this.files.length;
+      }
+      return;
+    }
     try {
       const controller=await createPreview(await file.arrayBuffer(),canvas,status);
       if(generation!==this.renderId){await controller.destroy();return;}
@@ -356,6 +370,11 @@ class DocFlowV2 {
       target.setSelectionRange(start,start);
     }
   }
+  private syncImageLabel():void{
+    if(!this.imagePreview)return;
+    const label=this.root.querySelector<HTMLElement>('[data-page-label]');
+    if(label)label.textContent=this.root.querySelector<HTMLElement>('[data-render-status]')?.textContent??'Image preview';
+  }
   private async click(event:MouseEvent):Promise<void>{
     const target=event.target instanceof Element?event.target:null;
     if(!target)return;
@@ -364,7 +383,7 @@ class DocFlowV2 {
     if(target.closest('[data-open-search]')){location.hash='#/';queueMicrotask(()=>this.root.querySelector<HTMLInputElement>('[data-tool-search]')?.focus());return;}
     const t=target.closest<HTMLElement>('[data-card-tool]');
     if(t&&getTool(t.dataset.cardTool??'')?.readiness!=='active'){event.preventDefault();const tool=getTool(t.dataset.cardTool??'');if(tool){this.tool=tool;this.unavailable();}return;}
-    if(target.closest('[data-reset],[data-again]')){this.files=[];this.selected.clear();this.result=null;this.freeLinks();await this.freePreview();if(this.tool)location.hash=base+this.tool.id;else location.hash='#/';return;}
+    if(target.closest('[data-reset],[data-again]')){this.files=[];this.selected.clear();this.result=null;this.freeLinks();this.imagePreview?.dispose();this.imagePreview=null;this.organizer?.dispose();this.organizer=null;await this.freePreview();if(this.tool)location.hash=base+this.tool.id;else location.hash='#/';return;}
     if(target.closest('[data-change-files]')){this.root.querySelector<HTMLInputElement>('[data-add-file]')?.click();return;}
     const up=target.closest<HTMLElement>('[data-move-up]'),down=target.closest<HTMLElement>('[data-move-down]'),remove=target.closest<HTMLElement>('[data-remove-file]');
     if(up||down||remove){const index=Number((up??down??remove)?.dataset.moveUp??(down??remove)?.dataset.moveDown??remove?.dataset.removeFile);
@@ -381,8 +400,15 @@ class DocFlowV2 {
       this.root.querySelectorAll<HTMLButtonElement>('.df2-thumb').forEach(btn=>btn.setAttribute('aria-pressed',String(this.selected.has(Number(btn.dataset.page)))));
       await this.showPage(p);return;
     }
-    if(target.closest('[data-page-prev]')){await this.showPage(this.currentPage-1);return;}
-    if(target.closest('[data-page-next]')){await this.showPage(this.currentPage+1);return;}
+    const imgThumb=target.closest<HTMLElement>('[data-image-index]');
+    if(imgThumb&&this.imagePreview){
+      await this.imagePreview.show(Number(imgThumb.dataset.imageIndex));
+      const label=this.root.querySelector<HTMLElement>('[data-page-label]');
+      if(label)label.textContent=this.root.querySelector<HTMLElement>('[data-render-status]')?.textContent??'Image preview';
+      return;
+    }
+    if(target.closest('[data-page-prev]')){if(this.imagePreview)await this.imagePreview.next(-1);else await this.showPage(this.currentPage-1);this.syncImageLabel();return;}
+    if(target.closest('[data-page-next]')){if(this.imagePreview)await this.imagePreview.next(1);else await this.showPage(this.currentPage+1);this.syncImageLabel();return;}
     if(target.closest('[data-zoom-out]')){this.zoom=Math.max(.55,this.zoom-.15);await this.showPage(this.currentPage);return;}
     if(target.closest('[data-zoom-in]')){this.zoom=Math.min(2.4,this.zoom+.15);await this.showPage(this.currentPage);return;}
     if(target.closest('[data-mobile-options]')){this.root.querySelector<HTMLElement>('[data-options-pane]')?.classList.toggle('opened');return;}
