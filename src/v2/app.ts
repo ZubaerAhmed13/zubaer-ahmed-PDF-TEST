@@ -1,6 +1,6 @@
 import { runWorkerOperation } from '../pdf/workerClient';
 import type { OperationResult, WorkerOperation } from '../pdf/types';
-import { createPreview, type PreviewController } from '../pdf/render';
+import { createPreview, pdfToImages, type PreviewController } from '../pdf/render';
 import { activeTools, getTool, groups, v2Tools, type V2Tool } from './catalog';
 import { mountPageOrganizer, type PageOrganizer } from './pageOrganizer';
 import { V2ImagePreview } from './imagePreview';
@@ -22,6 +22,7 @@ const field=(name:string,title:string,value:string,kind:'text'|'number'|'textare
 const select=(name:string,title:string,values:[string,string][])=>`<label class="df2-control"><span>${title}</span><select name="${name}">${values.map(([value,label])=>`<option value="${value}">${label}</option>`).join('')}</select></label>`;
 function toolOptions(id:string):string{
   switch(id){
+    case 'pdf-to-images': return select('format','Image format',[['png','PNG · lossless'],['jpeg','JPG · smaller']])+select('scale','Image resolution',[['1','Standard · 1×'],['1.5','High · 1.5×'],['2','Very high · 2×']])+`<p class="df2-organize-warning">Converts the visual appearance of each page into an image. Original selectable text and PDF vector objects are not preserved in images.</p>`;
     case 'organize': return `<div class="df2-page-plan-mount" data-organizer-host></div><p class="df2-organize-warning">Reordering preserves page contents. Duplicated pages may increase file size.</p>`;
     case 'compress': return select('compressionPreset','Image compression',[['balanced','Balanced quality'],['quality','Higher image quality'],['small','Smaller images']])+ `<p class="df2-organize-warning">Recompresses eligible RGB JPEG images only. No compression guarantee for scans using other encodings. Text and vectors stay as PDF objects.</p>`;
     case 'split':return select('mode','Split method',[['selected','Selected pages'],['ranges','Page ranges'],['individual','Individual pages'],['every','Every N pages']])+field('pages','Pages to extract','1')+field('ranges','Separate ranges (semicolon)','1-2;3-4')+field('every','Pages in each part','5','number');
@@ -330,7 +331,7 @@ class DocFlowV2 {
       </div></main>`;
   }
   private async execute():Promise<void>{
-    if(this.busy||!this.tool?.operation||!this.files.length)return;
+    if(this.busy||(!this.tool?.operation&&this.tool?.id!=='pdf-to-images')||!this.files.length)return;
     if(this.tool.id==='merge'&&this.files.length<2){this.message('Choose at least two PDFs to merge.');return;}
     const form=this.root.querySelector<HTMLFormElement>('[data-options]');
     if(!form)return;
@@ -363,10 +364,23 @@ class DocFlowV2 {
         input.push({name:'DocFlowSans.woff',type:'font/ttf',buffer:await response.arrayBuffer()});
       }
       if(generation!==this.processingGeneration)return;
-      const operation=this.tool.operation as WorkerOperation;
-      const running=runWorkerOperation(operation,input,options,p=>this.message(p.message+' · '+p.percent+'%'));
-      this.cancel=running.cancel;
-      const result=await running.result;
+      let result:OperationResult;
+      if(this.tool.id==='pdf-to-images'){
+        let cancelled=false;
+        this.cancel=()=>{cancelled=true;};
+        const format=options.format==='jpeg'?'jpeg':'png';
+        const scale=Number(options.scale??1.5);
+        const blob=await pdfToImages(input[0]!.buffer,format,Number.isFinite(scale)?scale:1.5,
+          (done,total)=>this.message('Rendering page '+done+' of '+total+' · '+Math.round(done*100/Math.max(1,total))+'%'),
+          ()=>cancelled||generation!==this.processingGeneration);
+        result={outputs:[{name:'pdf-pages.zip',type:'application/zip',buffer:await blob.arrayBuffer()}],
+          info:{format,pageCount:this.preview?.pageCount??0}};
+      }else{
+        const operation=this.tool.operation as WorkerOperation;
+        const running=runWorkerOperation(operation,input,options,p=>this.message(p.message+' · '+p.percent+'%'));
+        this.cancel=running.cancel;
+        result=await running.result;
+      }
       if(generation!==this.processingGeneration)return;
       this.result=result;
       this.busy=false;
