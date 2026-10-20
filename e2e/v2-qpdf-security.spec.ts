@@ -29,6 +29,10 @@ test('AES-256 PDF protection validates passwords and round-trips through the rea
   const protectedBytes=await resultBytes(page);
   expect(protectedBytes.subarray(0,5).toString('latin1')).toBe('%PDF-');
   await expect(PDFDocument.load(protectedBytes)).rejects.toThrow();
+  await page.getByRole('button',{name:'Return to editing'}).click();
+  await expect(page.locator('input[name=securityPassword]')).toHaveValue('');
+  await expect(page.locator('input[name=confirmPassword]')).toHaveValue('');
+  page.once('dialog',dialog=>dialog.accept());
   await page.goto(prefix+'#/tools/unlock-pdf');
   await page.locator('[data-file-input]').setInputFiles({
     name:'locked.pdf',mimeType:'application/pdf',buffer:protectedBytes

@@ -26,12 +26,19 @@ const preferred: Record<string,string> = {
   'page-numbers':'Page numbers',watermark:'Watermark',compress:'Optimize PDF',
   'images-to-pdf':'Images to PDF',forms:'Fill PDF forms'
 };
+const descriptions:Record<string,string>={
+  'edit-pdf':'Add text, images, shapes, highlights and notes directly on the page. Original PDF text and image objects remain unchanged; replacing them is not available yet.',
+  organize:'Arrange page thumbnails, duplicate or remove pages and undo changes before exporting a new PDF.',
+  watermark:'Add a text watermark with configurable angle, size and opacity while preserving existing page content.',
+  'images-to-pdf':'Combine JPG or PNG images into a PDF with page size, orientation and margin controls.',
+  'pdf-to-images':'Render PDF pages to PNG or JPEG images and download them in a ZIP archive.'
+};
 export const groups = [
   {id:'all',label:'All tools'}, ...toolCategories.map(c=>({id:c.id,label:c.label}))
 ];
 export const v2Tools: V2Tool[] = tools.map(t=>({
   id:t.id, name:preferred[t.id] ?? t.name, category:t.category,
-  description:t.description, icon:symbols[t.id]??t.icon,
+  description:descriptions[t.id]??t.description, icon:symbols[t.id]??t.icon,
   multiple:t.multipleFiles, accepts:t.id==='images-to-pdf'?'.png,.jpg,.jpeg,image/png,image/jpeg':'.pdf,application/pdf',
   operation:nativeOperations[t.id]??null,
   readiness:nativeOperations[t.id] || ['pdf-to-images','text-search','compare','protect-pdf','unlock-pdf','repair-pdf'].includes(t.id) ? 'active':'rebuilding',

@@ -1,6 +1,9 @@
 import type { PreviewController } from '../pdf/render';
 import { runWorkerOperation } from '../pdf/workerClient';
-import { constrain, displaySize, EditHistory, emptyPlan, type EditObject, type EditPlan, type PageFrame } from '../pdf/editModel';
+import { constrain, displaySize, type EditObject, type EditPlan, type PageFrame } from '../pdf/editModel';
+import {createEditorDraft,type EditorDraft} from './draft';
+import {loadEditorFont,paintEditorText} from './editorText';
+import type {Font} from '@pdf-lib/fontkit';
 
 type Kind=EditObject['kind'];
 const kinds:[Kind,string][]=[
@@ -10,8 +13,8 @@ const kinds:[Kind,string][]=[
 const uid=():string=>'v2-'+crypto.randomUUID();
 const escaping=(s:string):string=>s.replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]!));
 export class V2PageEditor {
-  private plan:EditPlan=emptyPlan();
-  private history=new EditHistory();
+  private plan:EditPlan;
+  private history:EditorDraft['history'];
   private frames:PageFrame[]=[];
   private selected:string|null=null;
   private page=1;
@@ -23,10 +26,12 @@ export class V2PageEditor {
   private onPageRender:()=>void;
   private fileInput:HTMLInputElement|null=null;
   private preserved=0;
+  private font:Font|null=null;
   private constructor(private readonly paper:HTMLElement,private readonly canvas:HTMLCanvasElement,
-    private readonly host:HTMLElement,private readonly preview:PreviewController){
+    private readonly host:HTMLElement,private readonly preview:PreviewController,private readonly draft:EditorDraft){
+    this.history=draft.history;this.plan=this.history.current;this.selected=draft.selected;
     this.overlay=document.createElement('div');this.overlay.className='df2-editor-overlay';
-    this.overlay.setAttribute('aria-label','Editable additions to this PDF page');this.paper.append(this.overlay);
+    this.overlay.setAttribute('role','group');this.overlay.setAttribute('aria-label','Editable additions to this PDF page');this.paper.append(this.overlay);
     this.panel=document.createElement('section');this.panel.className='df2-editor-panel';
     this.panel.setAttribute('aria-label','Edit PDF tools and properties');
     this.status=document.createElement('div');this.status.className='df2-editor-status';
@@ -42,14 +47,15 @@ export class V2PageEditor {
     this.panel.addEventListener('click',this.onClick);
     this.panel.addEventListener('change',this.onChange);
   }
-  static async mount(paper:HTMLElement,canvas:HTMLCanvasElement,host:HTMLElement,viewer:PreviewController,file:File):Promise<V2PageEditor>{
-    const editor=new V2PageEditor(paper,canvas,host,viewer);
+  static async mount(paper:HTMLElement,canvas:HTMLCanvasElement,host:HTMLElement,viewer:PreviewController,file:File,draft:EditorDraft=createEditorDraft()):Promise<V2PageEditor>{
+    const editor=new V2PageEditor(paper,canvas,host,viewer,draft);
     try{
-      const result=await runWorkerOperation('direct-edit-inspect',
-        [{name:file.name,type:file.type||'application/pdf',buffer:await file.arrayBuffer()}],{},()=>{}).result;
+      const [result,font]=await Promise.all([runWorkerOperation('direct-edit-inspect',
+        [{name:file.name,type:file.type||'application/pdf',buffer:await file.arrayBuffer()}],{},()=>{}).result,loadEditorFont()]);
       if(editor.destroyed)throw Error('Editor was closed before inspection completed');
       editor.frames=JSON.parse(String(result.info?.frames??'[]')) as PageFrame[];
       editor.preserved=Number(result.info?.preservedHighlights??0);
+      editor.font=font;
       editor.paintPanel();
       editor.paint();
       return editor;
@@ -58,13 +64,14 @@ export class V2PageEditor {
   get currentPlan():EditPlan{return structuredClone(this.plan);}
   get containsText():boolean{return this.plan.objects.some(o=>o.kind==='text');}
   private frame():PageFrame|undefined{return this.frames[this.page-1];}
-  show(page:number):void {this.page=Math.max(1,Math.min(page,this.frames.length));this.selected=null;this.paint();this.paintPanel();}
+  show(page:number):void {const next=Math.max(1,Math.min(page,this.frames.length));if(next!==this.page)this.selected=null;this.page=next;this.paint();this.paintPanel();}
   private commit():void{
     if(this.history.commit(this.plan)){
       this.plan=this.history.current;
       this.status.textContent='Unsaved changes · '+this.plan.objects.length+' additions';
     }
     this.paint();this.paintPanel();
+    this.paper.dispatchEvent(new CustomEvent('df2-draft-change',{bubbles:true}));
   }
   private colorDefault(kind:Kind):string{ return kind==='highlight'?'#f2d55c':kind==='native-highlight'?'#ffd352':kind==='comment'?'#db8b38':'#5c50c8';}
   private add(kind:Kind,data?:string):void{
@@ -165,10 +172,11 @@ export class V2PageEditor {
       if(obj.kind==='image'||obj.kind==='signature'){
         const image=document.createElement('img');image.src=obj.data??'';image.alt='Added image';
         image.draggable=false;el.append(image);
-      } else if(obj.kind==='text')el.textContent=obj.text??'';
+      } else if(obj.kind==='text'&&this.font){
+        el.style.fontFamily='DocFlowEditor';el.style.fontSize=(obj.size*w/size.width)+'px';
+        paintEditorText(el,obj,this.font);
+      }
       else if(obj.kind==='comment')el.textContent='▣';
-      else if(obj.kind==='native-highlight')el.textContent='Editable highlight';
-      else if(obj.kind==='highlight')el.textContent='Highlight region';
       this.overlay.append(el);
     }
   }
@@ -188,6 +196,7 @@ export class V2PageEditor {
     this.fileInput=this.panel.querySelector<HTMLInputElement>('[data-editor-image]');
     this.paintProperties();
     if(this.preserved>0)this.status.textContent=this.preserved+' pre-existing highlights are preserved.';
+    if(this.overlay.querySelector('[data-text-overflow=true]'))this.status.textContent='Text exceeds its box or uses unsupported characters. Enlarge the box, reduce its size or change the text before exporting.';
   }
   private paintProperties():void{
     const host=this.panel.querySelector<HTMLElement>('[data-editor-properties]');if(!host)return;
@@ -208,8 +217,8 @@ export class V2PageEditor {
     if(!node)return;
     const kind=node.dataset.editorAdd as Kind|undefined;
     if(kind){this.add(kind);return;}
-    if(node.hasAttribute('data-editor-undo')){this.plan=this.history.undo();this.selected=null;this.paint();this.paintPanel();return;}
-    if(node.hasAttribute('data-editor-redo')){this.plan=this.history.redo();this.selected=null;this.paint();this.paintPanel();return;}
+    if(node.hasAttribute('data-editor-undo')){this.plan=this.history.undo();this.selected=null;this.paint();this.paintPanel();this.paper.dispatchEvent(new CustomEvent('df2-draft-change',{bubbles:true}));return;}
+    if(node.hasAttribute('data-editor-redo')){this.plan=this.history.redo();this.selected=null;this.paint();this.paintPanel();this.paper.dispatchEvent(new CustomEvent('df2-draft-change',{bubbles:true}));return;}
     if(node.hasAttribute('data-editor-remove')){this.remove();return;}
     if(node.dataset.editorSelect){this.selected=node.dataset.editorSelect;this.paint();this.paintPanel();return;}
   };
@@ -227,22 +236,30 @@ export class V2PageEditor {
       reader.readAsDataURL(file);return;
     }
     if(!(target instanceof HTMLInputElement||target instanceof HTMLTextAreaElement))return;
-    if(!this.panel.contains(target)||!target.name)return;
-    const obj=this.selectedObject(),frame=this.frame();if(!obj||!frame)return;
+    if(this.applyProperty(target))this.commit();
+  };
+  private applyProperty(target:HTMLInputElement|HTMLTextAreaElement):boolean{
+    if(!this.panel.contains(target)||!target.name)return false;
+    const obj=this.selectedObject(),frame=this.frame();if(!obj||!frame)return false;
     const key=target.name;
     if(key==='editorText')obj.text=target.value;
     else if(key==='color')obj.color=target.value;
     else if(['x','y','width','height','size'].includes(key)){
       const n=Number(target.value);
-      if(!Number.isFinite(n))return;
+      if(!Number.isFinite(n))return false;
       if(key==='size')obj.size=Math.max(7,Math.min(60,n));
       else Object.assign(obj,constrain({...obj,[key]:n},frame));
-    }else return;
-    this.commit();
-  };
+    }else return false;
+    return true;
+  }
   dispose():void{
     if(this.destroyed)return;
-    this.destroyed=true;
+    // Hash navigation can remove a focused control without firing change.
+    // Commit pending property values before the view releases the shared draft.
+    const before=JSON.stringify(this.plan);
+    this.panel.querySelectorAll<HTMLInputElement|HTMLTextAreaElement>('[data-editor-properties] input,[data-editor-properties] textarea').forEach(input=>this.applyProperty(input));
+    if(JSON.stringify(this.plan)!==before)this.commit();
+    this.draft.selected=this.selected;this.destroyed=true;
     this.canvas.removeEventListener('docflow-page-rendered',this.onPageRender);
     this.overlay.removeEventListener('pointerdown',this.pointerDown);
     this.overlay.removeEventListener('pointermove',this.pointerMove);

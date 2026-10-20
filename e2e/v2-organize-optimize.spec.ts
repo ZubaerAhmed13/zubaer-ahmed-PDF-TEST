@@ -44,7 +44,6 @@ test('smartphone page organizer works without gestures and has keyboard-accessib
   await page.setViewportSize({width:390,height:844});
   await page.goto(base+'#/tools/organize');
   await page.locator('[data-file-input]').setInputFiles(await pdf(2));
-  await page.getByRole('button',{name:'Options'}).click();
   await expect(page.locator('.df2-plan-row')).toHaveCount(2);
   await page.getByRole('button',{name:'Move page 2 up'}).click();
   await expect(page.locator('.df2-plan-row').first()).toContainText('Page 2');

@@ -10,6 +10,9 @@ import { extractAndSearchText } from '../pdf/textExtraction';
 import { comparePdfs } from '../pdf/pdfComparison';
 import { runQpdfOperation } from '../pdf/qpdfWorkerClient';
 import { mountReview, type ReviewData } from './reviewResults';
+import {createEditorDraft,createOrganizerDraft,safeOptionValues,restoreOptions} from './draft';
+import {mountToolSearch} from './toolSearch';
+import {compressionPresets,compressionSettings,compressionSummary} from './compression';
 
 const esc=(value:string):string=>value.replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]!));
 const bytes=(value:number):string=>value<1024?value+' B':value<1048576?(value/1024).toFixed(1)+' KB':(value/1048576).toFixed(1)+' MB';
@@ -32,8 +35,8 @@ function toolOptions(id:string):string{
     case 'text-search': return field('query','Search phrase (optional)','')+`<p class="df2-organize-warning">Find text that is already selectable in the PDF and export plain text and Markdown. Scanned pages require OCR. The PDF itself is not modified.</p>`;
     case 'compare': return select('mode','Comparison',[['both','Text + visual'],['text','Text only'],['visual','Visual only']])+select('maxPages','Check first pages',[['10','10 pages'],['20','20 pages'],['35','35 pages'],['50','50 pages']])+`<p class="df2-organize-warning">Upload exactly two PDFs, A then B. Matches are heuristic; visually small edits may not be detected. Reports are for review, not legal certification.</p>`;
     case 'pdf-to-images': return select('format','Image format',[['png','PNG · lossless'],['jpeg','JPG · smaller']])+select('scale','Image resolution',[['1','Standard · 1×'],['1.5','High · 1.5×'],['2','Very high · 2×']])+`<p class="df2-organize-warning">Converts the visual appearance of each page into an image. Original selectable text and PDF vector objects are not preserved in images.</p>`;
-    case 'organize': return `<div class="df2-page-plan-mount" data-organizer-host></div><p class="df2-organize-warning">Reordering preserves page contents. Duplicated pages may increase file size.</p>`;
-    case 'compress': return select('compressionPreset','Image compression',[['balanced','Balanced quality'],['quality','Higher image quality'],['small','Smaller images']])+ `<p class="df2-organize-warning">Recompresses eligible RGB JPEG images only. No compression guarantee for scans using other encodings. Text and vectors stay as PDF objects.</p>`;
+    case 'organize': return `<p class="df2-organize-warning">Arrange page cards in the document area. Reordering preserves page contents. Duplicated pages may increase file size.</p>`;
+    case 'compress': return select('compressionPreset','Image compression',[['balanced','Balanced quality'],['quality','Higher image quality'],['small','Smaller images'],['custom','Custom settings']])+`<details class="df2-compression-details"><summary>Advanced compression</summary><label class="df2-control">JPEG image quality (%)<input name="jpegQuality" type="number" min="50" max="95" step="1" value="79"></label><label class="df2-control">Maximum image dimension (px)<input name="maxImagePixels" type="number" min="900" max="5000" step="1" value="2200"></label><p>Images above this pixel size are downsampled. This is a pixel limit, not DPI. Smaller images and lower quality can reduce detail.</p></details><p class="df2-organize-warning">Recompresses eligible RGB JPEG images while preserving text and vectors. Other encodings are left unchanged. Results depend on the document.</p>`;
     case 'split':return select('mode','Split method',[['selected','Selected pages'],['ranges','Page ranges'],['individual','Individual pages'],['every','Every N pages']])+field('pages','Pages to extract','1')+field('ranges','Separate ranges (semicolon)','1-2;3-4')+field('every','Pages in each part','5','number');
     case 'remove-pages':return field('pages','Pages to remove','');
     case 'extract-pages':return field('pages','Pages to extract','');
@@ -78,6 +81,13 @@ class DocFlowV2 {
   private renderId=0;
   private currentPage=1;
   private zoom=1;
+  private fitMode:'width'|'page'='width';
+  private activeFile=0;
+  private editorDraft=createEditorDraft();
+  private organizerDraft=createOrganizerDraft();
+  private optionValues:Record<string,string|boolean>={};
+  private lastRouteHash=location.hash||'#/';
+  private navigationGeneration=0;
   private busy=false;
   private cancel:()=>void=()=>{};
   private filter='all';
@@ -89,12 +99,15 @@ class DocFlowV2 {
     window.addEventListener('hashchange',()=>void this.navigate());
     this.root.addEventListener('click',event=>void this.click(event));
     this.root.addEventListener('input',event=>this.onInput(event));
+    this.root.addEventListener('change',()=>this.invalidateResult());
+    this.root.addEventListener('df2-draft-change',()=>this.invalidateResult());
+    window.addEventListener('beforeunload',event=>{if(this.files.length){event.preventDefault();event.returnValue='';}});
     window.addEventListener('keydown',event=>{
       if((event.metaKey||event.ctrlKey)&&event.key.toLowerCase()==='k'){
         event.preventDefault();
-        location.hash='#/';
-        queueMicrotask(()=>this.root.querySelector<HTMLInputElement>('[data-tool-search]')?.focus());
+        this.openSearch();
       }
+      if(event.key==='Escape')this.closeOptions();
     });
     void this.navigate();
   }
@@ -116,7 +129,7 @@ class DocFlowV2 {
   }
   private card(tool:V2Tool):string {
     const active=tool.readiness==='active';
-    return `<article class="df2-toolcard ${active?'':'df2-coming'}">
+    return `<article class="df2-toolcard ${active?'':'df2-coming'}" data-tool-category="${esc(tool.category)}">
       <a href="${active?base+tool.id:'#/'}" data-card-tool="${tool.id}" aria-label="${esc(tool.name)}${active?'':', rebuilding'}">
         <span class="df2-toolicon" aria-hidden="true">${esc(tool.icon)}</span>
         <span class="df2-toolname">${esc(tool.name)}</span>
@@ -139,7 +152,7 @@ class DocFlowV2 {
         <div class="df2-hero-actions">
           <a class="df2-btn df2-btn-main" href="#/tools/merge">Merge your PDFs <span aria-hidden="true">↗</span></a>
           <a class="df2-btn df2-btn-outline" href="#df2-catalog">Explore tools <span aria-hidden="true">↓</span></a>
-        </div><div class="df2-facts"><span>◉ Real PDF operations</span><span>◈ Dedicated workspaces</span><span>✓ Reviewed results</span></div>
+        </div><div class="df2-quick-tools" aria-label="Popular PDF tools">${v2Tools.filter(t=>t.featured).map(t=>`<a href="${base+t.id}">${esc(t.name)}</a>`).join('')}</div>
       </div><div class="df2-hero-visual" aria-hidden="true">
         <div class="df2-sheet df2-sheet-back"><div class="df2-sheet-lines"></div></div>
         <div class="df2-sheet df2-sheet-front"><span class="df2-sheet-tag">YOUR DOCUMENT</span><div class="df2-sheet-heading"></div>
@@ -163,23 +176,57 @@ class DocFlowV2 {
     input?.setSelectionRange(this.search.length,this.search.length);
   }
   private async navigate():Promise<void> {
+    const next=route();
+    if(next.id!==(this.tool?.id??null)&&this.files.length&&!window.confirm('Leave this document? Your current files and edits will be discarded.')){
+      history.replaceState(null,'',this.lastRouteHash);return;
+    }
+    const navigation=++this.navigationGeneration;
+    this.captureOptions();
     if(this.busy){
       // Route changes cancel processing. A generation token prevents stale
       // asynchronous results from returning the user to the previous tool.
       this.processingGeneration++;
       this.cancel();this.busy=false;
     }
-    const next=route();
-    if(next.id!==this.tool?.id){this.files=[];this.selected.clear();this.result=null;this.review=null;this.disposeReview?.();this.disposeReview=null;this.freeLinks();this.organizer?.dispose();this.organizer=null;this.imagePreview?.dispose();this.imagePreview=null;this.thumbnailRail?.dispose();this.thumbnailRail=null;this.editor?.dispose();this.editor=null;await this.freePreview();}
+    const changedTool=next.id!==(this.tool?.id??null);
+    this.organizer?.dispose();this.organizer=null;this.imagePreview?.dispose();this.imagePreview=null;
+    this.thumbnailRail?.dispose();this.thumbnailRail=null;this.editor?.dispose();this.editor=null;
+    await this.freePreview();
+    if(navigation!==this.navigationGeneration)return;
+    if(changedTool){this.files=[];this.resetDraft();}
     this.tool=next.id?getTool(next.id)??null:null;
     this.stage=next.stage;
-    if(!this.tool){this.home();return;}
-    if(this.tool.readiness!=='active'){this.unavailable();return;}
+    if(!this.tool){this.lastRouteHash=location.hash||'#/';this.home();return;}
+    if(this.tool.readiness!=='active'){this.lastRouteHash=location.hash||'#/';this.unavailable();return;}
     if(this.stage==='result'&&!this.result)this.stage=this.files.length?'work':'upload';
     if(this.stage==='work'&&!this.files.length)this.stage='upload';
+    const canonical=base+this.tool.id+(this.stage==='upload'?'':'/'+this.stage);
+    if(location.hash!==canonical)history.replaceState(null,'',canonical);
+    this.lastRouteHash=canonical;
     if(this.stage==='upload')this.upload();
     else if(this.stage==='work')this.workspace();
     else this.results();
+    const heading=this.root.querySelector<HTMLElement>('h1');if(heading){heading.tabIndex=-1;heading.focus({preventScroll:true});}
+  }
+  private captureOptions():void{
+    const form=this.root.querySelector<HTMLFormElement>('[data-options]');
+    if(form){this.optionValues=safeOptionValues(form);this.optionValues._advancedOpen=form.querySelector<HTMLDetailsElement>('details')?.open??false;}
+  }
+  private resetDraft():void{
+    // The outgoing form belongs to the discarded document. A following route
+    // transition must not capture it back into the new session.
+    this.root.querySelector('[data-options]')?.removeAttribute('data-options');
+    this.editorDraft=createEditorDraft();this.organizerDraft=createOrganizerDraft();this.optionValues={};
+    this.selected.clear();this.currentPage=1;this.activeFile=0;this.zoom=1;this.result=null;this.review=null;
+    this.disposeReview?.();this.disposeReview=null;this.freeLinks();
+  }
+  private invalidateResult():void{if(this.stage==='work'){this.result=null;this.review=null;this.freeLinks();}}
+  private openSearch():void{mountToolSearch(id=>{if(id!==this.tool?.id)location.hash=base+id;});}
+  private closeOptions():void{
+    const panel=this.root.querySelector<HTMLElement>('[data-options-pane]');
+    if(!panel?.classList.contains('opened'))return;
+    panel.classList.remove('opened');this.root.querySelector<HTMLButtonElement>('[data-mobile-options]')?.setAttribute('aria-expanded','false');
+    this.root.querySelector<HTMLButtonElement>('[data-mobile-options]')?.focus();
   }
   private crumbs():string {
     return `<div class="df2-crumbs"><a href="#/">All tools</a><span aria-hidden="true">›</span><span>${esc(this.tool?.name??'')}</span></div>`;
@@ -226,6 +273,9 @@ class DocFlowV2 {
     const tool=this.tool;if(!tool)return;
     const good=files.filter(file=>tool.accepts.includes('.png')?(/image\/(png|jpeg)/.test(file.type)||/\.(png|jpe?g)$/i.test(file.name)):(file.type==='application/pdf'||/\.pdf$/i.test(file.name)));
     if(good.length!==files.length||!good.length){const el=this.root.querySelector<HTMLElement>('.df2-upload-note');if(el)el.textContent='Choose supported '+(tool.accepts.includes('.png')?'JPG/PNG':'PDF')+' files only.';return;}
+    if(this.busy){this.message('Cancel processing before changing files.');return;}
+    this.captureOptions();
+    if(this.files.length&&!tool.multiple){if(!window.confirm('Replace this document? Your current edits will be discarded.'))return;this.resetDraft();}
     this.files=tool.multiple?[...this.files,...good]:good.slice(0,1);
     this.selected.clear();this.currentPage=1;this.result=null;this.review=null;this.disposeReview?.();this.disposeReview=null;
     // One hash-route transition owns the mount; never mount the viewer twice.
@@ -239,7 +289,7 @@ class DocFlowV2 {
     this.imagePreview?.dispose();this.imagePreview=null;
     this.thumbnailRail?.dispose();this.thumbnailRail=null;
     this.editor?.dispose();this.editor=null;
-    this.root.innerHTML=this.header()+`<main id="df2-main" class="df2-work">
+    this.root.innerHTML=this.header()+`<main id="df2-main" class="df2-work ${tool.id==='organize'?'df2-organizing':''}">
       <div class="df2-worktop">${this.crumbs()}<div class="df2-work-actions"><button class="df2-subtle" data-change-files>＋ Add files</button><button class="df2-subtle" data-reset>Start over</button></div></div>
       <div class="df2-workflow">
         <aside class="df2-rail" aria-label="Document pages and files"><div class="df2-pane-title"><strong>${tool.multiple?'Documents':'Pages'}</strong><span>${this.files.length} ${tool.multiple?'files':'file'}</span></div>
@@ -249,21 +299,24 @@ class DocFlowV2 {
         </aside>
         <section class="df2-canvas-pane" aria-label="Document preview">
           <div class="df2-canvas-toolbar"><span class="df2-doc-name" title="${esc(this.files[0]?.name??'')}">${esc(this.files[0]?.name??'')}</span>
-            <div class="df2-zoom"><button data-page-prev aria-label="Previous page">‹</button><span data-page-label>Page 1</span><button data-page-next aria-label="Next page">›</button><span class="df2-zoom-sep"></span><button data-zoom-out aria-label="Zoom out">−</button><span data-zoom-label>${Math.round(this.zoom*100)}%</span><button data-zoom-in aria-label="Zoom in">+</button></div></div>
-          <div class="df2-page-stage"><div class="df2-canvas-paper"><canvas data-page-canvas aria-label="PDF page preview" role="img"></canvas></div>
+            <div class="df2-zoom"><button data-page-prev aria-label="Previous page">‹</button><span data-page-label>Page 1</span><button data-page-next aria-label="Next page">›</button><span class="df2-zoom-sep"></span><button data-fit aria-label="Fit page or width" title="Switch between fit width and fit page">Fit</button><button data-zoom-out aria-label="Zoom out">−</button><span data-zoom-label>${Math.round(this.zoom*100)}%</span><button data-zoom-in aria-label="Zoom in">+</button></div></div>
+          <div class="df2-page-stage" tabindex="0" aria-label="Scrollable document">${tool.id==='organize'?'<button class="df2-subtle" data-show-grid hidden>← Back to pages</button><div class="df2-page-plan-mount" data-organizer-host></div>':''}<div class="df2-canvas-paper"><canvas data-page-canvas aria-label="PDF page preview" role="img"></canvas></div>
             <p data-render-status role="status" aria-live="polite">Preparing document preview…</p></div>
         </section>
-        <aside class="df2-inspector" data-options-pane aria-label="Tool settings"><div class="df2-pane-title"><strong>${esc(tool.name)}</strong><span>OPTIONS</span></div>
+        <aside class="df2-inspector" id="df2-options" data-options-pane aria-label="Tool settings"><div class="df2-pane-title"><strong>${esc(tool.name)}</strong><button type="button" class="df2-close-options" data-close-options aria-label="Close options">×</button></div>
           <p class="df2-inspector-caption">${esc(tool.description)}</p>
           <form data-options>${toolOptions(tool.id)}</form>
           <div class="df2-inspector-help"><b>Original preserved</b><p>We create a new result. Review it before sharing or distributing.</p></div>
         </aside>
       </div>
       <div class="df2-work-bottom"><div class="df2-run-status" role="status" data-run-status>Ready to process · ${this.files.length} files</div>
-        <button class="df2-btn df2-btn-outline df2-mobile-options" data-mobile-options>Options</button>
+        <button class="df2-btn df2-btn-outline" data-cancel-processing aria-label="Cancel processing" hidden>Cancel</button>
+        <button class="df2-btn df2-btn-outline df2-mobile-options" aria-controls="df2-options" aria-expanded="false" data-mobile-options>Options</button>
         <button class="df2-btn df2-btn-main" data-run>Run ${esc(tool.name)} <span aria-hidden="true">↗</span></button></div>
     <input hidden type="file" data-add-file accept="${tool.accepts}" ${tool.multiple?'multiple':''}>
     </main>`;
+    const form=this.root.querySelector<HTMLFormElement>('[data-options]');if(form)restoreOptions(form,this.optionValues);
+    const details=form?.querySelector<HTMLDetailsElement>('details');if(details)details.open=this.optionValues._advancedOpen===true;
     const add=this.root.querySelector<HTMLInputElement>('[data-add-file]');
     add?.addEventListener('change',()=>{if(add.files){void this.receive([...add.files]);}});
     void this.loadPreview();
@@ -271,7 +324,7 @@ class DocFlowV2 {
   private async loadPreview():Promise<void> {
     const generation=++this.renderId;
     await this.freePreview(false);
-    const file=this.files[0],canvas=this.root.querySelector<HTMLCanvasElement>('[data-page-canvas]'),
+    const file=this.files[this.activeFile]??this.files[0],canvas=this.root.querySelector<HTMLCanvasElement>('[data-page-canvas]'),
       status=this.root.querySelector<HTMLElement>('[data-render-status]');
     if(!file||!canvas||!status)return;
     if(this.tool?.id==='images-to-pdf'){
@@ -289,13 +342,14 @@ class DocFlowV2 {
       const controller=await createPreview(await file.arrayBuffer(),canvas,status);
       if(generation!==this.renderId){await controller.destroy();return;}
       this.preview=controller;
-      await this.showPage(1);
+      await this.showPage(this.currentPage);
+      if(generation!==this.renderId)return;
       if(this.tool?.id==='edit-pdf'){
         const paper=this.root.querySelector<HTMLElement>('.df2-canvas-paper');
         const panel=this.root.querySelector<HTMLElement>('.df2-inspector');
         if(paper&&panel){
           this.message('Inspecting editable PDF page geometry…');
-          const editor=await V2PageEditor.mount(paper,canvas,panel,controller,file);
+          const editor=await V2PageEditor.mount(paper,canvas,panel,controller,file,this.editorDraft);
           if(generation!==this.renderId){editor.dispose();return;}
           this.editor=editor;
           this.editor.show(this.currentPage);
@@ -304,10 +358,13 @@ class DocFlowV2 {
       }
       if(this.tool?.id==='organize'){
         const host=this.root.querySelector<HTMLElement>('[data-organizer-host]');
-        if(host)this.organizer=mountPageOrganizer(host,controller.pageCount,page=>{void this.showPage(page);});
+        if(host)this.organizer=mountPageOrganizer(host,controller.pageCount,page=>{this.root.querySelector('.df2-work')?.classList.add('df2-page-preview');this.root.querySelector<HTMLButtonElement>('[data-show-grid]')!.hidden=false;void this.showPage(page);},this.organizerDraft,controller);
       }
       const host=this.root.querySelector<HTMLElement>('.df2-page-thumbs');
-      if(host && generation===this.renderId)this.thumbnailRail=mountPdfThumbnailRail(host,controller);
+      if(host && generation===this.renderId){
+        this.thumbnailRail=mountPdfThumbnailRail(host,controller);
+        host.querySelectorAll<HTMLButtonElement>('.df2-thumb').forEach(btn=>btn.setAttribute('aria-pressed',String(this.selected.has(Number(btn.dataset.page)))));
+      }
     }catch(error){if(generation===this.renderId&&status)status.textContent=error instanceof Error?error.message:'Preview unavailable';}
   }
   private async showPage(page:number):Promise<void> {
@@ -316,7 +373,12 @@ class DocFlowV2 {
     const label=this.root.querySelector<HTMLElement>('[data-page-label]');
     if(label)label.textContent='Page '+this.currentPage+' / '+controller.pageCount;
     const zoom=this.root.querySelector<HTMLElement>('[data-zoom-label]');if(zoom)zoom.textContent=Math.round(this.zoom*100)+'%';
-    await controller.render(this.currentPage,1.08*this.zoom);
+    const pdfPage=await controller.document.getPage(this.currentPage),pageSize=pdfPage.getViewport({scale:1});
+    if(controller!==this.preview)return;
+    const stage=this.root.querySelector<HTMLElement>('.df2-page-stage');
+    const width=Math.max(100,(stage?.clientWidth??700)-32),height=Math.max(100,(stage?.clientHeight??800)-32);
+    const fit=this.fitMode==='page'?Math.min(width/pageSize.width,height/pageSize.height):width/pageSize.width;
+    await controller.render(this.currentPage,Math.max(.1,Math.min(4,fit*this.zoom)));
     this.editor?.show(this.currentPage);
   }
   private async freePreview(invalidate=true):Promise<void> {
@@ -334,14 +396,23 @@ class DocFlowV2 {
       const url=URL.createObjectURL(new Blob([output.buffer],{type:output.type}));this.links.push(url);
       return `<a class="df2-output" href="${url}" download="${esc(output.name)}"><span class="df2-output-icon">↓</span><span><b>${esc(output.name)}</b><small>${bytes(output.buffer.byteLength)} · Ready to download</small></span><strong>Download →</strong></a>`;
     }).join('');
+    const compression=tool.id==='compress'?compressionSummary(value.info):null;
+    const compressionMarkup=compression?`<section class="df2-compression-summary" data-compression-summary aria-label="Compression results"><strong>${compression.savedBytes>0?compression.percent+'% smaller':'No size reduction'}</strong><p>Original ${bytes(compression.input)} → Result ${bytes(compression.output)}</p><p>${compression.recompressed} of ${compression.eligible} eligible JPEG images recompressed. Text and vector objects preserved.</p>${compression.savedBytes?'':'<p>This document may already be optimised or use unsupported image encodings. Your original is available below.</p>'}</section>`:'';
+    const warning=value.info?.warning?`<p class="df2-review-warning" role="status">${esc(String(value.info.warning))}</p>`:'';
     this.root.innerHTML=this.header()+`<main id="df2-main" class="df2-result">${this.crumbs()}${this.progress()}
       <div class="df2-result-card"><span class="df2-result-check" aria-hidden="true">✓</span><p class="df2-overline">DOCUMENT READY</p>
-        <h1>${this.review?'Your analysis is ready.':'All done. Beautifully simple.'}</h1><p>${this.review?'Review the findings below and download the detailed reports.': 'Your '+esc(tool.name.toLowerCase())+' task finished. Your original file hasn\'t been overwritten.'}</p>
+        <h1>${this.review?'Your analysis is ready.':'Your document is ready.'}</h1><p>${this.review?'Review the findings below and download the detailed reports.': 'Your original file has not been overwritten.'}</p>
+        ${warning}${compressionMarkup}
         <div class="df2-downloads">${downloads||'<p>No downloadable file for this inspection operation.</p>'}</div>
         ${this.review?'<div data-v2-review-container></div>':''}
         ${value.info?`<details class="df2-result-info"><summary>Processing details</summary><pre>${esc(JSON.stringify(value.info,null,2))}</pre></details>`:''}
-        <div class="df2-result-actions"><button class="df2-btn df2-btn-outline" data-again>Start another file</button><a class="df2-btn df2-btn-subtle" href="#/">See all tools →</a></div>
+        <div class="df2-result-actions"><button class="df2-btn df2-btn-outline" data-return-edit>Return to editing</button><button class="df2-btn df2-btn-outline" data-again>Start another file</button><a class="df2-btn df2-btn-subtle" href="#/">See all tools →</a></div>
       </div></main>`;
+    if(compression&&!compression.savedBytes&&this.files[0]){
+      const source=document.createElement('a');const url=URL.createObjectURL(this.files[0]);this.links.push(url);
+      source.href=url;source.download=this.files[0].name;source.className='df2-btn df2-btn-outline';source.textContent='Download original';
+      this.root.querySelector('.df2-downloads')?.append(source);
+    }
     if(this.review){
       const host=this.root.querySelector<HTMLElement>('[data-v2-review-container]');
       if(host)this.disposeReview=mountReview(host,this.review);
@@ -376,17 +447,15 @@ class DocFlowV2 {
       options.order=this.organizer.getOrder().join(',');
     }
     if(tool.id==='compress'){
-      const preset=String(options.compressionPreset??'balanced');
-      const settings=preset==='quality'?{imageQuality:.91,maxImageDimension:3500}:
-        preset==='small'?{imageQuality:.61,maxImageDimension:1400}:{imageQuality:.79,maxImageDimension:2200};
-      Object.assign(options,settings);
+      Object.assign(options,compressionSettings(options));
     }
     if(['remove-pages','extract-pages'].includes(tool.id)&&!String(options.pages??'').trim()){
       this.message('Select at least one page before continuing.');return;
     }
     const button=this.root.querySelector<HTMLButtonElement>('[data-run]');
     const generation=++this.processingGeneration;
-    this.busy=true;if(button)button.disabled=true;this.message('Preparing files…');
+    this.setProcessing(true);this.message('Preparing files…');
+    const progressMessage=(message:string)=>{if(generation===this.processingGeneration)this.message(message);};
     try{
       const input=await Promise.all(this.files.map(async f=>({name:f.name,type:f.type,buffer:await f.arrayBuffer()})));
       if(tool.id==='edit-pdf' && this.editor?.containsText){
@@ -401,7 +470,7 @@ class DocFlowV2 {
         this.cancel=()=>{cancelled=true;};
         const query=String(options.query??'').trim();
         const extracted=await extractAndSearchText(input[0]!.buffer,query,
-          (done,total)=>this.message('Reading page '+done+' of '+total+' · '+Math.round(done*100/Math.max(1,total))+'%'),
+          (done,total)=>progressMessage('Reading page '+done+' of '+total+' · '+Math.round(done*100/Math.max(1,total))+'%'),
           ()=>cancelled||generation!==this.processingGeneration);
         if(cancelled||generation!==this.processingGeneration)return;
         result=extracted.result;
@@ -412,7 +481,7 @@ class DocFlowV2 {
         const comparison=await comparePdfs(input[0]!.buffer,input[1]!.buffer,
           {mode:options.mode==='text'||options.mode==='visual'?options.mode:'both',
            maxPages:Number(options.maxPages??20)},
-          (done,total)=>this.message('Comparing page pair '+done+' of '+total+' · '+Math.round(done*100/Math.max(1,total))+'%'),
+          (done,total)=>progressMessage('Comparing page pair '+done+' of '+total+' · '+Math.round(done*100/Math.max(1,total))+'%'),
           ()=>cancelled||generation!==this.processingGeneration);
         if(cancelled||generation!==this.processingGeneration)return;
         this.review={kind:'compare',comparison};
@@ -425,7 +494,7 @@ class DocFlowV2 {
       }else if(['protect-pdf','unlock-pdf','repair-pdf'].includes(tool.id)){
         const operation=tool.id==='protect-pdf'?'protect':tool.id==='unlock-pdf'?'unlock':'repair';
         const password=operation==='repair'?'':String(options.securityPassword??'');
-        const running=runQpdfOperation(operation,input[0]!,password,p=>this.message(p.message+' · '+p.percent+'%'));
+        const running=runQpdfOperation(operation,input[0]!,password,p=>progressMessage(p.message+' · '+p.percent+'%'));
         this.cancel=running.cancel;
         result=await running.result;
       }else if(tool.id==='pdf-to-images'){
@@ -434,13 +503,13 @@ class DocFlowV2 {
         const format=options.format==='jpeg'?'jpeg':'png';
         const scale=Number(options.scale??1.5);
         const blob=await pdfToImages(input[0]!.buffer,format,Number.isFinite(scale)?scale:1.5,
-          (done,total)=>this.message('Rendering page '+done+' of '+total+' · '+Math.round(done*100/Math.max(1,total))+'%'),
+          (done,total)=>progressMessage('Rendering page '+done+' of '+total+' · '+Math.round(done*100/Math.max(1,total))+'%'),
           ()=>cancelled||generation!==this.processingGeneration);
         result={outputs:[{name:'pdf-pages.zip',type:'application/zip',buffer:await blob.arrayBuffer()}],
           info:{format,pageCount:this.preview?.pageCount??0}};
       }else{
         const operation=tool.operation as WorkerOperation;
-        const running=runWorkerOperation(operation,input,options,p=>this.message(p.message+' · '+p.percent+'%'));
+        const running=runWorkerOperation(operation,input,options,p=>progressMessage(p.message+' · '+p.percent+'%'));
         this.cancel=running.cancel;
         result=await running.result;
       }
@@ -451,7 +520,13 @@ class DocFlowV2 {
       // Hashchange is the single authority for transition to result stage.
       location.hash=base+tool.id+'/result';
     }catch(error){if(generation===this.processingGeneration)this.message(error instanceof Error?'Could not finish: '+error.message:'Processing failed.');}
-    finally {if(generation===this.processingGeneration){this.busy=false;if(button)button.disabled=false;this.cancel=()=>{};}}
+    finally {if(generation===this.processingGeneration){this.setProcessing(false);if(button)button.disabled=false;this.cancel=()=>{};}}
+  }
+  private setProcessing(value:boolean):void{
+    this.busy=value;
+    const run=this.root.querySelector<HTMLButtonElement>('[data-run]');if(run)run.disabled=value;
+    const cancel=this.root.querySelector<HTMLButtonElement>('[data-cancel-processing]');if(cancel)cancel.hidden=!value;
+    const content=this.root.querySelector<HTMLElement>('.df2-workflow');if(content)content.inert=value;
   }
   private message(value:string):void{const node=this.root.querySelector<HTMLElement>('[data-run-status]');if(node)node.textContent=value;}
   private onInput(event:Event):void {
@@ -464,7 +539,16 @@ class DocFlowV2 {
       if(catalog)catalog.innerHTML=matches.map(tool=>this.card(tool)).join('');
       if(status)status.textContent=matches.length+' matching tools';
       target.setSelectionRange(start,start);
+      return;
     }
+    if(target instanceof HTMLSelectElement&&target.name==='compressionPreset'){
+      const preset=compressionPresets[target.value];
+      const form=target.form;if(preset&&form){form.querySelector<HTMLInputElement>('[name=jpegQuality]')!.value=String(Math.round(preset.imageQuality*100));form.querySelector<HTMLInputElement>('[name=maxImagePixels]')!.value=String(preset.maxImageDimension);}
+    }
+    if(target instanceof HTMLInputElement&&['jpegQuality','maxImagePixels'].includes(target.name)){
+      const preset=target.form?.querySelector<HTMLSelectElement>('[name=compressionPreset]');if(preset)preset.value='custom';
+    }
+    this.invalidateResult();
   }
   private syncImageLabel():void{
     if(!this.imagePreview)return;
@@ -474,16 +558,22 @@ class DocFlowV2 {
   private async click(event:MouseEvent):Promise<void>{
     const target=event.target instanceof Element?event.target:null;
     if(!target)return;
+    if(target.closest('.df2-skip')){event.preventDefault();const main=this.root.querySelector<HTMLElement>('main');if(main){main.tabIndex=-1;main.focus();}return;}
+    if(target.closest('a[href="#df2-catalog"]')){event.preventDefault();this.root.querySelector('#df2-catalog')?.scrollIntoView({behavior:'smooth'});return;}
     const category=target.closest<HTMLElement>('[data-category]');
     if(category){this.filter=category.dataset.category??'all';this.home();return;}
-    if(target.closest('[data-open-search]')){location.hash='#/';queueMicrotask(()=>this.root.querySelector<HTMLInputElement>('[data-tool-search]')?.focus());return;}
+    if(target.closest('[data-open-search]')){this.openSearch();return;}
+    if(target.closest('[data-cancel-processing]')){++this.processingGeneration;this.cancel();this.cancel=()=>{};this.setProcessing(false);this.message('Cancelled · your document and settings are ready to use.');return;}
     const t=target.closest<HTMLElement>('[data-card-tool]');
     if(t&&getTool(t.dataset.cardTool??'')?.readiness!=='active'){event.preventDefault();const tool=getTool(t.dataset.cardTool??'');if(tool){this.tool=tool;this.unavailable();}return;}
-    if(target.closest('[data-reset],[data-again]')){this.files=[];this.selected.clear();this.result=null;this.freeLinks();this.imagePreview?.dispose();this.imagePreview=null;this.organizer?.dispose();this.organizer=null;this.thumbnailRail?.dispose();this.thumbnailRail=null;this.editor?.dispose();this.editor=null;await this.freePreview();if(this.tool)location.hash=base+this.tool.id;else location.hash='#/';return;}
+    if(target.closest('[data-return-edit]')){location.hash=base+this.tool!.id+'/work';return;}
+    if(target.closest('[data-show-grid]')){this.root.querySelector('.df2-work')?.classList.remove('df2-page-preview');this.root.querySelector<HTMLButtonElement>('[data-show-grid]')!.hidden=true;return;}
+    if(target.closest('[data-reset],[data-again]')){if(this.stage==='work'&&this.files.length&&!window.confirm('Start over? Your current files and edits will be discarded.'))return;this.files=[];this.resetDraft();if(this.tool)location.hash=base+this.tool.id;else location.hash='#/';return;}
     if(target.closest('[data-change-files]')){this.root.querySelector<HTMLInputElement>('[data-add-file]')?.click();return;}
     const up=target.closest<HTMLElement>('[data-move-up]'),down=target.closest<HTMLElement>('[data-move-down]'),remove=target.closest<HTMLElement>('[data-remove-file]');
     if(up||down||remove){const index=Number((up??down??remove)?.dataset.moveUp??(down??remove)?.dataset.moveDown??remove?.dataset.removeFile);
       if(!Number.isInteger(index)||index<0||index>=this.files.length)return;
+      this.captureOptions();this.invalidateResult();
       if(remove)this.files.splice(index,1);
       else {const next=index+(up?-1:1);if(next<0||next>=this.files.length)return;[this.files[index],this.files[next]]=[this.files[next]!,this.files[index]!];}
       if(!this.files.length){location.hash=base+this.tool!.id;return;}
@@ -492,7 +582,7 @@ class DocFlowV2 {
     const thumb=target.closest<HTMLElement>('[data-page]');
     if(thumb&&thumb.classList.contains('df2-thumb')){
       const p=Number(thumb.dataset.page);const pagesField=this.root.querySelector<HTMLInputElement>('input[name="pages"]');
-      if(pagesField){if(this.selected.has(p))this.selected.delete(p);else this.selected.add(p);pagesField.value=range(this.selected);}
+      if(pagesField){if(this.selected.has(p))this.selected.delete(p);else this.selected.add(p);pagesField.value=range(this.selected);this.invalidateResult();}
       this.root.querySelectorAll<HTMLButtonElement>('.df2-thumb').forEach(btn=>btn.setAttribute('aria-pressed',String(this.selected.has(Number(btn.dataset.page)))));
       await this.showPage(p);return;
     }
@@ -507,7 +597,9 @@ class DocFlowV2 {
     if(target.closest('[data-page-next]')){if(this.imagePreview)await this.imagePreview.next(1);else await this.showPage(this.currentPage+1);this.syncImageLabel();return;}
     if(target.closest('[data-zoom-out]')){this.zoom=Math.max(.55,this.zoom-.15);await this.showPage(this.currentPage);return;}
     if(target.closest('[data-zoom-in]')){this.zoom=Math.min(2.4,this.zoom+.15);await this.showPage(this.currentPage);return;}
-    if(target.closest('[data-mobile-options]')){this.root.querySelector<HTMLElement>('[data-options-pane]')?.classList.toggle('opened');return;}
+    if(target.closest('[data-fit]')){this.fitMode=this.fitMode==='width'?'page':'width';this.zoom=1;await this.showPage(this.currentPage);return;}
+    if(target.closest('[data-close-options]')){this.closeOptions();return;}
+    if(target.closest('[data-mobile-options]')){const panel=this.root.querySelector<HTMLElement>('[data-options-pane]');if(panel?.classList.contains('opened'))this.closeOptions();else{panel?.classList.add('opened');this.root.querySelector('[data-mobile-options]')?.setAttribute('aria-expanded','true');panel?.querySelector<HTMLElement>('[data-close-options]')?.focus();}return;}
     if(target.closest('[data-run]')){await this.execute();return;}
   }
 }
