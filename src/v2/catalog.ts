@@ -7,7 +7,7 @@ export type V2Tool = {
   readiness: 'active' | 'rebuilding'; featured: boolean;
 };
 const nativeOperations: Partial<Record<string, WorkerOperation>> = {
-  merge: 'merge', split: 'split', 'remove-pages': 'remove-pages',
+  merge: 'merge', split: 'split', organize: 'organize', compress: 'optimize', 'remove-pages': 'remove-pages',
   'extract-pages':'extract-pages', rotate:'rotate', 'page-numbers':'page-numbers',
   watermark:'watermark', crop:'crop', 'metadata-edit':'metadata-edit',
   annotate:'annotate', metadata:'metadata', 'images-to-pdf':'images-to-pdf',
@@ -23,7 +23,7 @@ const symbols: Record<string,string> = {
 const preferred: Record<string,string> = {
   merge:'Merge PDFs',split:'Split PDF', 'remove-pages':'Remove pages',
   'extract-pages':'Extract pages',rotate:'Rotate PDF',
-  'page-numbers':'Page numbers',watermark:'Watermark',
+  'page-numbers':'Page numbers',watermark:'Watermark',compress:'Optimize PDF',
   'images-to-pdf':'Images to PDF',forms:'Fill PDF forms'
 };
 export const groups = [
