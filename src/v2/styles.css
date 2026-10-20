@@ -301,3 +301,28 @@ a{color:inherit;text-decoration:none}
   .df2-output strong{font-size:10px}
 }
 @media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}*,*::before,*::after{transition:none!important;animation:none!important}}
+
+/* R1 — accessible page organization, without legacy view adapters. */
+.df2-page-plan{display:grid;gap:11px;min-width:0}
+.df2-plan-title{display:flex;justify-content:space-between;align-items:center;gap:10px}
+.df2-plan-title strong{font-size:13px;color:#283750;font-weight:820}
+.df2-plan-title span{font-size:10px;color:#6d60cf;font-weight:780;background:#f1efff;border-radius:20px;padding:5px 9px}
+.df2-plan-info{font-size:11px;line-height:1.6;color:#68758e;margin:0}
+.df2-plan-toolbar{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:5px}
+.df2-plan-toolbar button{border:1px solid #e2e5ee;border-radius:9px;background:#fff;padding:8px 3px;font-size:11px;font-weight:750;min-height:42px;color:#4b5976}
+.df2-plan-toolbar button:disabled{opacity:.42;cursor:not-allowed}
+.df2-plan-list{display:grid;gap:6px;max-height:min(36dvh,460px);overflow-y:auto;overscroll-behavior:contain;scrollbar-width:thin;padding-right:3px}
+.df2-plan-row{display:flex;gap:4px;align-items:center;padding:5px;border:1px solid #e4e8f0;border-radius:11px;background:#fcfdff;min-height:52px}
+.df2-plan-page{flex:1;min-width:0;text-align:left;padding:10px 6px;background:transparent;border:0;color:#243553;font-size:12px;font-weight:800}
+.df2-plan-page:hover{color:#5b4ed1}
+.df2-plan-controls{display:flex;gap:3px}
+.df2-plan-controls button{border:1px solid #e0e5ed;background:#fff;color:#4e5e78;border-radius:8px;width:29px;height:36px;padding:0;font-size:16px;flex:0 0 29px}
+.df2-plan-controls button:disabled{opacity:.3;cursor:not-allowed}
+.df2-plan-controls button:hover:not(:disabled){background:#eeecff;border-color:#bcb7ef;color:#5549c9}
+.df2-organize-warning{margin:1px 0 0;font-size:11px;line-height:1.6;color:#728097;background:#f7f8fc;border-left:3px solid #8b82df;border-radius:8px;padding:10px 11px}
+@media(max-width:740px){
+  .df2-inspector .df2-page-plan-mount{grid-column:1/-1}
+  .df2-plan-list{max-height:min(40dvh,400px)}
+  .df2-plan-controls button{width:42px;height:44px;flex-basis:42px}
+  .df2-plan-toolbar button{min-height:44px}
+}
