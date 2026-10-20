@@ -33,11 +33,13 @@ export function formatPageChoice(selection: Iterable<number>): string {
 
 export function mountWorkspace(container: HTMLDivElement, tool: ToolDefinition): void {
   mountRecoveredWorkspace(container, tool);
-  if (tool.id !== 'remove-pages' && tool.id !== 'extract-pages') return;
+  if (tool.id !== 'remove-pages' && tool.id !== 'extract-pages' && tool.id !== 'split') return;
   const removing = tool.id === 'remove-pages';
+  const splitting = tool.id === 'split';
   const fileInput = container.querySelector<HTMLInputElement>('#workspace-file');
   const input = container.querySelector<HTMLInputElement>('#tool-options input[name="pages"]');
   const form = container.querySelector<HTMLFormElement>('#tool-options');
+  const splitMode = form?.querySelector<HTMLSelectElement>('select[name="mode"]');
   const drop = container.querySelector<HTMLElement>('.drop-zone');
   const run = container.querySelector<HTMLButtonElement>('#run-operation');
   if (!fileInput || !input || !form || !drop || !run) return;
@@ -48,10 +50,10 @@ export function mountWorkspace(container: HTMLDivElement, tool: ToolDefinition):
   panel.dataset.pickerMode = tool.id;
   panel.hidden = true;
   panel.innerHTML = `
-    <header class="df-picker-head"><div><span>${removing ? 'PAGES TO REMOVE' : 'PAGES TO EXTRACT'}</span><h2>${removing ? 'Select pages to remove' : 'Select pages to extract'}</h2><p>Choose pages below or type page numbers in Settings. The original PDF stays unchanged.</p></div><strong data-picker-count role="status" aria-live="polite">0 selected</strong></header>
+    <header class="df-picker-head"><div><span>${splitting ? 'VISUAL SPLIT' : removing ? 'PAGES TO REMOVE' : 'PAGES TO EXTRACT'}</span><h2>${splitting ? 'Pick pages to split' : removing ? 'Select pages to remove' : 'Select pages to extract'}</h2><p>${splitting ? 'Tap pages to create one PDF of your selection. This switches Split mode to Selected pages. Other split modes remain available in Settings.' : 'Choose pages below or type page numbers in Settings. The original PDF stays unchanged.'}</p></div><strong data-picker-count role="status" aria-live="polite">0 selected</strong></header>
     <div class="df-picker-actions"><button type="button" class="secondary" data-pick-all>Select all</button><button type="button" class="secondary" data-pick-clear>Clear selection</button><span>Tap to select · Shift-click for a range</span></div>
     <p data-picker-alert role="status" aria-live="polite" hidden></p>
-    <div class="df-picker-grid" data-pick-grid role="group" aria-label="${removing ? 'Pages to remove' : 'Pages to extract'}"></div>
+    <div class="df-picker-grid" data-pick-grid role="group" aria-label="${splitting ? 'Pages to split' : removing ? 'Pages to remove' : 'Pages to extract'}"></div>
   `;
   form.prepend(panel);
   const count = panel.querySelector<HTMLElement>('[data-picker-count]')!;
@@ -87,7 +89,7 @@ export function mountWorkspace(container: HTMLDivElement, tool: ToolDefinition):
       const active = selected.has(page);
       card.dataset.selected = String(active);
       const button = card.querySelector<HTMLButtonElement>('[data-pick-select]');
-      if (button) { button.setAttribute('aria-pressed', String(active)); button.setAttribute('aria-label', `${active ? 'Deselect' : 'Select'} page ${page} ${removing ? 'for removal' : 'for extraction'}`); }
+      if (button) { button.setAttribute('aria-pressed', String(active)); button.setAttribute('aria-label', `${active ? 'Deselect' : 'Select'} page ${page} ${removing ? 'for removal' : splitting ? 'for splitting' : 'for extraction'}`); }
     });
     const modalSelect = dialog.querySelector<HTMLButtonElement>('[data-picker-preview-select]');
     if (modalSelect && currentPreview !== null) modalSelect.textContent = selected.has(currentPreview) ? 'Deselect page' : 'Select page';
@@ -96,6 +98,12 @@ export function mountWorkspace(container: HTMLDivElement, tool: ToolDefinition):
   };
   const emit = (): void => {
     syncing = true;
+    // Visual selection defines the selected-pages split mode. Other split
+    // modes are left untouched until the user explicitly chooses pages.
+    if (splitting && splitMode && splitMode.value !== 'selected') {
+      splitMode.value = 'selected';
+      splitMode.dispatchEvent(new Event('change', { bubbles: true }));
+    }
     input.value = formatPageChoice(selected);
     input.dispatchEvent(new Event('input', { bubbles: true }));
     input.dispatchEvent(new Event('change', { bubbles: true }));
@@ -256,6 +264,7 @@ export function mountWorkspace(container: HTMLDivElement, tool: ToolDefinition):
   };
   const onRun = (event: MouseEvent): void => {
     if (!pages) return;
+    if (splitting && splitMode?.value !== 'selected') return;
     const parsed = parsePageChoice(input.value, pages);
     const error = parsed === null ? 'Correct the page range.' : parsed.size === 0 ? 'Select at least one page.' : removing && parsed.size === pages ? 'Keep at least one page.' : '';
     if (!error) return;
