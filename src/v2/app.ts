@@ -6,6 +6,9 @@ import { mountPageOrganizer, type PageOrganizer } from './pageOrganizer';
 import { V2ImagePreview } from './imagePreview';
 import { mountPdfThumbnailRail, type ThumbnailRail } from './thumbnailRail';
 import { V2PageEditor } from './pageEditor';
+import { extractAndSearchText } from '../pdf/textExtraction';
+import { comparePdfs } from '../pdf/pdfComparison';
+import { mountReview, type ReviewData } from './reviewResults';
 
 const esc=(value:string):string=>value.replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]!));
 const bytes=(value:number):string=>value<1024?value+' B':value<1048576?(value/1024).toFixed(1)+' KB':(value/1048576).toFixed(1)+' MB';
@@ -22,6 +25,8 @@ const field=(name:string,title:string,value:string,kind:'text'|'number'|'textare
 const select=(name:string,title:string,values:[string,string][])=>`<label class="df2-control"><span>${title}</span><select name="${name}">${values.map(([value,label])=>`<option value="${value}">${label}</option>`).join('')}</select></label>`;
 function toolOptions(id:string):string{
   switch(id){
+    case 'text-search': return field('query','Search phrase (optional)','')+`<p class="df2-organize-warning">Find text that is already selectable in the PDF and export plain text and Markdown. Scanned pages require OCR. The PDF itself is not modified.</p>`;
+    case 'compare': return select('mode','Comparison',[['both','Text + visual'],['text','Text only'],['visual','Visual only']])+select('maxPages','Check first pages',[['10','10 pages'],['20','20 pages'],['35','35 pages'],['50','50 pages']])+`<p class="df2-organize-warning">Upload exactly two PDFs, A then B. Matches are heuristic; visually small edits may not be detected. Reports are for review, not legal certification.</p>`;
     case 'pdf-to-images': return select('format','Image format',[['png','PNG · lossless'],['jpeg','JPG · smaller']])+select('scale','Image resolution',[['1','Standard · 1×'],['1.5','High · 1.5×'],['2','Very high · 2×']])+`<p class="df2-organize-warning">Converts the visual appearance of each page into an image. Original selectable text and PDF vector objects are not preserved in images.</p>`;
     case 'organize': return `<div class="df2-page-plan-mount" data-organizer-host></div><p class="df2-organize-warning">Reordering preserves page contents. Duplicated pages may increase file size.</p>`;
     case 'compress': return select('compressionPreset','Image compression',[['balanced','Balanced quality'],['quality','Higher image quality'],['small','Smaller images']])+ `<p class="df2-organize-warning">Recompresses eligible RGB JPEG images only. No compression guarantee for scans using other encodings. Text and vectors stay as PDF objects.</p>`;
@@ -63,6 +68,8 @@ class DocFlowV2 {
   private imagePreview:V2ImagePreview|null=null;
   private thumbnailRail:ThumbnailRail|null=null;
   private editor:V2PageEditor|null=null;
+  private review:ReviewData|null=null;
+  private disposeReview:(()=>void)|null=null;
   private processingGeneration=0;
   private renderId=0;
   private currentPage=1;
@@ -159,7 +166,7 @@ class DocFlowV2 {
       this.cancel();this.busy=false;
     }
     const next=route();
-    if(next.id!==this.tool?.id){this.files=[];this.selected.clear();this.result=null;this.freeLinks();this.organizer?.dispose();this.organizer=null;this.imagePreview?.dispose();this.imagePreview=null;this.thumbnailRail?.dispose();this.thumbnailRail=null;this.editor?.dispose();this.editor=null;await this.freePreview();}
+    if(next.id!==this.tool?.id){this.files=[];this.selected.clear();this.result=null;this.review=null;this.disposeReview?.();this.disposeReview=null;this.freeLinks();this.organizer?.dispose();this.organizer=null;this.imagePreview?.dispose();this.imagePreview=null;this.thumbnailRail?.dispose();this.thumbnailRail=null;this.editor?.dispose();this.editor=null;this.disposeReview?.();this.disposeReview=null;this.review=null;await this.freePreview();}
     this.tool=next.id?getTool(next.id)??null:null;
     this.stage=next.stage;
     if(!this.tool){this.home();return;}
@@ -216,7 +223,7 @@ class DocFlowV2 {
     const good=files.filter(file=>tool.accepts.includes('.png')?(/image\/(png|jpeg)/.test(file.type)||/\.(png|jpe?g)$/i.test(file.name)):(file.type==='application/pdf'||/\.pdf$/i.test(file.name)));
     if(good.length!==files.length||!good.length){const el=this.root.querySelector<HTMLElement>('.df2-upload-note');if(el)el.textContent='Choose supported '+(tool.accepts.includes('.png')?'JPG/PNG':'PDF')+' files only.';return;}
     this.files=tool.multiple?[...this.files,...good]:good.slice(0,1);
-    this.selected.clear();this.currentPage=1;this.result=null;
+    this.selected.clear();this.currentPage=1;this.result=null;this.review=null;this.disposeReview?.();this.disposeReview=null;
     // One hash-route transition owns the mount; never mount the viewer twice.
     const next=base+tool.id+'/work';
     if(location.hash!==next)location.hash=next;
@@ -317,6 +324,7 @@ class DocFlowV2 {
   private results():void {
     const tool=this.tool!,value=this.result;
     if(!value){this.workspace();return;}
+    this.disposeReview?.();this.disposeReview=null;
     this.freeLinks();
     const downloads=value.outputs.map(output=>{
       const url=URL.createObjectURL(new Blob([output.buffer],{type:output.type}));this.links.push(url);
@@ -324,18 +332,25 @@ class DocFlowV2 {
     }).join('');
     this.root.innerHTML=this.header()+`<main id="df2-main" class="df2-result">${this.crumbs()}${this.progress()}
       <div class="df2-result-card"><span class="df2-result-check" aria-hidden="true">✓</span><p class="df2-overline">DOCUMENT READY</p>
-        <h1>All done. Beautifully simple.</h1><p>Your ${esc(tool.name.toLowerCase())} task finished. Your original file hasn't been overwritten.</p>
+        <h1>${this.review?'Your analysis is ready.':'All done. Beautifully simple.'}</h1><p>${this.review?'Review the findings below and download the detailed reports.': 'Your '+esc(tool.name.toLowerCase())+' task finished. Your original file hasn\'t been overwritten.'}</p>
         <div class="df2-downloads">${downloads||'<p>No downloadable file for this inspection operation.</p>'}</div>
+        ${this.review?'<div data-v2-review-container></div>':''}
         ${value.info?`<details class="df2-result-info"><summary>Processing details</summary><pre>${esc(JSON.stringify(value.info,null,2))}</pre></details>`:''}
         <div class="df2-result-actions"><button class="df2-btn df2-btn-outline" data-again>Start another file</button><a class="df2-btn df2-btn-subtle" href="#/">See all tools →</a></div>
       </div></main>`;
+    if(this.review){
+      const host=this.root.querySelector<HTMLElement>('[data-v2-review-container]');
+      if(host)this.disposeReview=mountReview(host,this.review);
+    }
   }
   private async execute():Promise<void>{
-    if(this.busy||(!this.tool?.operation&&this.tool?.id!=='pdf-to-images')||!this.files.length)return;
+    if(this.busy||(!this.tool?.operation&&!['pdf-to-images','text-search','compare'].includes(this.tool?.id??''))||!this.files.length)return;
     if(this.tool.id==='merge'&&this.files.length<2){this.message('Choose at least two PDFs to merge.');return;}
+    if(this.tool.id==='compare'&&this.files.length!==2){this.message('Choose exactly two PDFs, A then B, to compare.');return;}
     const form=this.root.querySelector<HTMLFormElement>('[data-options]');
     if(!form)return;
     const options=readOptions(form);
+    this.disposeReview?.();this.disposeReview=null;this.review=null;
     if(this.tool.id==='edit-pdf'){
       if(!this.editor){this.message('Wait for the document editor to finish loading.');return;}
       options.plan=this.editor.currentPlan;
@@ -365,7 +380,33 @@ class DocFlowV2 {
       }
       if(generation!==this.processingGeneration)return;
       let result:OperationResult;
-      if(this.tool.id==='pdf-to-images'){
+      if(this.tool.id==='text-search'){
+        let cancelled=false;
+        this.cancel=()=>{cancelled=true;};
+        const query=String(options.query??'').trim();
+        const extracted=await extractAndSearchText(input[0]!.buffer,query,
+          (done,total)=>this.message('Reading page '+done+' of '+total+' · '+Math.round(done*100/Math.max(1,total))+'%'),
+          ()=>cancelled||generation!==this.processingGeneration);
+        if(cancelled||generation!==this.processingGeneration)return;
+        result=extracted.result;
+        this.review={kind:'text',query,hits:extracted.hits,pageCount:extracted.pageCount,scannedPages:extracted.scannedPages};
+      }else if(this.tool.id==='compare'){
+        let cancelled=false;
+        this.cancel=()=>{cancelled=true;};
+        const comparison=await comparePdfs(input[0]!.buffer,input[1]!.buffer,
+          {mode:options.mode==='text'||options.mode==='visual'?options.mode:'both',
+           maxPages:Number(options.maxPages??20)},
+          (done,total)=>this.message('Comparing page pair '+done+' of '+total+' · '+Math.round(done*100/Math.max(1,total))+'%'),
+          ()=>cancelled||generation!==this.processingGeneration);
+        if(cancelled||generation!==this.processingGeneration)return;
+        this.review={kind:'compare',comparison};
+        const outputs=await Promise.all([
+          comparison.report.arrayBuffer().then(buffer=>({name:'comparison-report.txt',type:'text/plain',buffer})),
+          comparison.htmlReport.arrayBuffer().then(buffer=>({name:'comparison-report.html',type:'text/html',buffer}))
+        ]);
+        result={outputs,info:{leftPages:comparison.leftPages,rightPages:comparison.rightPages,
+          pagesCompared:comparison.pagesCompared,changedPages:comparison.changedPages,limited:comparison.limited}};
+      }else if(this.tool.id==='pdf-to-images'){
         let cancelled=false;
         this.cancel=()=>{cancelled=true;};
         const format=options.format==='jpeg'?'jpeg':'png';
