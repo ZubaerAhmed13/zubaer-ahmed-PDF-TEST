@@ -7,7 +7,7 @@ export type V2Tool = {
   readiness: 'active' | 'rebuilding'; featured: boolean;
 };
 const nativeOperations: Partial<Record<string, WorkerOperation>> = {
-  merge: 'merge', split: 'split', organize: 'organize', compress: 'optimize', 'remove-pages': 'remove-pages',
+  merge: 'merge', split: 'split', organize: 'organize', compress: 'optimize', 'edit-pdf': 'direct-edit', 'remove-pages': 'remove-pages',
   'extract-pages':'extract-pages', rotate:'rotate', 'page-numbers':'page-numbers',
   watermark:'watermark', crop:'crop', 'metadata-edit':'metadata-edit',
   annotate:'annotate', metadata:'metadata', 'images-to-pdf':'images-to-pdf',
