@@ -229,3 +229,45 @@ test('form values are not written to local recovery IndexedDB', async ({ page })
   expect(JSON.stringify(recovery)).not.toContain('CustomerName');
   expect(JSON.stringify(recovery)).not.toContain('"values"');
 });
+
+
+test('visual form search, unfilled navigation and progress stay in sync with actual JSON values', async ({ page }) => {
+  const dialog = await openForms(page);
+  await dialog.locator('#workspace-file').setInputFiles({
+    name: 'form-progress.pdf', mimeType: 'application/pdf', buffer: await supportedFormsFixture()
+  });
+  const visual = dialog.locator('#visual-form-editor');
+  await expect(visual.getByRole('heading', { name: 'Fill form fields' })).toBeVisible();
+  await expect(visual.locator('.visual-form-progress [role="status"]')).toContainText('4 of 5 fields filled');
+
+  const filter = visual.getByRole('combobox', { name: 'Filter form fields' });
+  await filter.selectOption('incomplete');
+  const accepted = visual.getByRole('checkbox', { name: 'Accepted' });
+  await expect(accepted).toBeVisible();
+  await expect(visual.getByRole('textbox', { name: 'CustomerName' })).toBeHidden();
+  await visual.getByRole('button', { name: 'Next unfilled' }).click();
+  await expect(accepted).toBeFocused();
+  await expect(filter).toHaveValue('all');
+  await accepted.check();
+  await expect(visual.locator('.visual-form-progress [role="status"]')).toContainText('5 of 5 fields filled');
+
+  const finder = visual.getByRole('searchbox', { name: 'Find form field' });
+  await finder.fill('country');
+  await expect(visual.getByRole('combobox', { name: 'Country' })).toBeVisible();
+  await expect(visual.getByRole('textbox', { name: 'CustomerName' })).toBeHidden();
+  await finder.fill('nonexistent');
+  await expect(visual.getByText('No fields match. Change your search or filter.')).toBeVisible();
+
+  await finder.fill('');
+  await visual.getByRole('button', { name: 'Reset to original' }).click();
+  await expect(visual.locator('.visual-form-progress [role="status"]')).toContainText('4 of 5 fields filled');
+  await expect(visual.getByRole('checkbox', { name: 'Accepted' })).not.toBeChecked();
+
+  await dialog.locator('.visual-form-advanced summary').click();
+  await dialog.locator('textarea[name="values"]').fill(JSON.stringify({
+    CustomerName: '', Accepted: true, Plan: 'Pro', Country: 'BE', Skills: ['PMO']
+  }));
+  await expect(visual.locator('.visual-form-progress [role="status"]')).toContainText('4 of 5 fields filled');
+  await filter.selectOption('incomplete');
+  await expect(visual.getByRole('textbox', { name: 'CustomerName' })).toBeVisible();
+});

@@ -3,6 +3,8 @@
  * This UI never changes source files. The existing worker remains the sole
  * authority for PDF export, preserving all legacy JSON-based workflows.
  */
+import '../styles/forms-u7.css';
+
 export interface InspectedFormField {
   name: string;
   type: string;
@@ -95,12 +97,52 @@ export function mountVisualFormEditor(
   focus.type = 'button';
   focus.className = 'secondary';
   focus.textContent = 'First field';
-  actions.append(focus, reset);
+  const nextIncomplete = document.createElement('button');
+  nextIncomplete.type = 'button';
+  nextIncomplete.className = 'secondary';
+  nextIncomplete.textContent = 'Next unfilled';
+  actions.append(focus, nextIncomplete, reset);
+
+  const finder = document.createElement('div');
+  finder.className = 'visual-form-finder';
+  const searchLabel = document.createElement('label');
+  searchLabel.textContent = 'Find a field';
+  const search = document.createElement('input');
+  search.type = 'search';
+  search.placeholder = 'Search field names';
+  search.setAttribute('aria-label', 'Find form field');
+  searchLabel.append(search);
+  const filterLabel = document.createElement('label');
+  filterLabel.textContent = 'Show';
+  const filter = document.createElement('select');
+  filter.setAttribute('aria-label', 'Filter form fields');
+  for (const [value, label] of [['all','All fields'],['incomplete','Unfilled'],['required','Required']] as const) {
+    const option = document.createElement('option');
+    option.value = value;
+    option.textContent = label;
+    filter.append(option);
+  }
+  filterLabel.append(filter);
+  finder.append(searchLabel, filterLabel);
+
+  const progress = document.createElement('div');
+  progress.className = 'visual-form-progress';
+  const progressText = document.createElement('strong');
+  progressText.setAttribute('role','status');
+  progressText.setAttribute('aria-live','polite');
+  progressText.textContent = 'Checking fields…';
+  const progressBar = document.createElement('progress');
+  progressBar.max = 100;
+  progressBar.value = 0;
+  progressBar.setAttribute('aria-label','Form completion');
+  const requiredMessage = document.createElement('small');
+  progress.append(progressText, progressBar, requiredMessage);
 
   const list = document.createElement('div');
   list.className = 'visual-form-field-list';
   list.setAttribute('aria-label', 'Editable PDF form fields');
   const controls = new Map<string, HTMLElement>();
+  const rows = new Map<string, HTMLElement>();
   const originals: FormValues = Object.create(null) as FormValues;
   for (const field of fields) {
     const original = initialValue(field);
@@ -234,7 +276,73 @@ export function mountVisualFormEditor(
       unsupported.textContent = 'This field type cannot be edited visually. Use Advanced JSON below.';
       item.append(label, unsupported);
     }
+    rows.set(field.name, item);
     list.append(item);
+  });
+
+  const empty = document.createElement('p');
+  empty.className = 'visual-form-empty';
+  empty.textContent = 'No fields match. Change your search or filter.';
+  empty.hidden = true;
+  list.append(empty);
+
+  const filled = (value: FormValue | undefined): boolean =>
+    typeof value === 'boolean' ? value :
+    typeof value === 'string' ? value.trim().length > 0 :
+    Array.isArray(value) ? value.length > 0 : false;
+
+  const currentValue = (field: InspectedFormField, values: FormValues | null): FormValue | undefined =>
+    values && Object.prototype.hasOwnProperty.call(values, field.name) ? values[field.name] : undefined;
+
+  const refreshOverview = (): void => {
+    const values = sourceValues();
+    if (!values) {
+      progressText.textContent = 'Check Advanced JSON';
+      requiredMessage.textContent = 'Correct the JSON syntax to calculate completion.';
+      progressBar.value = 0;
+      return;
+    }
+    const editable = fields.slice(0, MAX_VISUAL_FIELDS).filter(field => controls.has(field.name) && !field.readOnly);
+    const completed = editable.filter(field => filled(currentValue(field, values))).length;
+    const missingRequired = editable.filter(field => field.required && !filled(currentValue(field, values))).length;
+    progressText.textContent = `${completed} of ${editable.length} fields filled`;
+    progressBar.value = editable.length ? Math.round(100 * completed / editable.length) : 100;
+    requiredMessage.textContent = missingRequired
+      ? `${missingRequired} required ${missingRequired === 1 ? 'field' : 'fields'} still unfilled`
+      : 'No unfilled required fields in this view';
+    const term = search.value.trim().toLocaleLowerCase();
+    let visible = 0;
+    for (const field of fields.slice(0, MAX_VISUAL_FIELDS)) {
+      const row = rows.get(field.name);
+      if (!row) continue;
+      const show = field.name.toLocaleLowerCase().includes(term) &&
+        (filter.value === 'all' ||
+         (filter.value === 'required' && field.required === true) ||
+         (filter.value === 'incomplete' && !field.readOnly && controls.has(field.name) && !filled(currentValue(field, values))));
+      row.hidden = !show;
+      row.dataset.filled = String(filled(currentValue(field, values)));
+      if (show) visible++;
+    }
+    empty.hidden = visible > 0;
+    nextIncomplete.disabled = !editable.some(field => !filled(currentValue(field, values)));
+  };
+  search.addEventListener('input', refreshOverview);
+  filter.addEventListener('change', refreshOverview);
+  nextIncomplete.addEventListener('click', () => {
+    const values = sourceValues();
+    if (!values) return;
+    const field = fields.slice(0, MAX_VISUAL_FIELDS).find(item =>
+      controls.has(item.name) && !item.readOnly && !filled(currentValue(item, values)));
+    if (!field) return;
+    search.value = '';
+    filter.value = 'all';
+    refreshOverview();
+    const target = controls.get(field.name);
+    if (target) {
+      target.scrollIntoView({ block: 'nearest', behavior: 'auto' });
+      if (target.matches('input,select,textarea')) target.focus();
+      else target.querySelector<HTMLElement>('input,select,textarea')?.focus();
+    }
   });
 
   if (fields.length > MAX_VISUAL_FIELDS) {
@@ -247,6 +355,7 @@ export function mountVisualFormEditor(
     const values = sourceValues();
     if (!values) {
       notices.textContent = 'Advanced JSON is invalid. Correct it before exporting.';
+      refreshOverview();
       return;
     }
     notices.textContent = '';
@@ -265,6 +374,7 @@ export function mountVisualFormEditor(
         element.querySelectorAll<HTMLInputElement>('input[type=radio]').forEach((input) => { input.checked = input.value === value; });
       }
     }
+    refreshOverview();
   };
 
   const onReset = (): void => {
@@ -273,15 +383,17 @@ export function mountVisualFormEditor(
   };
   reset.addEventListener('click', onReset);
   focus.addEventListener('click', () => {
-    const first = list.querySelector<HTMLElement>('input,select,textarea');
+    const first = [...list.querySelectorAll<HTMLElement>('.visual-form-field')].find(row => !row.hidden)
+      ?.querySelector<HTMLElement>('input:not(:disabled),select:not(:disabled),textarea:not(:disabled)');
     first?.focus();
   });
   advanced.addEventListener('input', onAdvancedInput);
-  host.append(title, help, actions, list, notices);
+  host.append(title, help, progress, finder, actions, list, notices);
   // Discovery is asynchronous. Never reset a focused text selection or replace
   // JSON entered while inspection was pending (including deliberate empty JSON).
   if (initialize && document.activeElement !== advanced && (!advanced.value.trim() || advanced.value.trim() === '{}')) writeValues({ ...originals });
   else onAdvancedInput();
+  refreshOverview();
 
   return {
     dispose: () => {
