@@ -138,7 +138,7 @@ export class V2PageEditor {
     this.overlay.querySelector<HTMLElement>('[data-edit-id="'+obj.id+'"]')?.focus();
   };
   private remove():void{
-    const obj=this.selectedObject();if(!obj)return;
+    if(!this.selectedObject())return;
     // Existing source annotations are not made editable by this release.
     this.plan.objects=this.plan.objects.filter(o=>o.id!==obj.id);
     this.selected=null;this.commit();
