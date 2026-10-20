@@ -8,6 +8,7 @@ import { mountPdfThumbnailRail, type ThumbnailRail } from './thumbnailRail';
 import { V2PageEditor } from './pageEditor';
 import { extractAndSearchText } from '../pdf/textExtraction';
 import { comparePdfs } from '../pdf/pdfComparison';
+import { runQpdfOperation } from '../pdf/qpdfWorkerClient';
 import { mountReview, type ReviewData } from './reviewResults';
 
 const esc=(value:string):string=>value.replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]!));
@@ -25,6 +26,9 @@ const field=(name:string,title:string,value:string,kind:'text'|'number'|'textare
 const select=(name:string,title:string,values:[string,string][])=>`<label class="df2-control"><span>${title}</span><select name="${name}">${values.map(([value,label])=>`<option value="${value}">${label}</option>`).join('')}</select></label>`;
 function toolOptions(id:string):string{
   switch(id){
+    case 'protect-pdf': return `<label class="df2-control"><span>New PDF password</span><input type="password" name="securityPassword" autocomplete="new-password" minlength="8" maxlength="127" required></label><label class="df2-control"><span>Confirm password</span><input type="password" name="confirmPassword" autocomplete="new-password" minlength="8" maxlength="127" required></label><p class="df2-organize-warning">AES-256 PDF encryption via qpdf. The password is required to open the resulting PDF. DocFlow cannot recover forgotten passwords.</p>`;
+    case 'unlock-pdf': return `<label class="df2-control"><span>PDF password</span><input type="password" name="securityPassword" autocomplete="current-password" maxlength="127" required></label><p class="df2-organize-warning">Only unlock PDFs you are authorised to access. Enter the existing PDF password; qpdf validates it before removing encryption.</p>`;
+    case 'repair-pdf': return `<p class="df2-organize-warning">Attempts to recover damaged PDF cross-references and rewrite structure. This cannot reconstruct missing text, images, or irreparably damaged pages.</p>`;
     case 'text-search': return field('query','Search phrase (optional)','')+`<p class="df2-organize-warning">Find text that is already selectable in the PDF and export plain text and Markdown. Scanned pages require OCR. The PDF itself is not modified.</p>`;
     case 'compare': return select('mode','Comparison',[['both','Text + visual'],['text','Text only'],['visual','Visual only']])+select('maxPages','Check first pages',[['10','10 pages'],['20','20 pages'],['35','35 pages'],['50','50 pages']])+`<p class="df2-organize-warning">Upload exactly two PDFs, A then B. Matches are heuristic; visually small edits may not be detected. Reports are for review, not legal certification.</p>`;
     case 'pdf-to-images': return select('format','Image format',[['png','PNG · lossless'],['jpeg','JPG · smaller']])+select('scale','Image resolution',[['1','Standard · 1×'],['1.5','High · 1.5×'],['2','Very high · 2×']])+`<p class="df2-organize-warning">Converts the visual appearance of each page into an image. Original selectable text and PDF vector objects are not preserved in images.</p>`;
@@ -345,12 +349,23 @@ class DocFlowV2 {
   }
   private async execute():Promise<void>{
     const tool=this.tool;
-    if(this.busy||!tool||(!tool.operation&&!['pdf-to-images','text-search','compare'].includes(tool.id))||!this.files.length)return;
+    if(this.busy||!tool||(!tool.operation&&!['pdf-to-images','text-search','compare','protect-pdf','unlock-pdf','repair-pdf'].includes(tool.id))||!this.files.length)return;
     if(tool.id==='merge'&&this.files.length<2){this.message('Choose at least two PDFs to merge.');return;}
     if(tool.id==='compare'&&this.files.length!==2){this.message('Choose exactly two PDFs, A then B, to compare.');return;}
     const form=this.root.querySelector<HTMLFormElement>('[data-options]');
     if(!form)return;
     const options=readOptions(form);
+    if(['protect-pdf','unlock-pdf'].includes(tool.id)){
+      const password=String(options.securityPassword??'');
+      const length=new TextEncoder().encode(password).byteLength;
+      if(!password){this.message('Enter the PDF password.');return;}
+      if(length>127||(tool.id==='protect-pdf'&&length<8)){
+        this.message('Password must use '+(tool.id==='protect-pdf'?'8–127':'1–127')+' UTF-8 bytes.');return;
+      }
+      if(tool.id==='protect-pdf'&&String(options.confirmPassword??'')!==password){
+        this.message('The confirmation password does not match.');return;
+      }
+    }
     this.disposeReview?.();this.disposeReview=null;this.review=null;
     if(tool.id==='edit-pdf'){
       if(!this.editor){this.message('Wait for the document editor to finish loading.');return;}
@@ -407,6 +422,12 @@ class DocFlowV2 {
         ]);
         result={outputs,info:{leftPages:comparison.leftPages,rightPages:comparison.rightPages,
           pagesCompared:comparison.pagesCompared,changedPages:comparison.changedPages,limited:comparison.limited}};
+      }else if(['protect-pdf','unlock-pdf','repair-pdf'].includes(tool.id)){
+        const operation=tool.id==='protect-pdf'?'protect':tool.id==='unlock-pdf'?'unlock':'repair';
+        const password=operation==='repair'?'':String(options.securityPassword??'');
+        const running=runQpdfOperation(operation,input[0]!,password,p=>this.message(p.message+' · '+p.percent+'%'));
+        this.cancel=running.cancel;
+        result=await running.result;
       }else if(tool.id==='pdf-to-images'){
         let cancelled=false;
         this.cancel=()=>{cancelled=true;};
