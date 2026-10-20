@@ -148,7 +148,8 @@ export class V2PageEditor {
     const frame=this.frame();
     if(!frame)return;
     const size=displaySize(frame);
-    const w=parseFloat(this.canvas.style.width)||this.canvas.width,h=parseFloat(this.canvas.style.height)||this.canvas.height;
+    const bounds=this.canvas.getBoundingClientRect();
+    const w=bounds.width||this.canvas.width,h=bounds.height||this.canvas.height;
     if(!w||!h)return;
     this.overlay.style.width=w+'px';this.overlay.style.height=h+'px';
     this.overlay.replaceChildren();
@@ -229,7 +230,7 @@ export class V2PageEditor {
     if(!(target instanceof HTMLInputElement||target instanceof HTMLTextAreaElement))return;
     if(!this.panel.contains(target)||!target.name)return;
     const obj=this.selectedObject(),frame=this.frame();if(!obj||!frame)return;
-    const key=target.name as keyof EditObject;
+    const key=target.name;
     if(key==='editorText')obj.text=target.value;
     else if(key==='color')obj.color=target.value;
     else if(['x','y','width','height','size'].includes(key)){
