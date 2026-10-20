@@ -34,7 +34,7 @@ export const v2Tools: V2Tool[] = tools.map(t=>({
   description:t.description, icon:symbols[t.id]??t.icon,
   multiple:t.multipleFiles, accepts:t.id==='images-to-pdf'?'.png,.jpg,.jpeg,image/png,image/jpeg':'.pdf,application/pdf',
   operation:nativeOperations[t.id]??null,
-  readiness:nativeOperations[t.id] || t.id==='pdf-to-images' ? 'active':'rebuilding',
+  readiness:nativeOperations[t.id] || ['pdf-to-images','text-search','compare'].includes(t.id) ? 'active':'rebuilding',
   featured:['merge','split','compress','edit-pdf','organize','rotate'].includes(t.id)
 }));
 export const activeTools=v2Tools.filter(t=>t.readiness==='active');
