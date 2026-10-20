@@ -326,3 +326,8 @@ a{color:inherit;text-decoration:none}
   .df2-plan-controls button{width:42px;height:44px;flex-basis:42px}
   .df2-plan-toolbar button{min-height:44px}
 }
+
+/* Source-image previews are rendered from local Blob URLs and revoked on exit. */
+.df2-image-thumb img{display:block;max-width:100%;width:auto;height:auto;max-height:100px;object-fit:contain;box-shadow:0 2px 6px rgba(15,30,64,.11);background:white}
+.df2-image-thumb[aria-pressed="true"]{border-color:#6659d9;background:#efecff;box-shadow:inset 0 0 0 1px #6659d9}
+.df2-page-stage:has(.df2-canvas-paper canvas[width]) .df2-canvas-paper{flex:0 0 auto}
