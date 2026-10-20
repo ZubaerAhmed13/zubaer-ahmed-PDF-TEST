@@ -69,3 +69,8 @@
   .df-merge-card-actions button{min-height:44px;}
 }
 @media(prefers-reduced-motion:reduce){.df-merge-storyboard-grid{scroll-behavior:auto;}}
+
+/* Explicit pointer interaction replaces unreliable browser-native HTML dragging. */
+.df-merge-drag-handle { touch-action:none; cursor:grab; }
+.df-merge-is-dragging .df-merge-drag-handle {cursor:grabbing;}
+.df-merge-card.df-merge-drop-target {outline:3px solid #584ad5;outline-offset:2px;}
