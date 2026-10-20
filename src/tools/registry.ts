@@ -63,7 +63,7 @@ export const tools: ToolDefinition[] = [
     load: () => import('./previewWorkspace')
   },
   tool({ id: 'merge', name: 'Merge PDF', category: 'organize', description: 'Combine PDFs without intentionally rasterizing page content.', keywords: ['combine','join'], icon: '⊕', quality: 'Lossless', status: 'Migrated', multipleFiles: true }),
-  tool({ id: 'split', name: 'Split PDF', category: 'organize', description: 'Extract ranges, individual pages, or chunks into new PDFs.', keywords: ['extract','range','pages'], icon: '✂', quality: 'Lossless', status: 'Migrated', multipleFiles: false }),
+  pagePickTool({ id: 'split', name: 'Split PDF', category: 'organize', description: 'Extract ranges, individual pages, or chunks into new PDFs.', keywords: ['extract','range','pages'], icon: '✂', quality: 'Lossless', status: 'Migrated', multipleFiles: false }),
   pagePickTool({ id: 'remove-pages', name: 'Remove pages', category: 'organize', description: 'Remove selected pages structurally while preserving the remaining page content.', keywords: ['delete','remove','pages'], icon: '−', quality: 'Lossless', status: 'Migrated', multipleFiles: false }),
   pagePickTool({ id: 'extract-pages', name: 'Extract pages', category: 'organize', description: 'Create a new PDF from selected pages without intentionally rasterizing them.', keywords: ['extract','copy','selected pages'], icon: '⇥', quality: 'Lossless', status: 'Migrated', multipleFiles: false }),
   {
