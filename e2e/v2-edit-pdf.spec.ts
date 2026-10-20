@@ -33,8 +33,12 @@ test('new PDF editor adds actual text and sticky notes while retaining original 
   await page.locator('textarea[name=editorText]').fill('Needs review');
   await page.locator('textarea[name=editorText]').dispatchEvent('change');
   await expect(page.locator('[data-edit-id]')).toHaveCount(2);
+  // Undo first reverts the edited note text, then removes the note.
+  await page.locator('[data-editor-undo]').click();
+  await expect(page.locator('[data-edit-id]')).toHaveCount(2);
   await page.locator('[data-editor-undo]').click();
   await expect(page.locator('[data-edit-id]')).toHaveCount(1);
+  await page.locator('[data-editor-redo]').click();
   await page.locator('[data-editor-redo]').click();
   await expect(page.locator('[data-edit-id]')).toHaveCount(2);
   const bytes=await download(page);
