@@ -35,7 +35,7 @@ jobs:
       - run: npm ci
       - run: npx playwright install --with-deps ${{ matrix.project }}
       - name: New UI journey - only, while legacy parity is migrated
-        run: npx playwright test e2e/v2-clean-slate.spec.ts e2e/v2-visual-review.spec.ts e2e/v2-organize-optimize.spec.ts e2e/v2-images-to-pdf.spec.ts e2e/v2-long-document.spec.ts e2e/v2-edit-pdf.spec.ts e2e/v2-pdf-to-images.spec.ts e2e/v2-text-compare.spec.ts --project=${{ matrix.project }}
+        run: npx playwright test e2e/v2-clean-slate.spec.ts e2e/v2-visual-review.spec.ts e2e/v2-organize-optimize.spec.ts e2e/v2-images-to-pdf.spec.ts e2e/v2-long-document.spec.ts e2e/v2-edit-pdf.spec.ts e2e/v2-pdf-to-images.spec.ts e2e/v2-text-compare.spec.ts e2e/v2-qpdf-security.spec.ts --project=${{ matrix.project }}
       - uses: actions/upload-artifact@v4
         if: always()
         with:
