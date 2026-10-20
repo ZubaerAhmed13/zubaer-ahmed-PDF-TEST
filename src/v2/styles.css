@@ -331,3 +331,48 @@ a{color:inherit;text-decoration:none}
 .df2-image-thumb img{display:block;max-width:100%;width:auto;height:auto;max-height:100px;object-fit:contain;box-shadow:0 2px 6px rgba(15,30,64,.11);background:white}
 .df2-image-thumb[aria-pressed="true"]{border-color:#6659d9;background:#efecff;box-shadow:inset 0 0 0 1px #6659d9}
 .df2-page-stage:has(.df2-canvas-paper canvas[width]) .df2-canvas-paper{flex:0 0 auto}
+
+/* V2 genuine on-page PDF object editor — no legacy dialogs or CSS imports. */
+.df2-canvas-paper{position:relative;align-self:center}
+.df2-editor-overlay{position:absolute;inset:0 auto auto 0;z-index:4;pointer-events:none;user-select:none}
+.df2-edit-object{position:absolute;display:block;padding:0;border:1.5px dashed var(--obj-ink,#5d53cc);color:var(--obj-ink,#5d53cc);
+  background:rgba(255,255,255,.17);border-radius:3px;overflow:hidden;white-space:pre-wrap;overflow-wrap:anywhere;
+  text-align:left;font:600 13px/1.25 system-ui,sans-serif;cursor:grab;pointer-events:auto;touch-action:none;user-select:none}
+.df2-edit-object[aria-pressed=true]{outline:3px solid #5d51d2;outline-offset:1px;box-shadow:0 0 0 2px white}
+.df2-edit-object:active{cursor:grabbing}
+.df2-edit-object.df2-edit-text{background:rgba(248,248,255,.5);color:var(--obj-ink)}
+.df2-edit-object.df2-edit-highlight{background:color-mix(in srgb,var(--obj-ink) 40%,transparent)}
+.df2-edit-object.df2-edit-native-highlight{background:rgba(255,217,64,.35);font-size:10px}
+.df2-edit-object.df2-edit-rectangle{background:color-mix(in srgb,var(--obj-ink) 20%,transparent)}
+.df2-edit-object.df2-edit-comment{display:grid;place-items:center;background:#ffecbe;font-size:20px;color:#976321}
+.df2-edit-object.df2-edit-image{border-style:solid;background:#f8f8ff}
+.df2-edit-object img{height:100%;width:100%;object-fit:fill;pointer-events:none}
+.df2-editor-panel{display:grid;gap:13px;padding:8px 17px 22px;border-top:1px solid #e7e9f3}
+.df2-editor-heading strong{font-size:15px;font-weight:830;color:#263450}
+.df2-editor-heading p{font-size:11px;color:#718097;line-height:1.6;margin:6px 0 0}
+.df2-editor-add{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}
+.df2-editor-add button,.df2-editor-image{min-height:43px;min-width:0;border:1px solid #e0e5ed;border-radius:10px;background:#f9faff;
+  color:#45556f;padding:10px 7px;font-size:11px;font-weight:750;line-height:1.4;text-align:center}
+.df2-editor-image{position:relative;overflow:hidden;display:flex;align-items:center;justify-content:center;cursor:pointer}
+.df2-editor-image input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
+.df2-editor-add button:hover,.df2-editor-image:hover{border-color:#aca4eb;background:#f1efff;color:#5249c1}
+.df2-editor-history{display:flex;gap:8px}
+.df2-editor-history button{flex:1;min-height:42px;border-radius:10px;border:1px solid #dfe4ef;background:#fff;color:#4e5e7a;font-size:12px;font-weight:750}
+.df2-editor-history button:disabled{opacity:.4;cursor:not-allowed}
+.df2-editor-objects{display:grid;gap:5px}
+.df2-editor-objects>strong,.df2-editor-properties>strong{font-size:12px;color:#273654}
+.df2-editor-objects>p{font-size:11px;line-height:1.6;color:#8893a5;margin:4px 0}
+.df2-editor-objects button{min-height:36px;border-radius:8px;background:#f8f9fd;border:1px solid #e8eaf1;font-size:11px;color:#637087;text-align:left;padding:7px 11px}
+.df2-editor-objects button[aria-pressed=true]{background:#f0edff;border-color:#9d92e7;color:#4b3eb4}
+.df2-editor-properties{display:grid;gap:9px}
+.df2-editor-properties>label,.df2-editor-grid>label{font-size:11px;color:#67728a;font-weight:730;display:grid;gap:6px}
+.df2-editor-properties textarea,.df2-editor-grid input{width:100%;min-width:0;min-height:43px;box-sizing:border-box;
+  padding:9px 10px;border:1px solid #dfe4ee;border-radius:9px;background:#fff;color:#263653;font:12px/1.4 inherit}
+.df2-editor-properties textarea{resize:vertical;min-height:73px}
+.df2-editor-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.df2-editor-grid input[type=color]{padding:5px 7px;cursor:pointer}
+.df2-editor-remove{min-height:43px;padding:10px;border-radius:9px;background:#fff7f6;border:1px solid #ebc6c1;color:#a34d45;font-size:11px;font-weight:730}
+.df2-editor-note{padding:12px;background:#f4f5fb;border-left:3px solid #7163d8;border-radius:8px;color:#64738c;font-size:11px;line-height:1.6}
+.df2-editor-status{font-size:11px;color:#5b6481}
+.df2-editor-panel button:focus-visible,.df2-editor-panel input:focus-visible,.df2-editor-panel textarea:focus-visible{outline:3px solid #6b5cdb;outline-offset:2px}
+@media(max-width:740px){.df2-editor-panel{padding:10px 20px}.df2-editor-add{grid-template-columns:repeat(2,minmax(0,1fr))}}
