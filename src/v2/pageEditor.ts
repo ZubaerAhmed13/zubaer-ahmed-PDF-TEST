@@ -4,6 +4,8 @@ import { constrain, displaySize, type EditObject, type EditPlan, type PageFrame 
 import {createEditorDraft,type EditorDraft} from './draft';
 import {loadEditorFont,paintEditorText} from './editorText';
 import type {Font} from '@pdf-lib/fontkit';
+import {V2NativeEditor} from './nativeEditor';
+import type {NativeEditPlan} from '../pdf/nativeModel';
 
 type Kind=EditObject['kind'];
 const kinds:[Kind,string][]=[
@@ -27,6 +29,7 @@ export class V2PageEditor {
   private fileInput:HTMLInputElement|null=null;
   private preserved=0;
   private font:Font|null=null;
+  private native:V2NativeEditor|null=null;
   private constructor(private readonly paper:HTMLElement,private readonly canvas:HTMLCanvasElement,
     private readonly host:HTMLElement,private readonly preview:PreviewController,private readonly draft:EditorDraft){
     this.history=draft.history;this.plan=this.history.current;this.selected=draft.selected;
@@ -56,6 +59,7 @@ export class V2PageEditor {
       editor.frames=JSON.parse(String(result.info?.frames??'[]')) as PageFrame[];
       editor.preserved=Number(result.info?.preservedHighlights??0);
       editor.font=font;
+      editor.native=new V2NativeEditor(paper,canvas,host,file,draft,(source,preview)=>editor.commitSource(source,preview));
       editor.paintPanel();
       editor.paint();
       return editor;
@@ -63,15 +67,22 @@ export class V2PageEditor {
   }
   get currentPlan():EditPlan{return structuredClone(this.plan);}
   get containsText():boolean{return this.plan.objects.some(o=>o.kind==='text');}
+  get nativeBusy():boolean{return this.native?.busy??false;}
+  get hasPendingSource():boolean{return this.native?.hasPending??false;}
+  private commitSource(source:NativeEditPlan,preview:ArrayBuffer):void{
+    const candidate=this.history.current;candidate.source=source;
+    // Accept the complete plan before changing the plan used by export.
+    this.history.commit(candidate);this.plan=this.history.current;this.commit(preview);
+  }
   private frame():PageFrame|undefined{return this.frames[this.page-1];}
-  show(page:number):void {const next=Math.max(1,Math.min(page,this.frames.length));if(next!==this.page)this.selected=null;this.page=next;this.paint();this.paintPanel();}
-  private commit():void{
+  show(page:number):void {const next=Math.max(1,Math.min(page,this.frames.length));if(next!==this.page)this.selected=null;this.page=next;this.paint();this.paintPanel();this.native?.show(next);}
+  private commit(preview?:ArrayBuffer):void{
     if(this.history.commit(this.plan)){
       this.plan=this.history.current;
       this.status.textContent='Unsaved changes · '+this.plan.objects.length+' additions';
     }
     this.paint();this.paintPanel();
-    this.paper.dispatchEvent(new CustomEvent('df2-draft-change',{bubbles:true}));
+    this.native?.refresh();this.paper.dispatchEvent(new CustomEvent('df2-draft-change',{bubbles:true,detail:{preview}}));
   }
   private colorDefault(kind:Kind):string{ return kind==='highlight'?'#f2d55c':kind==='native-highlight'?'#ffd352':kind==='comment'?'#db8b38':'#5c50c8';}
   private add(kind:Kind,data?:string):void{
@@ -185,13 +196,13 @@ export class V2PageEditor {
     const tools=kinds.map(([kind,label])=>`<button type="button" data-editor-add="${kind}">${escaping(label)}</button>`).join('');
     const list=this.plan.objects.filter(o=>o.page===this.page).map(o=>
       `<button type="button" data-editor-select="${o.id}" aria-pressed="${o.id===this.selected}">${escaping(o.kind.replace('-',' '))} · ${escaping((o.text??'Object').slice(0,28))}</button>`).join('');
-    this.panel.innerHTML=`<div class="df2-editor-heading"><strong>Edit on the page</strong><p>Add new content and annotations. Original PDF text remains unchanged.</p></div>
+    this.panel.innerHTML=`<div class="df2-editor-heading"><strong>Add content and annotations</strong><p>Use Existing content to replace supported source text and images.</p></div>
       <div class="df2-editor-add">${tools}<label class="df2-editor-image">Add image<input type="file" data-editor-image accept="image/png,image/jpeg"></label></div>
       <div class="df2-editor-history"><button data-editor-undo ${this.history.canUndo?'':'disabled'}>↶ Undo</button>
       <button data-editor-redo ${this.history.canRedo?'':'disabled'}>↷ Redo</button></div>
       <div class="df2-editor-objects"><strong>Page ${this.page} objects</strong>${list||'<p>Choose a tool above to add your first object.</p>'}</div>
       <div class="df2-editor-properties" data-editor-properties></div>
-      <div class="df2-editor-note">Drag objects to move, or use the X/Y fields and keyboard arrow keys for precision. This adds content; it does not replace embedded text.</div>`;
+      <div class="df2-editor-note">Drag additions to move, or use the X/Y fields and keyboard arrow keys for precision.</div>`;
     this.panel.append(this.status);
     this.fileInput=this.panel.querySelector<HTMLInputElement>('[data-editor-image]');
     this.paintProperties();
@@ -217,8 +228,8 @@ export class V2PageEditor {
     if(!node)return;
     const kind=node.dataset.editorAdd as Kind|undefined;
     if(kind){this.add(kind);return;}
-    if(node.hasAttribute('data-editor-undo')){this.plan=this.history.undo();this.selected=null;this.paint();this.paintPanel();this.paper.dispatchEvent(new CustomEvent('df2-draft-change',{bubbles:true}));return;}
-    if(node.hasAttribute('data-editor-redo')){this.plan=this.history.redo();this.selected=null;this.paint();this.paintPanel();this.paper.dispatchEvent(new CustomEvent('df2-draft-change',{bubbles:true}));return;}
+    if(node.hasAttribute('data-editor-undo')){this.plan=this.history.undo();this.selected=null;this.paint();this.paintPanel();this.native?.refresh();this.paper.dispatchEvent(new CustomEvent('df2-draft-change',{bubbles:true}));return;}
+    if(node.hasAttribute('data-editor-redo')){this.plan=this.history.redo();this.selected=null;this.paint();this.paintPanel();this.native?.refresh();this.paper.dispatchEvent(new CustomEvent('df2-draft-change',{bubbles:true}));return;}
     if(node.hasAttribute('data-editor-remove')){this.remove();return;}
     if(node.dataset.editorSelect){this.selected=node.dataset.editorSelect;this.paint();this.paintPanel();return;}
   };
@@ -260,6 +271,7 @@ export class V2PageEditor {
     this.panel.querySelectorAll<HTMLInputElement|HTMLTextAreaElement>('[data-editor-properties] input,[data-editor-properties] textarea').forEach(input=>this.applyProperty(input));
     if(JSON.stringify(this.plan)!==before)this.commit();
     this.draft.selected=this.selected;this.destroyed=true;
+    this.native?.dispose();this.native=null;
     this.canvas.removeEventListener('docflow-page-rendered',this.onPageRender);
     this.overlay.removeEventListener('pointerdown',this.pointerDown);
     this.overlay.removeEventListener('pointermove',this.pointerMove);

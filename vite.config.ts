@@ -17,6 +17,7 @@ export default defineConfig({
     __DOCFLOW_BUILD__: JSON.stringify(commit)
   },
   base: '/zubaer-ahmed-PDF-TEST/',
+  worker: {format:'es'},
   build: {
     target: 'es2022',
     sourcemap: true,

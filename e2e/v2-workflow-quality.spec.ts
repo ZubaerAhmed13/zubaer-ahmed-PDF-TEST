@@ -71,7 +71,9 @@ test('phone zoom magnifies the page and options dismiss with focus restoration',
 });
 test('landscape keeps the primary action inside the visual viewport',async({page})=>{
   await page.setViewportSize({width:844,height:390});await open(page);
-  const action=(await page.locator('[data-run]').boundingBox())!;expect(action.y+action.height).toBeLessThanOrEqual(391);
+  const action=(await page.locator('[data-run]').boundingBox())!;
+  const layout=await page.locator('.df2-work-bottom').evaluate(footer=>[...footer.children].map(el=>({class:el.className,width:el.getBoundingClientRect().width,height:el.getBoundingClientRect().height,shrink:getComputedStyle(el).flexShrink,whiteSpace:getComputedStyle(el).whiteSpace})));
+  expect(action.y+action.height,JSON.stringify(layout)).toBeLessThanOrEqual(391);
 });
 test('organiser shows real thumbnails, rearranges by drag, and retains output order after Back',async({page},testInfo)=>{
   await open(page,'organize');

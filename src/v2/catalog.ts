@@ -27,7 +27,7 @@ const preferred: Record<string,string> = {
   'images-to-pdf':'Images to PDF',forms:'Fill PDF forms'
 };
 const descriptions:Record<string,string>={
-  'edit-pdf':'Add text, images, shapes, highlights and notes directly on the page. Original PDF text and image objects remain unchanged; replacing them is not available yet.',
+  'edit-pdf':'Replace supported existing text and images, or add text, shapes, highlights and notes. Preview changes and download an edited copy.',
   organize:'Arrange page thumbnails, duplicate or remove pages and undo changes before exporting a new PDF.',
   watermark:'Add a text watermark with configurable angle, size and opacity while preserving existing page content.',
   'images-to-pdf':'Combine JPG or PNG images into a PDF with page size, orientation and margin controls.',

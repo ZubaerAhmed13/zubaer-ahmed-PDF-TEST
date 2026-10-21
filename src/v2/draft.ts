@@ -1,8 +1,8 @@
 import {EditHistory} from '../pdf/editModel';
 
 /** Session state outlives disposable editor/organiser DOM. Never store passwords. */
-export interface EditorDraft { history: EditHistory; selected: string | null; }
-export const createEditorDraft=():EditorDraft=>({history:new EditHistory(),selected:null});
+export interface EditorDraft { history: EditHistory; selected: string | null; native: {enabled:boolean;selected:string|null;pending:Record<string,{text:string;font:'original'|'docflow'}>}; }
+export const createEditorDraft=():EditorDraft=>({history:new EditHistory(),selected:null,native:{enabled:false,selected:null,pending:{}}});
 export interface OrganizerDraft { order:number[]; history:number[][]; future:number[][]; }
 export const createOrganizerDraft=():OrganizerDraft=>({order:[],history:[],future:[]});
 export function safeOptionValues(form:HTMLFormElement):Record<string,string|boolean>{

@@ -8,15 +8,18 @@ import { normalizePdfError } from '../pdf/errors';
 import type { OperationResult, WorkerRequest, WorkerResponse } from '../pdf/types';
 
 import { inspectDocument } from '../pdf/documentInspection';
-import { applyDirectEdit, inspectDirectEdit } from '../pdf/directEdit';
+import { inspectDirectEdit } from '../pdf/directEdit';
+import {applyEditorChanges,inspectNativeContent,previewNativeContent} from '../pdf/nativeEditing';
 import { preflightWorkflow } from '../workflows/workflowPreflight';
 import type { WorkflowStep } from '../workflows/workflowEngine';
 
 const handlers = {
   'workflow-preflight': async (files: import('../pdf/types').InputFile[], options: Record<string, unknown>): Promise<OperationResult> => ({ outputs: [], info: { preflight: JSON.stringify(await preflightWorkflow(files[0]!.buffer, options.steps as WorkflowStep[])) } }),
   'document-inspect': async (files: import('../pdf/types').InputFile[]): Promise<OperationResult> => ({ outputs: [], info: { inspection: JSON.stringify(await inspectDocument(files[0]!.buffer)) } }),
-  'direct-edit': applyDirectEdit,
+  'direct-edit': applyEditorChanges,
   'direct-edit-inspect': inspectDirectEdit,
+  'native-edit-inspect': inspectNativeContent,
+  'native-edit-preview': previewNativeContent,
   merge: mergePdf,
   split: splitPdf,
   'remove-pages': removePages,

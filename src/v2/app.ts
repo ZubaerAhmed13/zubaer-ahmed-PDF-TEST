@@ -13,6 +13,8 @@ import { mountReview, type ReviewData } from './reviewResults';
 import {createEditorDraft,createOrganizerDraft,safeOptionValues,restoreOptions} from './draft';
 import {mountToolSearch} from './toolSearch';
 import {compressionPresets,compressionSettings,compressionSummary} from './compression';
+import type {NativeEditPlan} from '../pdf/nativeModel';
+import type {RunningOperation} from '../pdf/workerClient';
 
 const esc=(value:string):string=>value.replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]!));
 const bytes=(value:number):string=>value<1024?value+' B':value<1048576?(value/1024).toFixed(1)+' KB':(value/1048576).toFixed(1)+' MB';
@@ -75,6 +77,11 @@ class DocFlowV2 {
   private imagePreview:V2ImagePreview|null=null;
   private thumbnailRail:ThumbnailRail|null=null;
   private editor:V2PageEditor|null=null;
+  private nativePreviewSource:ArrayBuffer|null=null;
+  private nativePreviewKey='null';
+  private nativeGeneration=0;
+  private nativeOperation:RunningOperation|null=null;
+  private nativePreviewBusy=false;
   private review:ReviewData|null=null;
   private disposeReview:(()=>void)|null=null;
   private processingGeneration=0;
@@ -100,7 +107,7 @@ class DocFlowV2 {
     this.root.addEventListener('click',event=>void this.click(event));
     this.root.addEventListener('input',event=>this.onInput(event));
     this.root.addEventListener('change',()=>this.invalidateResult());
-    this.root.addEventListener('df2-draft-change',()=>this.invalidateResult());
+    this.root.addEventListener('df2-draft-change',event=>{this.invalidateResult();if(this.tool?.id==='edit-pdf'&&this.stage==='work')void this.syncNativePreview((event as CustomEvent<{preview?:ArrayBuffer}>).detail?.preview);});
     window.addEventListener('beforeunload',event=>{if(this.files.length){event.preventDefault();event.returnValue='';}});
     window.addEventListener('keydown',event=>{
       if((event.metaKey||event.ctrlKey)&&event.key.toLowerCase()==='k'){
@@ -181,6 +188,7 @@ class DocFlowV2 {
       history.replaceState(null,'',this.lastRouteHash);return;
     }
     const navigation=++this.navigationGeneration;
+    ++this.nativeGeneration;this.nativeOperation?.cancel();this.nativeOperation=null;this.nativePreviewBusy=false;
     this.captureOptions();
     if(this.busy){
       // Route changes cancel processing. A generation token prevents stale
@@ -217,6 +225,7 @@ class DocFlowV2 {
     // transition must not capture it back into the new session.
     this.root.querySelector('[data-options]')?.removeAttribute('data-options');
     this.editorDraft=createEditorDraft();this.organizerDraft=createOrganizerDraft();this.optionValues={};
+    ++this.nativeGeneration;this.nativeOperation?.cancel();this.nativeOperation=null;this.nativePreviewSource=null;this.nativePreviewKey='null';this.nativePreviewBusy=false;
     this.selected.clear();this.currentPage=1;this.activeFile=0;this.zoom=1;this.result=null;this.review=null;
     this.disposeReview?.();this.disposeReview=null;this.freeLinks();
   }
@@ -301,7 +310,7 @@ class DocFlowV2 {
           <div class="df2-canvas-toolbar"><span class="df2-doc-name" title="${esc(this.files[0]?.name??'')}">${esc(this.files[0]?.name??'')}</span>
             <div class="df2-zoom"><button data-page-prev aria-label="Previous page">‹</button><span data-page-label>Page 1</span><button data-page-next aria-label="Next page">›</button><span class="df2-zoom-sep"></span><button data-fit aria-label="Fit page or width" title="Switch between fit width and fit page">Fit</button><button data-zoom-out aria-label="Zoom out">−</button><span data-zoom-label>${Math.round(this.zoom*100)}%</span><button data-zoom-in aria-label="Zoom in">+</button></div></div>
           <div class="df2-page-stage" tabindex="0" aria-label="Scrollable document">${tool.id==='organize'?'<button class="df2-subtle" data-show-grid hidden>← Back to pages</button><div class="df2-page-plan-mount" data-organizer-host></div>':''}<div class="df2-canvas-paper"><canvas data-page-canvas aria-label="PDF page preview" role="img"></canvas></div>
-            <p data-render-status role="status" aria-live="polite">Preparing document preview…</p></div>
+            <p data-render-status role="status" aria-live="polite">Preparing document preview…</p>${tool.id==='edit-pdf'?'<p data-native-preview-status role="status" aria-live="polite"></p>':''}</div>
         </section>
         <aside class="df2-inspector" id="df2-options" data-options-pane aria-label="Tool settings"><div class="df2-pane-title"><strong>${esc(tool.name)}</strong><button type="button" class="df2-close-options" data-close-options aria-label="Close options">×</button></div>
           <p class="df2-inspector-caption">${esc(tool.description)}</p>
@@ -339,7 +348,13 @@ class DocFlowV2 {
       return;
     }
     try {
-      const controller=await createPreview(await file.arrayBuffer(),canvas,status);
+      if(this.tool?.id==='edit-pdf'&&JSON.stringify(this.editorDraft.history.current.source??null)!==this.nativePreviewKey){
+        const source=this.editorDraft.history.current.source;
+        const result=source?.edits.length?await this.nativeBytes(source):null;
+        if(generation!==this.renderId)return;
+        this.nativePreviewSource=result;this.nativePreviewKey=JSON.stringify(source??null);
+      }
+      const controller=await createPreview(this.tool?.id==='edit-pdf'&&this.nativePreviewSource?this.nativePreviewSource.slice(0):await file.arrayBuffer(),canvas,status);
       if(generation!==this.renderId){await controller.destroy();return;}
       this.preview=controller;
       await this.showPage(this.currentPage);
@@ -353,7 +368,8 @@ class DocFlowV2 {
           if(generation!==this.renderId){editor.dispose();return;}
           this.editor=editor;
           this.editor.show(this.currentPage);
-          this.message('Ready to add text, images and PDF annotations');
+          this.message('Ready to edit supported source content or add text, images and PDF annotations');
+          const nativeStatus=this.root.querySelector<HTMLElement>('[data-native-preview-status]');if(nativeStatus&&this.editorDraft.history.current.source?.edits.length)nativeStatus.textContent='Source changes previewed';
         }
       }
       if(this.tool?.id==='organize'){
@@ -366,6 +382,33 @@ class DocFlowV2 {
         host.querySelectorAll<HTMLButtonElement>('.df2-thumb').forEach(btn=>btn.setAttribute('aria-pressed',String(this.selected.has(Number(btn.dataset.page)))));
       }
     }catch(error){if(generation===this.renderId&&status)status.textContent=error instanceof Error?error.message:'Preview unavailable';}
+  }
+  private async nativeBytes(source:NativeEditPlan):Promise<ArrayBuffer>{
+    const file=this.files[0];if(!file)throw Error('Choose a PDF first.');
+    this.nativeOperation=runWorkerOperation('native-edit-preview',[{name:file.name,type:'application/pdf',buffer:await file.arrayBuffer()}],{source},()=>{});
+    return (await this.nativeOperation.result).outputs[0]!.buffer;
+  }
+  private async syncNativePreview(provided?:ArrayBuffer):Promise<void>{
+    const source=this.editorDraft.history.current.source,key=JSON.stringify(source??null);
+    if(key===this.nativePreviewKey)return;
+    const generation=++this.nativeGeneration,render=this.renderId,file=this.files[0];
+    this.nativeOperation?.cancel();this.nativeOperation=null;this.nativePreviewBusy=true;
+    const state=this.root.querySelector<HTMLElement>('[data-native-preview-status]');if(state)state.textContent='Preparing source preview…';
+    try{
+      const bytes=provided??(source?.edits.length?await this.nativeBytes(source):await file!.arrayBuffer());
+      if(generation!==this.nativeGeneration||render!==this.renderId||key!==JSON.stringify(this.editorDraft.history.current.source??null))return;
+      this.nativePreviewSource=source?.edits.length?bytes.slice(0):null;this.nativePreviewKey=key;
+      const canvas=this.root.querySelector<HTMLCanvasElement>('[data-page-canvas]'),status=this.root.querySelector<HTMLElement>('[data-render-status]');if(!canvas||!status)return;
+      this.thumbnailRail?.dispose();this.thumbnailRail=null;
+      await this.freePreview(false);if(generation!==this.nativeGeneration||render!==this.renderId)return;
+      const controller=await createPreview(bytes.slice(0),canvas,status);
+      if(generation!==this.nativeGeneration||render!==this.renderId){await controller.destroy();return;}
+      this.preview=controller;await this.showPage(this.currentPage);
+      if(generation!==this.nativeGeneration||render!==this.renderId)return;
+      const host=this.root.querySelector<HTMLElement>('.df2-page-thumbs');if(host)this.thumbnailRail=mountPdfThumbnailRail(host,controller);
+      if(state)state.textContent='Source changes previewed';
+    }catch(e){if(generation===this.nativeGeneration){if(state)state.textContent=e instanceof Error?e.message:'Source preview failed.';this.nativePreviewKey='';}}
+    finally{if(generation===this.nativeGeneration){this.nativeOperation=null;this.nativePreviewBusy=false;}}
   }
   private async showPage(page:number):Promise<void> {
     const controller=this.preview;if(!controller)return;
@@ -440,6 +483,8 @@ class DocFlowV2 {
     this.disposeReview?.();this.disposeReview=null;this.review=null;
     if(tool.id==='edit-pdf'){
       if(!this.editor){this.message('Wait for the document editor to finish loading.');return;}
+      if(this.editor.nativeBusy||this.nativePreviewBusy){this.message('Wait for the source change and preview to finish.');return;}
+      if(this.editor.hasPendingSource){this.message('Apply or discard unapplied source text before exporting.');return;}
       options.plan=this.editor.currentPlan;
     }
     if(tool.id==='organize'){
