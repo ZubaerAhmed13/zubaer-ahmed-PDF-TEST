@@ -1,0 +1,26 @@
+{
+  "name": "docflow-processing-worker",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": "24.x"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "prepare:engines": "node scripts/prepare-snapshot.ts"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "2.118.0",
+    "@vercel/sandbox": "3.9.0",
+    "@vercel/functions": "3.10.3"
+  },
+  "devDependencies": {
+    "@types/node": "24.10.0",
+    "typescript": "5.7.2"
+  },
+  "overrides": {
+    "@vercel/cli-config": {
+      "zod": "4.6.7"
+    }
+  }
+}

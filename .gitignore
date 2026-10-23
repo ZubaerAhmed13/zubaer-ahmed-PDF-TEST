@@ -12,3 +12,5 @@ supabase/.temp/
 supabase/.branches/
 
 .superpowers/
+__pycache__/
+*.pyc
