@@ -30,6 +30,8 @@ export type WorkerOperation =
   | 'document-inspect'
   | 'direct-edit'
   | 'direct-edit-inspect'
+  | 'native-edit-inspect'
+  | 'native-edit-preview'
   | 'merge'
   | 'split'
   | 'remove-pages'

@@ -28,7 +28,7 @@ const decode = (value: unknown): string =>
   value instanceof PDFString || value instanceof PDFHexString
     ? value.decodeText()
     : "";
-function frameFor(page: ReturnType<PDFDocument["getPage"]>): PageFrame {
+export function frameFor(page: ReturnType<PDFDocument["getPage"]>): PageFrame {
   const unit = page.node.lookup(name('UserUnit'));
   if (unit !== undefined && (!(unit instanceof PDFNumber) || unit.asNumber() !== 1))
     throw new PdfOperationError('UNSUPPORTED_PAGE_SCALE', 'This PDF uses a custom page scale that Edit PDF cannot position accurately yet. Use another tool or keep the original unchanged.');

@@ -1,4 +1,5 @@
 node_modules/
+public/native-fonts/
 dist/
 public/ocr/
 playwright-report/
@@ -11,3 +12,5 @@ supabase/.temp/
 supabase/.branches/
 
 .superpowers/
+__pycache__/
+*.pyc

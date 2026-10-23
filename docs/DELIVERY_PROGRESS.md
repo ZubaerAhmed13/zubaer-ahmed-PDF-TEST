@@ -1,0 +1,14 @@
+# DocFlow remaining-stage delivery
+
+User instruction, 22 October 2026: finish all remaining stages one by one and continue after deployment. Existing workflow-quality slice is published in draft PR #36 at 56b7a9d.
+
+1. **Existing text/image editing — published and verified at f46b720.** Actual source replacement/removal, supported-font choice, byte-rendered preview, shared history and pending-input guards. Local checks: 191 units, 38 v2 Chromium cases, 30-document corpus and 26 independent raster pairs pass. A fresh reviewer independently verified five fixes. [Three-browser CI](https://github.com/ZubaerAhmed13/zubaer-ahmed-PDF-TEST/actions/runs/39695667711) and the [quality job](https://github.com/ZubaerAhmed13/zubaer-ahmed-PDF-TEST/actions/runs/39695667904/job/119552306866) passed. The full legacy browser jobs were cancelled and still need migration; this does not establish full parity. [Acceptance and limits](NATIVE_CONTENT_ACCEPTANCE.md).
+2. **Processing backend — in progress.** The existing DocFlow Supabase project is identified; private storage/jobs and isolated compute are being implemented. [Spec](superpowers/specs/2026-10-24-processing-backend.md) and [plan](superpowers/plans/2026-10-24-processing-backend.md) follow issue #38. No server processing is advertised as ready yet.
+3. **Seven missing tools — queued.** Reader, secure redaction, OCR, embedded-image extraction, visual signature, workflows and batch; preserve and reuse proven domain engines with new v2 views and actual output tests.
+4. **Release validation and deployment — queued.** Port regression scenarios, complete capability/device/accessibility/security/fidelity checks, deploy the exact verified source, independently smoke-test production, then continue remaining roadmap acceptance.
+
+Every verified milestone is committed and published with current status/evidence so progress survives workspace maintenance. Do not mark a tool complete merely because controls render, or a backend complete merely because an endpoint returns HTTP 200. Keep difficult/unsupported PDF cases and external hosting prerequisites explicit.
+
+5. **Ongoing improvement rounds — required after the planned stages.** Revisit actual output fidelity, device usability, keyboard/screen-reader access, performance and failure/recovery scenarios. Record concrete defects, reproduce each with evidence, fix and verify before advancing. Keep the next improvement backlog current; deployment does not end this work.
+
+Next measured improvements after remaining delivery: restore keyboard focus after source-panel repaint, reject oversized uploads from File metadata before reading buffers, stress large decoded-image/history memory, and complete physical-device/assistive-technology acceptance. These are tracked work, not claims of completion.
