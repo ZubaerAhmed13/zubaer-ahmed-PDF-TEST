@@ -22,7 +22,7 @@ if (existing) {
       return (await result.stdout()).slice(-8000);
     }
     await checked('apt-get',['update'],true);
-    await checked('apt-get',['install','-y','--no-install-recommends','libreoffice-writer','libreoffice-impress','libreoffice-calc','tesseract-ocr-eng','tesseract-ocr-deu','fonts-crosextra-carlito','fonts-crosextra-caladea','fonts-liberation','fonts-noto-core','fonts-dejavu-core','python3-venv'],true);
+    await checked('apt-get',['install','-y','--no-install-recommends','libreoffice-writer','libreoffice-impress','libreoffice-calc','tesseract-ocr','tesseract-ocr-eng','tesseract-ocr-deu','fonts-crosextra-carlito','fonts-crosextra-caladea','fonts-liberation','fonts-noto-core','fonts-dejavu-core','python3-venv'],true);
     await checked('python3',['-m','venv','/vercel/sandbox/venv']);
     await checked('/vercel/sandbox/venv/bin/pip',['install','--requirement','/vercel/sandbox/requirements-test.lock']);
     await checked('/vercel/sandbox/venv/bin/python',['-m','unittest','test_engines.py','test_acceptance.py']);
