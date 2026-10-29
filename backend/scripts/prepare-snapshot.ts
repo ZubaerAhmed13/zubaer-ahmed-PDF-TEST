@@ -17,7 +17,7 @@ if (existing) {
     vm = await Sandbox.create({name:`df-engine-build-${Date.now()}`,persistent:false,region:'fra1',resources:{vcpus:2},timeout:300_000,networkPolicy:'allow-all',signal:AbortSignal.timeout(30_000)});
     await vm.writeFiles(files);
     async function checked(cmd: string,args: string[],sudo=false) {
-      const result=await vm!.runCommand({cmd,args,sudo,timeoutMs:180_000});
+      const result=await vm!.runCommand({cmd,args,sudo,cwd:'/vercel/sandbox',timeoutMs:180_000});
       if(result.exitCode!==0)throw new Error(`Engine preparation failed: ${cmd}: ${(await result.stderr()).slice(-2000)}`);
       return (await result.stdout()).slice(-8000);
     }
@@ -37,7 +37,7 @@ if (existing) {
     // Prove the prepared snapshot works with egress denied; never process a user file in the builder.
     const offline=await Sandbox.create({source:{type:'snapshot',snapshotId:snapshot.snapshotId},persistent:false,region:'fra1',resources:{vcpus:2},timeout:60_000,networkPolicy:'deny-all'});
     try {
-      const test=await offline.runCommand('/vercel/sandbox/venv/bin/python',['-m','unittest','test_engines.py','test_acceptance.py'],{timeoutMs:45_000});
+      const test=await offline.runCommand({cmd:'/vercel/sandbox/venv/bin/python',args:['-m','unittest','test_engines.py','test_acceptance.py'],cwd:'/vercel/sandbox',timeoutMs:45_000});
       if(test.exitCode!==0)throw new Error(`Offline engine tests failed: ${(await test.stderr()).slice(-2000)}`);
       const network=await offline.runCommand('python3',['-c',"import urllib.request,sys\ntry: urllib.request.urlopen('https://example.com',timeout=3)\nexcept Exception: print('egress-denied')\nelse: sys.exit(1)"],{timeoutMs:5000});
       if(network.exitCode!==0)throw new Error('Offline VM egress check failed');
