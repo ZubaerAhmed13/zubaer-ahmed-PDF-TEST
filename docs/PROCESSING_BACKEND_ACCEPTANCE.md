@@ -27,12 +27,18 @@ After correcting the missing `backend/public` output folder, exact source 43f0b5
 
 Pricing checked against [Vercel's official Sandbox pricing](https://vercel.com/docs/sandbox/pricing). The preparer caps the builder at two vCPUs/300 seconds and its offline verification VM at two vCPUs/60 seconds; each is stopped in its lifecycle. Actual regional usage and retained snapshot size still need recording before a production cost estimate.
 
+## Control-plane expiry verification
+
+On 29 October, six hosted transactional SQL suites passed for owner/concurrency/daily quotas, the exact 24-hour boundary, expired claims/leases, malformed output, valid completion, RLS/idempotency/CAS/cancellation and expiry recovery. Three regressions were observed failing before fixes: dead leases stranding the owner slot, historical backlog consuming the bounded expiry batch, and an overdue targeted read returning completion metadata. The applied service-only, SECURITY INVOKER expiry helper prioritises leases still occupying a slot, and read/start/cancel expire their exact target independently of the sweep. Completed expiry clears output/path/request/details together while retaining rows and started timestamps for quota accounting. Fresh review independently rechecked both backlog fixes. [Recorded evidence](PROCESSING_LIFECYCLE_EVIDENCE.json).
+
+The database function-body hashes match the committed migration source. The CLI-generated expiry file was aligned with provider-applied history `20261029202039`; the unchanged original processing migration was likewise aligned with its observed provider version `20261023232005`. No SQL body was changed by that original-file rename. Every probe rolled back; final synthetic job/user counts are zero, and no Storage object or VM was created. Security advisors show the same two existing findings, with no new finding. This establishes control-plane expiry, not physical file deletion or authenticated transport acceptance.
+
 ## Remaining release gates
 
 - Expand the hosted corpus beyond synthetic fixtures: Office font/layout fidelity, diacritics, mixed scan/text pages, skew/rotation and low-quality scans. Retain actual output artifacts for independent review.
-- Additional quota/lease-expiry and malformed worker-output probes, followed by real broker acceptance. Existing preference tables are untouched.
+- Real broker ownership/load/error acceptance, beyond the completed SQL quota/lease/output probes. Existing preference tables are untouched.
 - Authenticated broker, real VM cancellation, signed input/output validation, expiry and Storage API purge, including the fixed two-hour signed-upload replay window.
 - Browser → authenticated job → verified output acceptance and explicit upload/retention notice. No remote capability is advertised until those pass.
 - Repair/PDF-A and PDF → editable Office are separate evidence gates. No PDF/A or editable-Office fidelity claim is made here.
 
-Supabase advisors report the intentional deny-all private claims table as RLS-without-policy (INFO). The existing project also has [leaked password protection disabled](https://supabase.com/docs/guides/auth/password-security#password-strength-and-leaked-password-protection) (WARN); no global Auth setting was changed by this migration.
+Supabase advisors report the intentional deny-all private claims table as [RLS-without-policy](https://supabase.com/docs/guides/database/database-linter?lint=0008_rls_enabled_no_policy) (INFO). The existing project also has [leaked password protection disabled](https://supabase.com/docs/guides/auth/password-security#password-strength-and-leaked-password-protection) (WARN); no global Auth setting was changed by this migration.
