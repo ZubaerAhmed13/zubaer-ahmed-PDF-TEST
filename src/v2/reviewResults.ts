@@ -1,11 +1,13 @@
 import type { ComparisonResult, PageDifference } from '../pdf/pdfComparison';
 import type { SearchHit } from '../pdf/textExtraction';
 import {mountImageReview,type ImageReviewData} from './imageReview';
+import {mountPdfReview,type PdfReviewData} from './pdfReview';
 
 export type ReviewData =
   | {kind:'text';query:string;hits:SearchHit[];pageCount:number;scannedPages:number}
   | {kind:'compare';comparison:ComparisonResult}
-  | ImageReviewData;
+  | ImageReviewData
+  | PdfReviewData;
 
 const label=(tag:string,value:string,cls=''):HTMLElement=>{
   const node=document.createElement(tag);node.textContent=value;
@@ -16,6 +18,7 @@ export function mountReview(host:HTMLElement,data:ReviewData):()=>void{
   host.replaceChildren();
   host.className='df2-review';
   if(data.kind==='images')return mountImageReview(host,data);
+  if(data.kind==='pdf')return mountPdfReview(host,data);
   if(data.kind==='text'){
     host.append(label('h2','Search and extraction results'));
     const summary=data.query

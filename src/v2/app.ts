@@ -18,6 +18,8 @@ import type {RunningOperation} from '../pdf/workerClient';
 import {validateInputBudget} from '../pdf/resourceBudget';
 import {extractEmbeddedImages} from '../pdf/embeddedImages';
 import {V2Reader} from './reader';
+import {V2Redaction,createRedactionDraft} from './redaction';
+import {redactPdf,REDACTION_MAX_BYTES,REDACTION_MAX_PAGES} from '../pdf/secureRasterRedaction';
 
 const esc=(value:string):string=>value.replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]!));
 const bytes=(value:number):string=>value<1024?value+' B':value<1048576?(value/1024).toFixed(1)+' KB':(value/1048576).toFixed(1)+' MB';
@@ -34,6 +36,7 @@ const field=(name:string,title:string,value:string,kind:'text'|'number'|'textare
 const select=(name:string,title:string,values:[string,string][])=>`<label class="df2-control"><span>${title}</span><select name="${name}">${values.map(([value,label])=>`<option value="${value}">${label}</option>`).join('')}</select></label>`;
 function toolOptions(id:string):string{
   switch(id){
+    case 'redact-secure':return select('redactionDpi','Raster resolution',[['115.2','Standard · 115 DPI'],['150','Higher detail · 150 DPI'],['200','Higher detail · 200 DPI'],['300','Highest detail · 300 DPI']])+`<p class="df2-organize-warning">Every page becomes an image-only PDF. Original selectable text, accessibility tags, interactive forms, attachments, digital signature validation and metadata are discarded, even on unmarked pages. Unmarked visible content stays as pixels. Output resolution is capped at 3.2 million pixels and 2,200 pixels per dimension. Maximum 15 pages and 40 MB input.</p><label class="df2-check"><input type="checkbox" name="confirmRasterization"> I understand that all pages become images and document structure is removed. I will review the exported PDF.</label>`;
     case 'preview':return `<label class="df2-control">Page number<input type="number" name="readerPage" min="1" step="1" value="1"></label><button type="button" class="df2-btn df2-btn-outline" data-reader-go>Go to page</button><p data-reader-status role="status" aria-live="polite">Preparing text selection…</p><p>Read, zoom and select existing PDF text. Downloading keeps the original bytes. Scanned pages need OCR for selectable text.</p>`;
     case 'extract-images':return `<p class="df2-organize-warning">Extracts supported embedded raster objects as PNGs, retaining their pixel dimensions. Masks and grouped inline atlases are reported as skipped. Vectors are not raster images. Original compressed streams and source metadata are not preserved. Up to 1,000 image records, 16 million pixels per image and 150 MB of encoded images.</p>`;
     case 'protect-pdf': return `<label class="df2-control"><span>New PDF password</span><input type="password" name="securityPassword" autocomplete="new-password" minlength="8" maxlength="127" required></label><label class="df2-control"><span>Confirm password</span><input type="password" name="confirmPassword" autocomplete="new-password" minlength="8" maxlength="127" required></label><p class="df2-organize-warning">AES-256 PDF encryption via qpdf. The password is required to open the resulting PDF. DocFlow cannot recover forgotten passwords.</p>`;
@@ -83,6 +86,8 @@ class DocFlowV2 {
   private thumbnailRail:ThumbnailRail|null=null;
   private editor:V2PageEditor|null=null;
   private reader:V2Reader|null=null;
+  private redaction:V2Redaction|null=null;
+  private redactionDraft=createRedactionDraft();
   private nativePreviewSource:ArrayBuffer|null=null;
   private nativePreviewKey='null';
   private nativeGeneration=0;
@@ -233,6 +238,7 @@ class DocFlowV2 {
     // transition must not capture it back into the new session.
     this.root.querySelector('[data-options]')?.removeAttribute('data-options');
     this.editorDraft=createEditorDraft();this.organizerDraft=createOrganizerDraft();this.optionValues={};
+    this.redactionDraft=createRedactionDraft();
     ++this.nativeGeneration;this.nativeOperation?.cancel();this.nativeOperation=null;this.nativePreviewSource=null;this.nativePreviewKey='null';this.nativePreviewBusy=false;
     this.selected.clear();this.currentPage=1;this.activeFile=0;this.zoom=1;this.result=null;this.review=null;
     this.disposeReview?.();this.disposeReview=null;this.freeLinks();
@@ -263,7 +269,7 @@ class DocFlowV2 {
             <span class="df2-upload-symbol" aria-hidden="true">↥</span>
             <strong>Drag ${tool.multiple?'your files':'a file'} here</strong><span>or choose from your device</span>
             <label class="df2-btn df2-btn-main">Choose ${tool.multiple?'files':'a file'}<input type="file" data-file-input accept="${tool.accepts}" ${tool.multiple?'multiple':''}></label>
-            <small>${tool.accepts.includes('.png')?'JPG or PNG images':'PDF documents'} · 150 MB per file · 250 MB total</small>
+            <small>${tool.accepts.includes('.png')?'JPG or PNG images':'PDF documents'} · ${tool.id==='redact-secure'?'40 MB · 15 pages maximum':'150 MB per file · 250 MB total'}</small>
           </div><p class="df2-upload-note" role="status" aria-live="polite">Your original files will not be overwritten. You can review the result before downloading.</p>
         </div></div>
     </main>`;
@@ -292,7 +298,7 @@ class DocFlowV2 {
     if(good.length!==files.length||!good.length){const el=this.root.querySelector<HTMLElement>('.df2-upload-note');if(el)el.textContent='Choose supported '+(tool.accepts.includes('.png')?'JPG/PNG':'PDF')+' files only.';return;}
     if(this.busy){this.message('Cancel processing before changing files.');return;}
     const candidate=tool.multiple?[...this.files,...good]:good.slice(0,1);
-    try{validateInputBudget(candidate.map(file=>file.size));}
+    try{validateInputBudget(candidate.map(file=>file.size));if(tool.id==='redact-secure'&&candidate.some(file=>file.size>REDACTION_MAX_BYTES))throw Error('Permanent redaction supports a maximum input file size of 40 MB.');}
     catch(error){
       const note=this.root.querySelector<HTMLElement>('.df2-upload-note');
       const message=error instanceof Error?error.message:'These files exceed the input limit.';
@@ -338,7 +344,7 @@ class DocFlowV2 {
       <div class="df2-work-bottom"><div class="df2-run-status" role="status" data-run-status>Ready to process · ${this.files.length} files</div>
         <button class="df2-btn df2-btn-outline" data-cancel-processing aria-label="Cancel processing" hidden>Cancel</button>
         <button class="df2-btn df2-btn-outline df2-mobile-options" aria-controls="df2-options" aria-expanded="false" data-mobile-options>Options</button>
-        <button class="df2-btn df2-btn-main" data-run>${tool.id==='preview'?'Download original':'Run '+esc(tool.name)} <span aria-hidden="true">↗</span></button></div>
+        <button class="df2-btn df2-btn-main" data-run>${tool.id==='preview'?'Download original':tool.id==='redact-secure'?'Apply permanent redactions':'Run '+esc(tool.name)} <span aria-hidden="true">↗</span></button></div>
     <input hidden type="file" data-add-file accept="${tool.accepts}" ${tool.multiple?'multiple':''}>
     </main>`;
     const form=this.root.querySelector<HTMLFormElement>('[data-options]');if(form)restoreOptions(form,this.optionValues);
@@ -374,6 +380,7 @@ class DocFlowV2 {
       }
       const controller=await createPreview(this.tool?.id==='edit-pdf'&&this.nativePreviewSource?this.nativePreviewSource.slice(0):await file.arrayBuffer(),canvas,status);
       if(generation!==this.renderId){await controller.destroy();return;}
+      if(this.tool?.id==='redact-secure'&&controller.pageCount>REDACTION_MAX_PAGES){await controller.destroy();const message='Permanent redaction supports at most 15 pages. Split this document first.';this.message(message);const run=this.root.querySelector<HTMLButtonElement>('[data-run]');if(run)run.disabled=true;throw Error(message);}
       this.preview=controller;
       await this.showPage(this.currentPage);
       if(generation!==this.renderId)return;
@@ -381,6 +388,10 @@ class DocFlowV2 {
         const paper=this.root.querySelector<HTMLElement>('.df2-canvas-paper'),readerStatus=this.root.querySelector<HTMLElement>('[data-reader-status]');
         const input=this.root.querySelector<HTMLInputElement>('[name=readerPage]');if(input){input.max=String(controller.pageCount);input.value=String(this.currentPage);}
         if(paper&&readerStatus)this.reader=new V2Reader(canvas,paper,readerStatus);
+      }
+      if(this.tool?.id==='redact-secure'){
+        const paper=this.root.querySelector<HTMLElement>('.df2-canvas-paper'),panel=this.root.querySelector<HTMLElement>('.df2-inspector');
+        if(paper&&panel)this.redaction=new V2Redaction(canvas,paper,panel,controller.pageCount,this.redactionDraft,()=>this.invalidateResult(),page=>{void this.showPage(page);},()=>this.busy);
       }
       if(this.tool?.id==='edit-pdf'){
         const paper=this.root.querySelector<HTMLElement>('.df2-canvas-paper');
@@ -436,6 +447,7 @@ class DocFlowV2 {
   private async showPage(page:number):Promise<void> {
     const controller=this.preview;if(!controller)return;
     this.reader?.clear();
+    this.redaction?.clearPage();
     this.currentPage=Math.max(1,Math.min(page,controller.pageCount));
     const pageInput=this.root.querySelector<HTMLInputElement>('[name=readerPage]');if(pageInput)pageInput.value=String(this.currentPage);
     const label=this.root.querySelector<HTMLElement>('[data-page-label]');
@@ -452,6 +464,7 @@ class DocFlowV2 {
   private async freePreview(invalidate=true):Promise<void> {
     if(invalidate)++this.renderId;
     this.reader?.dispose();this.reader=null;
+    this.redaction?.dispose();this.redaction=null;
     const current=this.preview;this.preview=null;
     if(current)await current.destroy().catch(()=>{});
   }
@@ -470,7 +483,7 @@ class DocFlowV2 {
     const warning=value.info?.warning?`<p class="df2-review-warning" role="status">${esc(String(value.info.warning))}</p>`:'';
     this.root.innerHTML=this.header()+`<main id="df2-main" class="df2-result">${this.crumbs()}${this.progress()}
       <div class="df2-result-card"><span class="df2-result-check" aria-hidden="true">✓</span><p class="df2-overline">DOCUMENT READY</p>
-        <h1>${this.review?.kind==='images'?'Your images are ready.':this.review?'Your analysis is ready.':'Your document is ready.'}</h1><p>${this.review?.kind==='images'?'Review each extracted image below. Download a PNG or the complete ZIP archive.':this.review?'Review the findings below and download the detailed reports.': 'Your original file has not been overwritten.'}</p>
+        <h1>${this.review?.kind==='images'?'Your images are ready.':this.review?.kind==='pdf'?'Your PDF is ready.':this.review?'Your analysis is ready.':'Your document is ready.'}</h1><p>${this.review?.kind==='images'?'Review each extracted image below. Download a PNG or the complete ZIP archive.':this.review?.kind==='pdf'?'Review the actual exported PDF below before downloading and sharing.':this.review?'Review the findings below and download the detailed reports.': 'Your original file has not been overwritten.'}</p>
         ${warning}${compressionMarkup}
         <div class="df2-downloads">${downloads||'<p>No downloadable file for this inspection operation.</p>'}</div>
         ${this.review?'<div data-v2-review-container></div>':''}
@@ -489,12 +502,18 @@ class DocFlowV2 {
   }
   private async execute():Promise<void>{
     const tool=this.tool;
-    if(this.busy||!tool||(!tool.operation&&!['preview','pdf-to-images','extract-images','text-search','compare','protect-pdf','unlock-pdf','repair-pdf'].includes(tool.id))||!this.files.length)return;
+    if(this.busy||!tool||(!tool.operation&&!['redact-secure','preview','pdf-to-images','extract-images','text-search','compare','protect-pdf','unlock-pdf','repair-pdf'].includes(tool.id))||!this.files.length)return;
     if(tool.id==='merge'&&this.files.length<2){this.message('Choose at least two PDFs to merge.');return;}
     if(tool.id==='compare'&&this.files.length!==2){this.message('Choose exactly two PDFs, A then B, to compare.');return;}
     const form=this.root.querySelector<HTMLFormElement>('[data-options]');
     if(!form)return;
     const options=readOptions(form);
+    if(tool.id==='redact-secure'){
+      if(!options.confirmRasterization){this.message('Please confirm the warning that every page becomes an image and document structure is removed.');return;}
+      if(!this.redaction){this.message('Wait for the redaction preview to finish loading.');return;}
+      if(this.redaction.hasPending){this.message('Finish drawing the current area before processing.');return;}
+      if(!this.redactionDraft.marks.length){this.message('Mark at least one redaction area before processing.');return;}
+    }
     if(['protect-pdf','unlock-pdf'].includes(tool.id)){
       const password=String(options.securityPassword??'');
       const length=new TextEncoder().encode(password).byteLength;
@@ -536,7 +555,13 @@ class DocFlowV2 {
       }
       if(generation!==this.processingGeneration)return;
       let result:OperationResult;
-      if(tool.id==='preview'){
+      if(tool.id==='redact-secure'){
+        const abort=new AbortController();this.cancel=()=>abort.abort();
+        const marks=this.redactionDraft.marks.map(mark=>({...mark}));
+        result=await redactPdf(input[0]!.buffer,marks,event=>progressMessage(event.message+' · '+Math.round(event.current*100/Math.max(1,event.total))+'%'),abort.signal,Number(options.redactionDpi??115.2));
+        if(generation!==this.processingGeneration)return;
+        this.review={kind:'pdf',title:'Review redacted PDF',buffer:result.outputs[0]!.buffer};
+      }else if(tool.id==='preview'){
         result={outputs:[{name:this.files[0]!.name,type:'application/pdf',buffer:input[0]!.buffer}],info:{originalBytesUnchanged:true,pageCount:this.preview?.pageCount??0}};
       }else if(tool.id==='text-search'){
         let cancelled=false;
