@@ -31,7 +31,8 @@ const descriptions:Record<string,string>={
   organize:'Arrange page thumbnails, duplicate or remove pages and undo changes before exporting a new PDF.',
   watermark:'Add a text watermark with configurable angle, size and opacity while preserving existing page content.',
   'images-to-pdf':'Combine JPG or PNG images into a PDF with page size, orientation and margin controls.',
-  'pdf-to-images':'Render PDF pages to PNG or JPEG images and download them in a ZIP archive.'
+  'pdf-to-images':'Render PDF pages to PNG or JPEG images and download them in a ZIP archive.',
+  'extract-images':'Extract supported embedded raster images, review them visually and download PNGs individually or in a ZIP.'
 };
 export const groups = [
   {id:'all',label:'All tools'}, ...toolCategories.map(c=>({id:c.id,label:c.label}))
@@ -41,7 +42,7 @@ export const v2Tools: V2Tool[] = tools.map(t=>({
   description:descriptions[t.id]??t.description, icon:symbols[t.id]??t.icon,
   multiple:t.multipleFiles, accepts:t.id==='images-to-pdf'?'.png,.jpg,.jpeg,image/png,image/jpeg':'.pdf,application/pdf',
   operation:nativeOperations[t.id]??null,
-  readiness:nativeOperations[t.id] || ['pdf-to-images','text-search','compare','protect-pdf','unlock-pdf','repair-pdf'].includes(t.id) ? 'active':'rebuilding',
+  readiness:nativeOperations[t.id] || ['pdf-to-images','extract-images','text-search','compare','protect-pdf','unlock-pdf','repair-pdf'].includes(t.id) ? 'active':'rebuilding',
   featured:['merge','split','compress','edit-pdf','organize','rotate'].includes(t.id)
 }));
 export const activeTools=v2Tools.filter(t=>t.readiness==='active');

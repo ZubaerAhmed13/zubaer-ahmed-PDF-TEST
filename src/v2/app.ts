@@ -16,6 +16,7 @@ import {compressionPresets,compressionSettings,compressionSummary} from './compr
 import type {NativeEditPlan} from '../pdf/nativeModel';
 import type {RunningOperation} from '../pdf/workerClient';
 import {validateInputBudget} from '../pdf/resourceBudget';
+import {extractEmbeddedImages} from '../pdf/embeddedImages';
 
 const esc=(value:string):string=>value.replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]!));
 const bytes=(value:number):string=>value<1024?value+' B':value<1048576?(value/1024).toFixed(1)+' KB':(value/1048576).toFixed(1)+' MB';
@@ -32,6 +33,7 @@ const field=(name:string,title:string,value:string,kind:'text'|'number'|'textare
 const select=(name:string,title:string,values:[string,string][])=>`<label class="df2-control"><span>${title}</span><select name="${name}">${values.map(([value,label])=>`<option value="${value}">${label}</option>`).join('')}</select></label>`;
 function toolOptions(id:string):string{
   switch(id){
+    case 'extract-images':return `<p class="df2-organize-warning">Extracts supported embedded raster objects as PNGs, retaining their pixel dimensions. Masks and grouped inline atlases are reported as skipped. Vectors are not raster images. Original compressed streams and source metadata are not preserved. Up to 1,000 image records, 16 million pixels per image and 150 MB of encoded images.</p>`;
     case 'protect-pdf': return `<label class="df2-control"><span>New PDF password</span><input type="password" name="securityPassword" autocomplete="new-password" minlength="8" maxlength="127" required></label><label class="df2-control"><span>Confirm password</span><input type="password" name="confirmPassword" autocomplete="new-password" minlength="8" maxlength="127" required></label><p class="df2-organize-warning">AES-256 PDF encryption via qpdf. The password is required to open the resulting PDF. DocFlow cannot recover forgotten passwords.</p>`;
     case 'unlock-pdf': return `<label class="df2-control"><span>PDF password</span><input type="password" name="securityPassword" autocomplete="current-password" maxlength="127" required></label><p class="df2-organize-warning">Only unlock PDFs you are authorised to access. Enter the existing PDF password; qpdf validates it before removing encryption.</p>`;
     case 'repair-pdf': return `<p class="df2-organize-warning">Attempts to recover damaged PDF cross-references and rewrite structure. This cannot reconstruct missing text, images, or irreparably damaged pages.</p>`;
@@ -203,6 +205,7 @@ class DocFlowV2 {
     this.thumbnailRail?.dispose();this.thumbnailRail=null;this.editor?.dispose();this.editor=null;
     await this.freePreview();
     if(navigation!==this.navigationGeneration||location.hash!==requestedHash)return;
+    this.disposeReview?.();this.disposeReview=null;
     if(changedTool){this.files=[];this.resetDraft();}
     this.tool=next.id?getTool(next.id)??null:null;
     this.stage=next.stage;
@@ -455,7 +458,7 @@ class DocFlowV2 {
     const warning=value.info?.warning?`<p class="df2-review-warning" role="status">${esc(String(value.info.warning))}</p>`:'';
     this.root.innerHTML=this.header()+`<main id="df2-main" class="df2-result">${this.crumbs()}${this.progress()}
       <div class="df2-result-card"><span class="df2-result-check" aria-hidden="true">✓</span><p class="df2-overline">DOCUMENT READY</p>
-        <h1>${this.review?'Your analysis is ready.':'Your document is ready.'}</h1><p>${this.review?'Review the findings below and download the detailed reports.': 'Your original file has not been overwritten.'}</p>
+        <h1>${this.review?.kind==='images'?'Your images are ready.':this.review?'Your analysis is ready.':'Your document is ready.'}</h1><p>${this.review?.kind==='images'?'Review each extracted image below. Download a PNG or the complete ZIP archive.':this.review?'Review the findings below and download the detailed reports.': 'Your original file has not been overwritten.'}</p>
         ${warning}${compressionMarkup}
         <div class="df2-downloads">${downloads||'<p>No downloadable file for this inspection operation.</p>'}</div>
         ${this.review?'<div data-v2-review-container></div>':''}
@@ -474,7 +477,7 @@ class DocFlowV2 {
   }
   private async execute():Promise<void>{
     const tool=this.tool;
-    if(this.busy||!tool||(!tool.operation&&!['pdf-to-images','text-search','compare','protect-pdf','unlock-pdf','repair-pdf'].includes(tool.id))||!this.files.length)return;
+    if(this.busy||!tool||(!tool.operation&&!['pdf-to-images','extract-images','text-search','compare','protect-pdf','unlock-pdf','repair-pdf'].includes(tool.id))||!this.files.length)return;
     if(tool.id==='merge'&&this.files.length<2){this.message('Choose at least two PDFs to merge.');return;}
     if(tool.id==='compare'&&this.files.length!==2){this.message('Choose exactly two PDFs, A then B, to compare.');return;}
     const form=this.root.querySelector<HTMLFormElement>('[data-options]');
@@ -531,6 +534,14 @@ class DocFlowV2 {
         if(cancelled||generation!==this.processingGeneration)return;
         result=extracted.result;
         this.review={kind:'text',query,hits:extracted.hits,pageCount:extracted.pageCount,scannedPages:extracted.scannedPages};
+      }else if(tool.id==='extract-images'){
+        let cancelled=false;this.cancel=()=>{cancelled=true;};
+        const extracted=await extractEmbeddedImages(input[0]!.buffer,(message,percent)=>progressMessage(message+' · '+Math.round(percent)+'%'),()=>cancelled||generation!==this.processingGeneration);
+        if(cancelled||generation!==this.processingGeneration)return;
+        const buffer=await extracted.blob.arrayBuffer();
+        if(cancelled||generation!==this.processingGeneration)return;
+        this.review={kind:'images',images:extracted.images,skipped:extracted.skipped};
+        result={outputs:[{name:'embedded-images.zip',type:'application/zip',buffer}],info:{extractedImages:extracted.count,skippedRasterOperations:extracted.skipped.length,format:'Decoded PNG; original compressed streams are not preserved'}};
       }else if(tool.id==='compare'){
         let cancelled=false;
         this.cancel=()=>{cancelled=true;};
