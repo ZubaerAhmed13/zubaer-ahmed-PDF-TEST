@@ -85,7 +85,8 @@ export class V2NativeEditor {
     this.overlay.hidden=!this.draft.native.enabled;this.overlay.replaceChildren();
     const inspection=this.inspections.get(this.page);if(!inspection){this.restoreFocus(focus);return;}
     const size=displaySize(inspection.frame),bounds=this.canvas.getBoundingClientRect();
-    this.overlay.style.width=bounds.width+'px';this.overlay.style.height=bounds.height+'px';
+    const origin=this.paper.getBoundingClientRect();
+    Object.assign(this.overlay.style,{left:bounds.x-origin.x+'px',top:bounds.y-origin.y+'px',right:'auto',bottom:'auto',width:bounds.width+'px',height:bounds.height+'px'});
     for(const object of inspection.objects){
       if(object.kind==='other'||this.draft.history.current.source?.edits.some(e=>e.id===object.id&&e.kind==='remove'))continue;
       const button=document.createElement('button');button.type='button';button.dataset.sourceSelect=object.id;

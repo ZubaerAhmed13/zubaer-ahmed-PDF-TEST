@@ -20,6 +20,8 @@ import {extractEmbeddedImages} from '../pdf/embeddedImages';
 import {V2Reader} from './reader';
 import {V2Redaction,createRedactionDraft} from './redaction';
 import {redactPdf,REDACTION_MAX_BYTES,REDACTION_MAX_PAGES} from '../pdf/secureRasterRedaction';
+import {mountSignaturePad} from '../app/signaturePad';
+import {typedSignature} from './signature';
 
 const esc=(value:string):string=>value.replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]!));
 const bytes=(value:number):string=>value<1024?value+' B':value<1048576?(value/1024).toFixed(1)+' KB':(value/1048576).toFixed(1)+' MB';
@@ -36,6 +38,7 @@ const field=(name:string,title:string,value:string,kind:'text'|'number'|'textare
 const select=(name:string,title:string,values:[string,string][])=>`<label class="df2-control"><span>${title}</span><select name="${name}">${values.map(([value,label])=>`<option value="${value}">${label}</option>`).join('')}</select></label>`;
 function toolOptions(id:string):string{
   switch(id){
+    case 'sign-visual':return `<p class="df2-organize-warning">This adds a visible signature mark. It is not a digital certificate or a cryptographic signature. PDFs containing existing certificate signatures are not supported by this tool.</p><div data-signature-pad-host></div><button type="button" class="df2-btn df2-btn-outline" data-signature-place>Place drawing</button><label class="df2-control">Typed signature<input name="signatureText" maxlength="150" autocomplete="off" placeholder="Your name"></label><button type="button" class="df2-btn df2-btn-outline" data-signature-type>Place typed signature</button>`;
     case 'redact-secure':return select('redactionDpi','Raster resolution',[['115.2','Standard · 115 DPI'],['150','Higher detail · 150 DPI'],['200','Higher detail · 200 DPI'],['300','Highest detail · 300 DPI']])+`<p class="df2-organize-warning">Every page becomes an image-only PDF. Original selectable text, accessibility tags, interactive forms, attachments, digital signature validation and metadata are discarded, even on unmarked pages. Unmarked visible content stays as pixels. Output resolution is capped at 3.2 million pixels and 2,200 pixels per dimension. Maximum 15 pages and 40 MB input.</p><label class="df2-check"><input type="checkbox" name="confirmRasterization"> I understand that all pages become images and document structure is removed. I will review the exported PDF.</label>`;
     case 'preview':return `<label class="df2-control">Page number<input type="number" name="readerPage" min="1" step="1" value="1"></label><button type="button" class="df2-btn df2-btn-outline" data-reader-go>Go to page</button><p data-reader-status role="status" aria-live="polite">Preparing text selection…</p><p>Read, zoom and select existing PDF text. Downloading keeps the original bytes. Scanned pages need OCR for selectable text.</p>`;
     case 'extract-images':return `<p class="df2-organize-warning">Extracts supported embedded raster objects as PNGs, retaining their pixel dimensions. Masks and grouped inline atlases are reported as skipped. Vectors are not raster images. Original compressed streams and source metadata are not preserved. Up to 1,000 image records, 16 million pixels per image and 150 MB of encoded images.</p>`;
@@ -88,6 +91,9 @@ class DocFlowV2 {
   private reader:V2Reader|null=null;
   private redaction:V2Redaction|null=null;
   private redactionDraft=createRedactionDraft();
+  private signaturePad:ReturnType<typeof mountSignaturePad>|null=null;
+  private signatureInk='';
+  private signatureGeneration=0;
   private nativePreviewSource:ArrayBuffer|null=null;
   private nativePreviewKey='null';
   private nativeGeneration=0;
@@ -230,6 +236,7 @@ class DocFlowV2 {
     const heading=this.root.querySelector<HTMLElement>('h1');if(heading){heading.tabIndex=-1;heading.focus({preventScroll:true});}
   }
   private captureOptions():void{
+    if(this.signaturePad)this.signatureInk=this.signaturePad.getData();
     const form=this.root.querySelector<HTMLFormElement>('[data-options]');
     if(form){this.optionValues=safeOptionValues(form);this.optionValues._advancedOpen=form.querySelector<HTMLDetailsElement>('details')?.open??false;}
   }
@@ -239,6 +246,7 @@ class DocFlowV2 {
     this.root.querySelector('[data-options]')?.removeAttribute('data-options');
     this.editorDraft=createEditorDraft();this.organizerDraft=createOrganizerDraft();this.optionValues={};
     this.redactionDraft=createRedactionDraft();
+    ++this.signatureGeneration;this.signaturePad?.dispose();this.signaturePad=null;this.signatureInk='';
     ++this.nativeGeneration;this.nativeOperation?.cancel();this.nativeOperation=null;this.nativePreviewSource=null;this.nativePreviewKey='null';this.nativePreviewBusy=false;
     this.selected.clear();this.currentPage=1;this.activeFile=0;this.zoom=1;this.result=null;this.review=null;
     this.disposeReview?.();this.disposeReview=null;this.freeLinks();
@@ -344,7 +352,7 @@ class DocFlowV2 {
       <div class="df2-work-bottom"><div class="df2-run-status" role="status" data-run-status>Ready to process · ${this.files.length} files</div>
         <button class="df2-btn df2-btn-outline" data-cancel-processing aria-label="Cancel processing" hidden>Cancel</button>
         <button class="df2-btn df2-btn-outline df2-mobile-options" aria-controls="df2-options" aria-expanded="false" data-mobile-options>Options</button>
-        <button class="df2-btn df2-btn-main" data-run>${tool.id==='preview'?'Download original':tool.id==='redact-secure'?'Apply permanent redactions':'Run '+esc(tool.name)} <span aria-hidden="true">↗</span></button></div>
+        <button class="df2-btn df2-btn-main" data-run>${tool.id==='preview'?'Download original':tool.id==='redact-secure'?'Apply permanent redactions':tool.id==='sign-visual'?'Create signed copy':'Run '+esc(tool.name)} <span aria-hidden="true">↗</span></button></div>
     <input hidden type="file" data-add-file accept="${tool.accepts}" ${tool.multiple?'multiple':''}>
     </main>`;
     const form=this.root.querySelector<HTMLFormElement>('[data-options]');if(form)restoreOptions(form,this.optionValues);
@@ -393,16 +401,17 @@ class DocFlowV2 {
         const paper=this.root.querySelector<HTMLElement>('.df2-canvas-paper'),panel=this.root.querySelector<HTMLElement>('.df2-inspector');
         if(paper&&panel)this.redaction=new V2Redaction(canvas,paper,panel,controller.pageCount,this.redactionDraft,()=>this.invalidateResult(),page=>{void this.showPage(page);},()=>this.busy);
       }
-      if(this.tool?.id==='edit-pdf'){
+      if(this.tool?.id==='edit-pdf'||this.tool?.id==='sign-visual'){
         const paper=this.root.querySelector<HTMLElement>('.df2-canvas-paper');
         const panel=this.root.querySelector<HTMLElement>('.df2-inspector');
         if(paper&&panel){
           this.message('Inspecting editable PDF page geometry…');
-          const editor=await V2PageEditor.mount(paper,canvas,panel,controller,file,this.editorDraft);
+          const editor=await V2PageEditor.mount(paper,canvas,panel,controller,file,this.editorDraft,this.tool.id==='sign-visual'?'signature':'edit');
           if(generation!==this.renderId){editor.dispose();return;}
           this.editor=editor;
           this.editor.show(this.currentPage);
-          this.message('Ready to edit supported source content or add text, images and PDF annotations');
+          this.message(this.tool.id==='sign-visual'?'Draw or type a mark, place it on the page, and review the signed copy.':'Ready to edit supported source content or add text, images and PDF annotations');
+          if(this.tool.id==='sign-visual'){const host=this.root.querySelector<HTMLElement>('[data-signature-pad-host]');if(host)this.signaturePad=mountSignaturePad(host,this.signatureInk);}
           const nativeStatus=this.root.querySelector<HTMLElement>('[data-native-preview-status]');if(nativeStatus&&this.editorDraft.history.current.source?.edits.length)nativeStatus.textContent='Source changes previewed';
         }
       }
@@ -415,7 +424,7 @@ class DocFlowV2 {
         this.thumbnailRail=mountPdfThumbnailRail(host,controller);
         host.querySelectorAll<HTMLButtonElement>('.df2-thumb').forEach(btn=>btn.setAttribute('aria-pressed',String(this.selected.has(Number(btn.dataset.page)))));
       }
-    }catch(error){if(generation===this.renderId&&status)status.textContent=error instanceof Error?error.message:'Preview unavailable';}
+    }catch(error){if(generation===this.renderId&&status){const message=error instanceof Error?error.message:'Preview unavailable';status.textContent=message;if(this.tool?.id==='sign-visual'){this.message(message);this.root.querySelectorAll<HTMLButtonElement>('[data-signature-place],[data-signature-type],[data-run]').forEach(button=>{button.disabled=true;});}}}
   }
   private async nativeBytes(source:NativeEditPlan):Promise<ArrayBuffer>{
     const file=this.files[0];if(!file)throw Error('Choose a PDF first.');
@@ -465,6 +474,7 @@ class DocFlowV2 {
     if(invalidate)++this.renderId;
     this.reader?.dispose();this.reader=null;
     this.redaction?.dispose();this.redaction=null;
+    ++this.signatureGeneration;this.signaturePad?.dispose();this.signaturePad=null;
     const current=this.preview;this.preview=null;
     if(current)await current.destroy().catch(()=>{});
   }
@@ -531,6 +541,11 @@ class DocFlowV2 {
       if(this.editor.nativeBusy||this.nativePreviewBusy){this.message('Wait for the source change and preview to finish.');return;}
       if(this.editor.hasPendingSource){this.message('Apply or discard unapplied source text before exporting.');return;}
       options.plan=this.editor.currentPlan;
+    }
+    if(tool.id==='sign-visual'){
+      if(!this.editor){this.message('Wait for signature placement to finish loading.');return;}
+      const plan=this.editor.currentPlan;if(!plan.objects.some(object=>object.kind==='signature')){this.message('Place at least one signature on the document first.');return;}
+      options.plan=plan;options.requireUnsigned=true;
     }
     if(tool.id==='organize'){
       if(!this.organizer){this.message('Wait for the page preview to finish loading.');return;}
@@ -619,6 +634,7 @@ class DocFlowV2 {
         this.cancel=running.cancel;
         result=await running.result;
       }
+      if(tool.id==='sign-visual'&&generation===this.processingGeneration){result.outputs[0]!.name='visually-signed.pdf';this.review={kind:'pdf',title:'Review visually signed PDF',buffer:result.outputs[0]!.buffer};}
       if(generation!==this.processingGeneration)return;
       this.result=result;
       this.busy=false;
@@ -662,6 +678,14 @@ class DocFlowV2 {
     if(!count){status.textContent='Wait for the document preview to finish loading.';return;}
     if(!Number.isInteger(page)||page<1||page>count){input.setAttribute('aria-invalid','true');status.textContent='Choose a page from 1–'+count+'.';return;}
     input.removeAttribute('aria-invalid');await this.showPage(page);
+  }
+  private async placeSignature(typed:boolean):Promise<void>{
+    const editor=this.editor,generation=this.signatureGeneration;if(this.busy||this.tool?.id!=='sign-visual'||!editor){this.message('Wait for signature placement to finish loading.');return;}
+    try{
+      const data=typed?await typedSignature(this.root.querySelector<HTMLInputElement>('[name=signatureText]')?.value??''):this.signaturePad?.getData();
+      if(generation!==this.signatureGeneration||editor!==this.editor||this.stage!=='work')return;
+      if(!data)throw Error('Draw a signature first or enter your name.');editor.placeSignature(data);this.invalidateResult();this.message('Signature placed. Move or resize it on the page, then create a signed copy.');
+    }catch(error){if(generation===this.signatureGeneration)this.message(error instanceof Error?error.message:'Signature could not be placed.');}
   }
   private syncImageLabel():void{
     if(!this.imagePreview)return;
@@ -707,6 +731,8 @@ class DocFlowV2 {
       return;
     }
     if(target.closest('[data-reader-go]')){await this.jumpReaderPage();return;}
+    if(target.closest('[data-signature-place]')){await this.placeSignature(false);return;}
+    if(target.closest('[data-signature-type]')){await this.placeSignature(true);return;}
     if(target.closest('[data-page-prev]')){if(this.imagePreview)await this.imagePreview.next(-1);else await this.showPage(this.currentPage-1);this.syncImageLabel();return;}
     if(target.closest('[data-page-next]')){if(this.imagePreview)await this.imagePreview.next(1);else await this.showPage(this.currentPage+1);this.syncImageLabel();return;}
     if(target.closest('[data-zoom-out]')){this.zoom=Math.max(.55,this.zoom-.15);await this.showPage(this.currentPage);return;}

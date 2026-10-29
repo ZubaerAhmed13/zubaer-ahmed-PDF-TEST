@@ -11,7 +11,7 @@ const nativeOperations: Partial<Record<string, WorkerOperation>> = {
   'extract-pages':'extract-pages', rotate:'rotate', 'page-numbers':'page-numbers',
   watermark:'watermark', crop:'crop', 'metadata-edit':'metadata-edit',
   annotate:'annotate', metadata:'metadata', 'images-to-pdf':'images-to-pdf',
-  forms:'forms-fill'
+  forms:'forms-fill','sign-visual':'direct-edit'
 };
 const symbols: Record<string,string> = {
   merge:'⇄', split:'⌁', 'remove-pages':'−', 'extract-pages':'▤',

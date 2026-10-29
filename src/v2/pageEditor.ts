@@ -31,7 +31,7 @@ export class V2PageEditor {
   private font:Font|null=null;
   private native:V2NativeEditor|null=null;
   private constructor(private readonly paper:HTMLElement,private readonly canvas:HTMLCanvasElement,
-    private readonly host:HTMLElement,private readonly preview:PreviewController,private readonly draft:EditorDraft){
+    private readonly host:HTMLElement,private readonly preview:PreviewController,private readonly draft:EditorDraft,private readonly mode:'edit'|'signature'='edit'){
     this.history=draft.history;this.plan=this.history.current;this.selected=draft.selected;
     this.overlay=document.createElement('div');this.overlay.className='df2-editor-overlay';
     this.overlay.setAttribute('role','group');this.overlay.setAttribute('aria-label','Editable additions to this PDF page');this.paper.append(this.overlay);
@@ -50,16 +50,17 @@ export class V2PageEditor {
     this.panel.addEventListener('click',this.onClick);
     this.panel.addEventListener('change',this.onChange);
   }
-  static async mount(paper:HTMLElement,canvas:HTMLCanvasElement,host:HTMLElement,viewer:PreviewController,file:File,draft:EditorDraft=createEditorDraft()):Promise<V2PageEditor>{
-    const editor=new V2PageEditor(paper,canvas,host,viewer,draft);
+  static async mount(paper:HTMLElement,canvas:HTMLCanvasElement,host:HTMLElement,viewer:PreviewController,file:File,draft:EditorDraft=createEditorDraft(),mode:'edit'|'signature'='edit'):Promise<V2PageEditor>{
+    const editor=new V2PageEditor(paper,canvas,host,viewer,draft,mode);
     try{
       const [result,font]=await Promise.all([runWorkerOperation('direct-edit-inspect',
         [{name:file.name,type:file.type||'application/pdf',buffer:await file.arrayBuffer()}],{},()=>{}).result,loadEditorFont()]);
       if(editor.destroyed)throw Error('Editor was closed before inspection completed');
+      if(mode==='signature'&&result.info?.hasSignatures)throw Error('This PDF contains an existing certificate signature. Use a certificate-aware editor to preserve its validity.');
       editor.frames=JSON.parse(String(result.info?.frames??'[]')) as PageFrame[];
       editor.preserved=Number(result.info?.preservedHighlights??0);
       editor.font=font;
-      editor.native=new V2NativeEditor(paper,canvas,host,file,draft,(source,preview)=>editor.commitSource(source,preview));
+      if(mode==='edit')editor.native=new V2NativeEditor(paper,canvas,host,file,draft,(source,preview)=>editor.commitSource(source,preview));
       editor.paintPanel();
       editor.paint();
       return editor;
@@ -69,6 +70,7 @@ export class V2PageEditor {
   get containsText():boolean{return this.plan.objects.some(o=>o.kind==='text');}
   get nativeBusy():boolean{return this.native?.busy??false;}
   get hasPendingSource():boolean{return this.native?.hasPending??false;}
+  placeSignature(data:string):void{if(!this.destroyed)this.add('signature',data);}
   private commitSource(source:NativeEditPlan,preview:ArrayBuffer):void{
     const candidate=this.history.current;candidate.source=source;
     // Accept the complete plan before changing the plan used by export.
@@ -89,7 +91,7 @@ export class V2PageEditor {
     const frame=this.frame();if(!frame)return;
     if(this.plan.objects.length>=1000){this.status.textContent='Maximum 1,000 objects per document.';return;}
     const size=displaySize(frame);
-    const width=Math.min(size.width*.46,kind==='comment'?28:220),height=kind==='text'?54:kind==='comment'?28:kind==='image'?120:76;
+    const width=Math.min(size.width*.46,kind==='comment'?28:220),height=kind==='text'?54:kind==='comment'?28:kind==='signature'?width*210/720:kind==='image'?120:76;
     const obj:EditObject={
       id:uid(),page:this.page,kind,x:Math.round(size.width*.16),y:Math.round(size.height*.2),
       width:Math.min(width,size.width),height:Math.min(height,size.height),
@@ -169,7 +171,8 @@ export class V2PageEditor {
     const bounds=this.canvas.getBoundingClientRect();
     const w=bounds.width||this.canvas.width,h=bounds.height||this.canvas.height;
     if(!w||!h)return;
-    this.overlay.style.width=w+'px';this.overlay.style.height=h+'px';
+    const origin=this.paper.getBoundingClientRect();
+    Object.assign(this.overlay.style,{left:bounds.x-origin.x+'px',top:bounds.y-origin.y+'px',right:'auto',bottom:'auto',width:w+'px',height:h+'px'});
     this.overlay.replaceChildren();
     for(const obj of this.plan.objects.filter(o=>o.page===this.page)){
       const el=document.createElement('button');
@@ -196,8 +199,8 @@ export class V2PageEditor {
     const tools=kinds.map(([kind,label])=>`<button type="button" data-editor-add="${kind}">${escaping(label)}</button>`).join('');
     const list=this.plan.objects.filter(o=>o.page===this.page).map(o=>
       `<button type="button" data-editor-select="${o.id}" aria-pressed="${o.id===this.selected}">${escaping(o.kind.replace('-',' '))} · ${escaping((o.text??'Object').slice(0,28))}</button>`).join('');
-    this.panel.innerHTML=`<div class="df2-editor-heading"><strong>Add content and annotations</strong><p>Use Existing content to replace supported source text and images.</p></div>
-      <div class="df2-editor-add">${tools}<label class="df2-editor-image">Add image<input type="file" data-editor-image accept="image/png,image/jpeg"></label></div>
+    this.panel.innerHTML=`<div class="df2-editor-heading"><strong>${this.mode==='signature'?'Signature placement':'Add content and annotations'}</strong><p>${this.mode==='signature'?'Place a typed mark or drawing above, then move and size it on the page.':'Use Existing content to replace supported source text and images.'}</p></div>
+      ${this.mode==='signature'?'':`<div class="df2-editor-add">${tools}<label class="df2-editor-image">Add image<input type="file" data-editor-image accept="image/png,image/jpeg"></label></div>`}
       <div class="df2-editor-history"><button data-editor-undo ${this.history.canUndo?'':'disabled'}>↶ Undo</button>
       <button data-editor-redo ${this.history.canRedo?'':'disabled'}>↷ Redo</button></div>
       <div class="df2-editor-objects"><strong>Page ${this.page} objects</strong>${list||'<p>Choose a tool above to add your first object.</p>'}</div>
@@ -220,7 +223,7 @@ export class V2PageEditor {
       <div class="df2-editor-grid">${input('x','X (points)',obj.x)}${input('y','Y (points)',obj.y)}
       ${input('width','Width',obj.width)}${input('height','Height',obj.height)}
       ${text?input('size','Font size',obj.size):''}
-      <label>Colour<input type="color" name="color" value="${obj.color}"></label></div>
+      ${obj.kind==='signature'?'':`<label>Colour<input type="color" name="color" value="${obj.color}"></label>`}</div>
       <button class="df2-editor-remove" type="button" data-editor-remove>Remove selected object</button>`;
   }
   private onClick=(event:MouseEvent):void=>{

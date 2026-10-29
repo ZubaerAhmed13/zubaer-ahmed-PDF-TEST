@@ -24,6 +24,19 @@ import { PdfOperationError } from "./errors";
 import { inspectNativeHighlights, removeAnnotationReferences, writeNativeHighlight } from "./nativeHighlights";
 
 const name = (value: string): PDFName => PDFName.of(value);
+function hasSignatures(doc:PDFDocument):boolean{
+  if(doc.catalog.has(name('Perms')))return true;
+  const pending:Array<PDFDict|PDFArray>=[],seen=new Set<PDFDict|PDFArray>();
+  const push=(value:unknown):void=>{if(value instanceof PDFDict||value instanceof PDFArray)pending.push(value);};
+  doc.context.enumerateIndirectObjects().forEach(([,object])=>push(object));
+  while(pending.length){
+    const object=pending.pop()!;if(seen.has(object))continue;seen.add(object);
+    if(seen.size>100000)throw new PdfOperationError('RESOURCE_LIMIT','PDF signature inspection exceeds the supported structure limit.');
+    if(object instanceof PDFDict){if(object.get(name('Type'))?.toString()==='/Sig'||object.has(name('ByteRange')))return true;object.entries().forEach(([,value])=>push(value));}
+    else object.asArray().forEach(push);
+  }
+  return false;
+}
 const decode = (value: unknown): string =>
   value instanceof PDFString || value instanceof PDFHexString
     ? value.decodeText()
@@ -106,7 +119,7 @@ export async function inspectDirectEdit(
   removeAnnotationReferences(doc, overlayIds);
   return {
     outputs: overlayIds.size ? [{ name: 'editor-preview.pdf', type: 'application/pdf', buffer: (await doc.save()).slice().buffer }] : [],
-    info: { frames: JSON.stringify(frames), comments: JSON.stringify(objects), preservedHighlights },
+    info: { frames: JSON.stringify(frames), comments: JSON.stringify(objects), preservedHighlights,hasSignatures:hasSignatures(doc) },
   };
 }
 export function checkText(text: string, supported?: Set<number>): void {
@@ -133,6 +146,7 @@ async function applyEdits(
   const doc = await PDFDocument.load(files[0]!.buffer, {
     updateMetadata: false,
   });
+  if(options.requireUnsigned===true&&hasSignatures(doc))throw new PdfOperationError('SIGNED_PDF','This PDF contains an existing certificate signature. Use a certificate-aware editor; a visual mark cannot preserve its validity.');
   const plan = options.plan as EditPlan;
   if (!plan || !Array.isArray(plan.objects) || plan.objects.length > 1000)
     throw new Error("The edit plan exceeds the 1,000 object limit.");

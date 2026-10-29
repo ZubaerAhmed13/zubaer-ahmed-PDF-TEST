@@ -3,6 +3,11 @@ import {PDFDocument,PDFName,PDFNumber,PDFRawStream,decodePDFRawStream,StandardFo
 import {getDocument} from 'pdfjs-dist/legacy/build/pdf.mjs';
 import {readFile} from 'node:fs/promises';
 const base='/zubaer-ahmed-PDF-TEST/';
+test('source selection follows the canvas offset on a narrow page',async({page})=>{
+  const pdf=await PDFDocument.create(),font=await pdf.embedFont(StandardFonts.Helvetica);pdf.addPage([100,1000]).drawText('Hi',{x:10,y:900,size:12,font});await page.goto(base+'#/tools/edit-pdf');await page.locator('[data-file-input]').setInputFiles({name:'narrow-source.pdf',mimeType:'application/pdf',buffer:Buffer.from(await pdf.save())});await page.locator('[data-source-toggle]').click();await expect(page.locator('.df2-source-list')).toContainText('Hi');
+  await page.locator('[data-fit]').click();await expect.poll(async()=>(await page.locator('[data-page-canvas]').boundingBox())!.width).toBeLessThan(100);await expect.poll(async()=>Math.abs((await page.locator('.df2-native-overlay').boundingBox())!.width-(await page.locator('[data-page-canvas]').boundingBox())!.width)).toBeLessThan(1);
+  const canvas=(await page.locator('[data-page-canvas]').boundingBox())!,overlay=(await page.locator('.df2-native-overlay').boundingBox())!;expect(Math.abs(overlay.x-canvas.x)).toBeLessThan(1);expect(Math.abs(overlay.y-canvas.y)).toBeLessThan(1);
+});
 async function open(page:Page,pageCount=1){
   const doc=await PDFDocument.create(),p=doc.addPage([500,700]),font=await doc.embedFont(StandardFonts.Helvetica);
   p.drawText('Original source text',{x:50,y:620,size:18,font});p.drawText('Unchanged text',{x:50,y:540,size:14,font});
