@@ -15,6 +15,7 @@ import {mountToolSearch} from './toolSearch';
 import {compressionPresets,compressionSettings,compressionSummary} from './compression';
 import type {NativeEditPlan} from '../pdf/nativeModel';
 import type {RunningOperation} from '../pdf/workerClient';
+import {validateInputBudget} from '../pdf/resourceBudget';
 
 const esc=(value:string):string=>value.replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]!));
 const bytes=(value:number):string=>value<1024?value+' B':value<1048576?(value/1024).toFixed(1)+' KB':(value/1048576).toFixed(1)+' MB';
@@ -183,6 +184,7 @@ class DocFlowV2 {
     input?.setSelectionRange(this.search.length,this.search.length);
   }
   private async navigate():Promise<void> {
+    const requestedHash=location.hash;
     const next=route();
     if(next.id!==(this.tool?.id??null)&&this.files.length&&!window.confirm('Leave this document? Your current files and edits will be discarded.')){
       history.replaceState(null,'',this.lastRouteHash);return;
@@ -200,7 +202,7 @@ class DocFlowV2 {
     this.organizer?.dispose();this.organizer=null;this.imagePreview?.dispose();this.imagePreview=null;
     this.thumbnailRail?.dispose();this.thumbnailRail=null;this.editor?.dispose();this.editor=null;
     await this.freePreview();
-    if(navigation!==this.navigationGeneration)return;
+    if(navigation!==this.navigationGeneration||location.hash!==requestedHash)return;
     if(changedTool){this.files=[];this.resetDraft();}
     this.tool=next.id?getTool(next.id)??null:null;
     this.stage=next.stage;
@@ -255,8 +257,8 @@ class DocFlowV2 {
             <span class="df2-upload-symbol" aria-hidden="true">↥</span>
             <strong>Drag ${tool.multiple?'your files':'a file'} here</strong><span>or choose from your device</span>
             <label class="df2-btn df2-btn-main">Choose ${tool.multiple?'files':'a file'}<input type="file" data-file-input accept="${tool.accepts}" ${tool.multiple?'multiple':''}></label>
-            <small>${tool.accepts.includes('.png')?'JPG or PNG images':'PDF documents'} · Up to your browser’s available memory</small>
-          </div><p class="df2-upload-note">Your original files will not be overwritten. You can review the result before downloading.</p>
+            <small>${tool.accepts.includes('.png')?'JPG or PNG images':'PDF documents'} · 150 MB per file · 250 MB total</small>
+          </div><p class="df2-upload-note" role="status" aria-live="polite">Your original files will not be overwritten. You can review the result before downloading.</p>
         </div></div>
     </main>`;
     this.bindDrop();
@@ -283,9 +285,18 @@ class DocFlowV2 {
     const good=files.filter(file=>tool.accepts.includes('.png')?(/image\/(png|jpeg)/.test(file.type)||/\.(png|jpe?g)$/i.test(file.name)):(file.type==='application/pdf'||/\.pdf$/i.test(file.name)));
     if(good.length!==files.length||!good.length){const el=this.root.querySelector<HTMLElement>('.df2-upload-note');if(el)el.textContent='Choose supported '+(tool.accepts.includes('.png')?'JPG/PNG':'PDF')+' files only.';return;}
     if(this.busy){this.message('Cancel processing before changing files.');return;}
+    const candidate=tool.multiple?[...this.files,...good]:good.slice(0,1);
+    try{validateInputBudget(candidate.map(file=>file.size));}
+    catch(error){
+      const note=this.root.querySelector<HTMLElement>('.df2-upload-note');
+      const message=error instanceof Error?error.message:'These files exceed the input limit.';
+      if(note)note.textContent=message;else this.message(message);
+      this.root.querySelectorAll<HTMLInputElement>('[data-file-input],[data-add-file]').forEach(input=>{input.value='';});
+      return;
+    }
     this.captureOptions();
     if(this.files.length&&!tool.multiple){if(!window.confirm('Replace this document? Your current edits will be discarded.'))return;this.resetDraft();}
-    this.files=tool.multiple?[...this.files,...good]:good.slice(0,1);
+    this.files=candidate;
     this.selected.clear();this.currentPage=1;this.result=null;this.review=null;this.disposeReview?.();this.disposeReview=null;
     // One hash-route transition owns the mount; never mount the viewer twice.
     const next=base+tool.id+'/work';

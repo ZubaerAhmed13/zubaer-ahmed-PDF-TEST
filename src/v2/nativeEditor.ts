@@ -4,6 +4,7 @@ import type {NativeEditPlan,NativeInspection,NativeObject} from '../pdf/nativeMo
 import type {EditorDraft} from './draft';
 
 const escape=(s:string)=>s.replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]!));
+type SourceFocus={area:'panel'|'overlay';selector:string;start?:number;end?:number;direction?:'forward'|'backward'|'none'};
 /** DOM boxes select immutable source IDs; the canvas alone shows edited content. */
 export class V2NativeEditor {
   private panel=document.createElement('section');
@@ -15,8 +16,9 @@ export class V2NativeEditor {
   private operation:RunningOperation|null=null;
   private applying=false;
   private status='';
+  private validationFocus:SourceFocus|null=null;
   constructor(private paper:HTMLElement,private canvas:HTMLCanvasElement,host:HTMLElement,private file:File,private draft:EditorDraft,private commit:(plan:NativeEditPlan,preview:ArrayBuffer)=>void){
-    this.panel.className='df2-native-panel';this.panel.setAttribute('aria-label','Existing PDF content');host.append(this.panel);
+    this.panel.className='df2-native-panel';this.panel.setAttribute('aria-label','Existing PDF content');this.panel.tabIndex=-1;host.append(this.panel);
     this.overlay.className='df2-native-overlay';this.overlay.setAttribute('role','group');this.overlay.setAttribute('aria-label','Existing PDF text and images');paper.append(this.overlay);
     this.panel.addEventListener('click',this.click);this.panel.addEventListener('input',this.input);this.panel.addEventListener('change',this.change);
     this.overlay.addEventListener('click',this.click);this.canvas.addEventListener('docflow-page-rendered',this.rendered);this.paint();
@@ -25,7 +27,7 @@ export class V2NativeEditor {
   get busy():boolean{return this.applying;}
   get hasPending():boolean{return Object.keys(this.draft.native.pending).length>0;}
   show(page:number):void{
-    if(this.page!==page){++this.generation;this.operation?.cancel();this.operation=null;this.applying=false;this.page=page;this.status='';this.paint();}
+    if(this.page!==page){++this.generation;this.operation?.cancel();this.operation=null;this.applying=false;this.validationFocus=null;this.page=page;this.status='';this.paint();}
     if(this.draft.native.enabled&&!this.inspections.has(page))void this.inspect();else this.paintOverlay();
   }
   refresh():void{this.paint();}
@@ -40,8 +42,32 @@ export class V2NativeEditor {
     finally{if(generation===this.generation)this.operation=null;}
   }
   private item():NativeObject|undefined{return this.inspections.get(this.page)?.objects.find(o=>o.id===this.draft.native.selected);}
+  private focusSnapshot(area:'panel'|'overlay'):SourceFocus|null{
+    const root=area==='panel'?this.panel:this.overlay,active=document.activeElement;
+    if(!(active instanceof HTMLElement)||active===root||!root.contains(active))return null;
+    const attribute=['name','data-source-select','data-source-toggle','data-source-apply','data-source-remove','data-source-discard','data-source-image'].find(key=>active.hasAttribute(key));
+    if(!attribute)return null;
+    const focus:SourceFocus={area,selector:`[${attribute}="${CSS.escape(active.getAttribute(attribute)!)}"]`};
+    if(active instanceof HTMLInputElement&&active.selectionStart!==null){focus.start=active.selectionStart;focus.end=active.selectionEnd??focus.start;focus.direction=active.selectionDirection??'none';}
+    return focus;
+  }
+  private restoreFocus(focus:SourceFocus|null):void{
+    if(!focus)return;
+    const root=focus.area==='panel'?this.panel:this.overlay;
+    let target=root.querySelector<HTMLElement>(focus.selector);
+    if(!target||target.closest('[hidden]'))target=this.panel.querySelector<HTMLElement>(`[data-source-select="${CSS.escape(this.draft.native.selected??'')}"]`)??this.panel.querySelector('[data-source-toggle]');
+    if(!target)return;
+    if(target.matches(':disabled')){
+      if(this.applying){this.validationFocus=focus;this.panel.focus({preventScroll:true});}
+      return;
+    }
+    target.focus({preventScroll:true});
+    if(target instanceof HTMLInputElement&&focus.start!==undefined)target.setSelectionRange(focus.start,focus.end??focus.start,focus.direction);
+  }
   private paint():void{
     if(this.destroyed)return;
+    const focus=!this.applying&&document.activeElement===this.panel&&this.validationFocus?this.validationFocus:this.focusSnapshot('panel');
+    this.panel.setAttribute('aria-busy',String(this.applying));
     const {enabled,pending}=this.draft.native,inspection=this.inspections.get(this.page),item=this.item(),source=this.draft.history.current.source,change=source?.edits.find(e=>e.id===item?.id);
     const values=item?pending[item.id]??(change?.kind==='text'?change:{text:item.text??'',font:'original' as const}):null;
     this.panel.innerHTML=`<h2>Existing content</h2><button type="button" data-source-toggle aria-pressed="${enabled}">${enabled?'Hide source selection':'Select existing content'}</button>
@@ -52,10 +78,12 @@ export class V2NativeEditor {
         <button type="button" data-source-remove ${this.applying||change?.kind==='remove'?'disabled':''}>Remove source object</button>`}</div>`:''}`:''}
       <p data-source-status role="status" aria-live="polite">${escape(this.status)}</p>${this.hasPending?'<button type="button" data-source-discard>Discard unapplied source changes</button>':''}`;
     this.paintOverlay();
+    this.restoreFocus(focus);if(!this.applying)this.validationFocus=null;
   }
   private paintOverlay():void{
+    const focus=this.focusSnapshot('overlay');
     this.overlay.hidden=!this.draft.native.enabled;this.overlay.replaceChildren();
-    const inspection=this.inspections.get(this.page);if(!inspection)return;
+    const inspection=this.inspections.get(this.page);if(!inspection){this.restoreFocus(focus);return;}
     const size=displaySize(inspection.frame),bounds=this.canvas.getBoundingClientRect();
     this.overlay.style.width=bounds.width+'px';this.overlay.style.height=bounds.height+'px';
     for(const object of inspection.objects){
@@ -65,6 +93,7 @@ export class V2NativeEditor {
       Object.assign(button.style,{left:object.rect.x/size.width*100+'%',top:object.rect.y/size.height*100+'%',width:Math.max(1,object.rect.width)/size.width*100+'%',height:Math.max(1,object.rect.height)/size.height*100+'%'});
       this.overlay.append(button);
     }
+    this.restoreFocus(focus);
   }
   private click=(event:Event):void=>{
     const button=event.target instanceof Element?event.target.closest<HTMLElement>('button'):null;if(!button||this.applying)return;

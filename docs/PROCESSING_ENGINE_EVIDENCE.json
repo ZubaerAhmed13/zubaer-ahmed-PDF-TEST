@@ -1,0 +1,18 @@
+{
+  "sourceCommit": "9d085f43205e679cfc4fd01f674f94ffc81758f5",
+  "snapshotId": "snap_xmLQxHteb7AzQ5OrU68cBXYpkmiJ",
+  "preparedAt": "2026-10-29T03:31:13.768Z",
+  "retentionDays": 7,
+  "engineSourceSha256": "1b955c361f0d1bdf2b21241712e3c66d0a3da6ef1240e54553147722c4c54812",
+  "requirementsSha256": "c4717595145e30b3cfe6ead0cc45b57a5520ba2e664290a2d640fc24deae88a0",
+  "versions": {"python":"3.14.4","libreoffice":"26.2.6.3","tesseract":"5.5.0","qpdf":"12.4.2","pikepdf":"10.17.0","Pillow":"13.0.0","pypdfium2":"5.14.0","ocrmypdf":"17.13.0"},
+  "networkDeniedTestsPassed": true,
+  "metrics": [
+    {"operation":"ocr","language":"eng","cer":0,"wer":0,"visualPixelsIdentical":true,"processingMs":1117},
+    {"operation":"ocr","language":"deu","cer":0,"wer":0,"visualPixelsIdentical":true,"processingMs":1111},
+    {"operation":"office-to-pdf","format":"docx","pages":2,"size":30193,"processingMs":585},
+    {"operation":"office-to-pdf","format":"pptx","pages":2,"size":26975,"processingMs":636},
+    {"operation":"office-to-pdf","format":"xlsx","pages":2,"size":25484,"processingMs":477}
+  ],
+  "limitations": "Five synthetic acceptance files; broader accuracy/fidelity and authenticated transport/cancellation/retention acceptance remain open. Document uploads are disabled."
+}

@@ -62,6 +62,35 @@ test('requires applying pending source text before export',async({page})=>{
   await open(page);await page.locator('[name=nativeText]').fill('Pending replacement');await page.locator('[data-run]').click();
   await expect(page.locator('[data-run-status]')).toContainText('Apply');await expect(page.locator('.df2-work')).toBeVisible();
 });
+test('source selection and validation keep keyboard focus without stealing it from another control',async({page})=>{
+  await open(page);
+  const selected=page.locator('.df2-source-list [data-source-select]').filter({hasText:'Original source text'});
+  await selected.focus();await selected.press('Enter');await expect(selected).toBeFocused();
+  await page.locator('[name=nativeText]').fill('Updated source text');
+  const apply=page.locator('[data-source-apply]');await apply.focus();await apply.press('Enter');
+  await expect(page.locator('[data-source-status]')).toContainText('Source change applied');await expect(apply).toBeFocused();
+  const overlay=page.locator('.df2-native-overlay [data-source-select]').first();await overlay.focus();
+  await page.locator('[data-page-canvas]').evaluate(c=>c.dispatchEvent(new Event('docflow-page-rendered')));await expect(overlay).toBeFocused();
+  await page.evaluate(()=>{
+    const original=File.prototype.arrayBuffer;let release!:()=>void;
+    const gate=new Promise<void>(r=>{release=r;});
+    (window as unknown as {releaseSourceRead:()=>void}).releaseSourceRead=release;
+    File.prototype.arrayBuffer=async function(){File.prototype.arrayBuffer=original;await gate;return original.call(this);};
+  });
+  await page.locator('[name=nativeText]').fill('Second source change');await apply.click();
+  await expect(page.getByRole('region',{name:'Existing PDF content'})).toHaveAttribute('aria-busy','true');
+  await expect(page.getByRole('region',{name:'Existing PDF content'})).toBeFocused();
+  await page.locator('[data-zoom-in]').focus();
+  await page.evaluate(()=>(window as unknown as {releaseSourceRead:()=>void}).releaseSourceRead());
+  await expect(page.locator('[data-source-status]')).toContainText('Source change applied');await expect(page.locator('[data-zoom-in]')).toBeFocused();
+});
+test('source-panel refresh retains pending text and a backward caret selection',async({page})=>{
+  await open(page);const input=page.locator('[name=nativeText]');await input.fill('Pending source typing');
+  await input.evaluate((el:HTMLInputElement)=>{el.focus();el.setSelectionRange(2,8,'backward');});
+  await page.locator('[data-editor-add=rectangle]').dispatchEvent('click');
+  await expect(input).toBeFocused();await expect(input).toHaveValue('Pending source typing');
+  expect(await input.evaluate((el:HTMLInputElement)=>[el.selectionStart,el.selectionEnd,el.selectionDirection])).toEqual([2,8,'backward']);
+});
 test('page navigation cancels validation without locking further source editing',async({page})=>{
   await open(page,2);await page.locator('[name=nativeText]').fill('Updated source text');await page.locator('[data-source-apply]').click();
   await page.locator('[data-page-next]').click();await expect(page.locator('.df2-source-list')).toContainText('Second page text');
