@@ -31,10 +31,11 @@ test('reviews true embedded rasters and downloads pixel-equivalent PNGs and a tr
     return {source:await decode(source),result:await decode(result)};
   },{source:png.toString('base64'),result:extracted.toString('base64')});expect(pixels.result).toEqual(pixels.source);
   const activeUrl=await page.locator('[data-image-detail] img').getAttribute('src');
-  const canLoad=(url:string)=>page.evaluate(src=>new Promise<boolean>(resolve=>{const image=new Image();image.onload=()=>resolve(true);image.onerror=()=>resolve(false);image.src=src;}),url);
-  expect(await canLoad(activeUrl!)).toBe(true);
-  await page.goBack();await expect(page.locator('[data-run]')).toBeEnabled();expect(await canLoad(activeUrl!)).toBe(false);
+  await page.evaluate(()=>{const revoke=URL.revokeObjectURL.bind(URL);(window as unknown as {revokedPreviews:string[]}).revokedPreviews=[];URL.revokeObjectURL=url=>{(window as unknown as {revokedPreviews:string[]}).revokedPreviews.push(url);revoke(url);};});
+  await page.goBack();await expect(page.locator('[data-run]')).toBeEnabled();
+  expect(await page.evaluate(()=>(window as unknown as {revokedPreviews:string[]}).revokedPreviews)).toContain(activeUrl);
   await page.goForward();await expect(page.locator('[data-image-detail] img')).toBeVisible();
+  expect(await page.locator('[data-image-detail] img').getAttribute('src')).not.toBe(activeUrl);
 });
 test('reports a text/vector-only PDF without producing page screenshots as extracted images',async({page})=>{
   await open(page,false);await page.locator('[data-run]').click();await expect(page.locator('[data-run-status]')).toContainText('No decoded embedded raster images');

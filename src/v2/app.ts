@@ -17,6 +17,7 @@ import type {NativeEditPlan} from '../pdf/nativeModel';
 import type {RunningOperation} from '../pdf/workerClient';
 import {validateInputBudget} from '../pdf/resourceBudget';
 import {extractEmbeddedImages} from '../pdf/embeddedImages';
+import {V2Reader} from './reader';
 
 const esc=(value:string):string=>value.replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]!));
 const bytes=(value:number):string=>value<1024?value+' B':value<1048576?(value/1024).toFixed(1)+' KB':(value/1048576).toFixed(1)+' MB';
@@ -33,6 +34,7 @@ const field=(name:string,title:string,value:string,kind:'text'|'number'|'textare
 const select=(name:string,title:string,values:[string,string][])=>`<label class="df2-control"><span>${title}</span><select name="${name}">${values.map(([value,label])=>`<option value="${value}">${label}</option>`).join('')}</select></label>`;
 function toolOptions(id:string):string{
   switch(id){
+    case 'preview':return `<label class="df2-control">Page number<input type="number" name="readerPage" min="1" step="1" value="1"></label><button type="button" class="df2-btn df2-btn-outline" data-reader-go>Go to page</button><p data-reader-status role="status" aria-live="polite">Preparing text selection…</p><p>Read, zoom and select existing PDF text. Downloading keeps the original bytes. Scanned pages need OCR for selectable text.</p>`;
     case 'extract-images':return `<p class="df2-organize-warning">Extracts supported embedded raster objects as PNGs, retaining their pixel dimensions. Masks and grouped inline atlases are reported as skipped. Vectors are not raster images. Original compressed streams and source metadata are not preserved. Up to 1,000 image records, 16 million pixels per image and 150 MB of encoded images.</p>`;
     case 'protect-pdf': return `<label class="df2-control"><span>New PDF password</span><input type="password" name="securityPassword" autocomplete="new-password" minlength="8" maxlength="127" required></label><label class="df2-control"><span>Confirm password</span><input type="password" name="confirmPassword" autocomplete="new-password" minlength="8" maxlength="127" required></label><p class="df2-organize-warning">AES-256 PDF encryption via qpdf. The password is required to open the resulting PDF. DocFlow cannot recover forgotten passwords.</p>`;
     case 'unlock-pdf': return `<label class="df2-control"><span>PDF password</span><input type="password" name="securityPassword" autocomplete="current-password" maxlength="127" required></label><p class="df2-organize-warning">Only unlock PDFs you are authorised to access. Enter the existing PDF password; qpdf validates it before removing encryption.</p>`;
@@ -80,6 +82,7 @@ class DocFlowV2 {
   private imagePreview:V2ImagePreview|null=null;
   private thumbnailRail:ThumbnailRail|null=null;
   private editor:V2PageEditor|null=null;
+  private reader:V2Reader|null=null;
   private nativePreviewSource:ArrayBuffer|null=null;
   private nativePreviewKey='null';
   private nativeGeneration=0;
@@ -335,13 +338,14 @@ class DocFlowV2 {
       <div class="df2-work-bottom"><div class="df2-run-status" role="status" data-run-status>Ready to process · ${this.files.length} files</div>
         <button class="df2-btn df2-btn-outline" data-cancel-processing aria-label="Cancel processing" hidden>Cancel</button>
         <button class="df2-btn df2-btn-outline df2-mobile-options" aria-controls="df2-options" aria-expanded="false" data-mobile-options>Options</button>
-        <button class="df2-btn df2-btn-main" data-run>Run ${esc(tool.name)} <span aria-hidden="true">↗</span></button></div>
+        <button class="df2-btn df2-btn-main" data-run>${tool.id==='preview'?'Download original':'Run '+esc(tool.name)} <span aria-hidden="true">↗</span></button></div>
     <input hidden type="file" data-add-file accept="${tool.accepts}" ${tool.multiple?'multiple':''}>
     </main>`;
     const form=this.root.querySelector<HTMLFormElement>('[data-options]');if(form)restoreOptions(form,this.optionValues);
     const details=form?.querySelector<HTMLDetailsElement>('details');if(details)details.open=this.optionValues._advancedOpen===true;
     const add=this.root.querySelector<HTMLInputElement>('[data-add-file]');
     add?.addEventListener('change',()=>{if(add.files){void this.receive([...add.files]);}});
+    this.root.querySelector<HTMLInputElement>('[name=readerPage]')?.addEventListener('keydown',event=>{if(event.key==='Enter'){event.preventDefault();void this.jumpReaderPage();}});
     void this.loadPreview();
   }
   private async loadPreview():Promise<void> {
@@ -373,6 +377,11 @@ class DocFlowV2 {
       this.preview=controller;
       await this.showPage(this.currentPage);
       if(generation!==this.renderId)return;
+      if(this.tool?.id==='preview'){
+        const paper=this.root.querySelector<HTMLElement>('.df2-canvas-paper'),readerStatus=this.root.querySelector<HTMLElement>('[data-reader-status]');
+        const input=this.root.querySelector<HTMLInputElement>('[name=readerPage]');if(input){input.max=String(controller.pageCount);input.value=String(this.currentPage);}
+        if(paper&&readerStatus)this.reader=new V2Reader(canvas,paper,readerStatus);
+      }
       if(this.tool?.id==='edit-pdf'){
         const paper=this.root.querySelector<HTMLElement>('.df2-canvas-paper');
         const panel=this.root.querySelector<HTMLElement>('.df2-inspector');
@@ -426,7 +435,9 @@ class DocFlowV2 {
   }
   private async showPage(page:number):Promise<void> {
     const controller=this.preview;if(!controller)return;
+    this.reader?.clear();
     this.currentPage=Math.max(1,Math.min(page,controller.pageCount));
+    const pageInput=this.root.querySelector<HTMLInputElement>('[name=readerPage]');if(pageInput)pageInput.value=String(this.currentPage);
     const label=this.root.querySelector<HTMLElement>('[data-page-label]');
     if(label)label.textContent='Page '+this.currentPage+' / '+controller.pageCount;
     const zoom=this.root.querySelector<HTMLElement>('[data-zoom-label]');if(zoom)zoom.textContent=Math.round(this.zoom*100)+'%';
@@ -440,6 +451,7 @@ class DocFlowV2 {
   }
   private async freePreview(invalidate=true):Promise<void> {
     if(invalidate)++this.renderId;
+    this.reader?.dispose();this.reader=null;
     const current=this.preview;this.preview=null;
     if(current)await current.destroy().catch(()=>{});
   }
@@ -477,7 +489,7 @@ class DocFlowV2 {
   }
   private async execute():Promise<void>{
     const tool=this.tool;
-    if(this.busy||!tool||(!tool.operation&&!['pdf-to-images','extract-images','text-search','compare','protect-pdf','unlock-pdf','repair-pdf'].includes(tool.id))||!this.files.length)return;
+    if(this.busy||!tool||(!tool.operation&&!['preview','pdf-to-images','extract-images','text-search','compare','protect-pdf','unlock-pdf','repair-pdf'].includes(tool.id))||!this.files.length)return;
     if(tool.id==='merge'&&this.files.length<2){this.message('Choose at least two PDFs to merge.');return;}
     if(tool.id==='compare'&&this.files.length!==2){this.message('Choose exactly two PDFs, A then B, to compare.');return;}
     const form=this.root.querySelector<HTMLFormElement>('[data-options]');
@@ -524,7 +536,9 @@ class DocFlowV2 {
       }
       if(generation!==this.processingGeneration)return;
       let result:OperationResult;
-      if(tool.id==='text-search'){
+      if(tool.id==='preview'){
+        result={outputs:[{name:this.files[0]!.name,type:'application/pdf',buffer:input[0]!.buffer}],info:{originalBytesUnchanged:true,pageCount:this.preview?.pageCount??0}};
+      }else if(tool.id==='text-search'){
         let cancelled=false;
         this.cancel=()=>{cancelled=true;};
         const query=String(options.query??'').trim();
@@ -617,6 +631,13 @@ class DocFlowV2 {
     }
     this.invalidateResult();
   }
+  private async jumpReaderPage():Promise<void>{
+    const input=this.root.querySelector<HTMLInputElement>('[name=readerPage]'),status=this.root.querySelector<HTMLElement>('[data-reader-status]');if(!input||!status)return;
+    const page=Number(input.value),count=this.preview?.pageCount;
+    if(!count){status.textContent='Wait for the document preview to finish loading.';return;}
+    if(!Number.isInteger(page)||page<1||page>count){input.setAttribute('aria-invalid','true');status.textContent='Choose a page from 1–'+count+'.';return;}
+    input.removeAttribute('aria-invalid');await this.showPage(page);
+  }
   private syncImageLabel():void{
     if(!this.imagePreview)return;
     const label=this.root.querySelector<HTMLElement>('[data-page-label]');
@@ -660,6 +681,7 @@ class DocFlowV2 {
       if(label)label.textContent=this.root.querySelector<HTMLElement>('[data-render-status]')?.textContent??'Image preview';
       return;
     }
+    if(target.closest('[data-reader-go]')){await this.jumpReaderPage();return;}
     if(target.closest('[data-page-prev]')){if(this.imagePreview)await this.imagePreview.next(-1);else await this.showPage(this.currentPage-1);this.syncImageLabel();return;}
     if(target.closest('[data-page-next]')){if(this.imagePreview)await this.imagePreview.next(1);else await this.showPage(this.currentPage+1);this.syncImageLabel();return;}
     if(target.closest('[data-zoom-out]')){this.zoom=Math.max(.55,this.zoom-.15);await this.showPage(this.currentPage);return;}

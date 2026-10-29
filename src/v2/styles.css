@@ -343,6 +343,18 @@ a{color:inherit;text-decoration:none}
 
 /* V2 genuine on-page PDF object editor — no legacy dialogs or CSS imports. */
 .df2-canvas-paper{position:relative;align-self:center}
+/* PDF.js 4.10 TextLayer layout, scoped to the read-only v2 reader. */
+.df2-reader-text{position:absolute;inset:0;text-align:initial;overflow:clip;line-height:1;-webkit-text-size-adjust:none;text-size-adjust:none;forced-color-adjust:none;transform-origin:0 0;caret-color:CanvasText;z-index:1}
+.hiddenCanvasElement{position:absolute;top:0;left:0;width:0;height:0;display:none}
+.df2-reader-text :is(span,br){color:transparent;position:absolute;white-space:pre;cursor:text;transform-origin:0 0}
+.df2-reader-text > :not(.markedContent),.df2-reader-text .markedContent span:not(.markedContent){z-index:1}
+.df2-reader-text span.markedContent{top:0;height:0}
+.df2-reader-text span[role=img]{user-select:none;cursor:default}
+.df2-reader-text ::selection{background:rgba(75,60,220,.28)}
+.df2-reader-text br::selection{background:transparent}
+.df2-reader-text[data-main-rotation="90"]{transform:rotate(90deg) translateY(-100%)}
+.df2-reader-text[data-main-rotation="180"]{transform:rotate(180deg) translate(-100%,-100%)}
+.df2-reader-text[data-main-rotation="270"]{transform:rotate(270deg) translateX(-100%)}
 .df2-editor-overlay{position:absolute;inset:0 auto auto 0;z-index:4;pointer-events:none;user-select:none}
 .df2-native-overlay{position:absolute;inset:0 auto auto 0;z-index:3;pointer-events:none}
 .df2-native-overlay button{position:absolute;pointer-events:auto;border:1px dashed #386b9f;background:transparent;border-radius:2px;min-width:3px;min-height:3px;cursor:pointer}
