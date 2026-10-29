@@ -289,15 +289,20 @@ export async function inspectForms(files: InputFile[], _options: Record<string, 
     else if (field instanceof PDFRadioGroup) { type = 'radio'; value = field.getSelected() ?? ''; choices = field.getOptions(); }
     else if (field instanceof PDFDropdown) { type = 'dropdown'; selected = field.getSelected(); value = selected[0] ?? ''; choices = field.getOptions(); }
     else if (field instanceof PDFOptionList) { type = 'option-list'; selected = field.getSelected(); value = selected.join(', '); choices = field.getOptions(); }
+    const radioOnValues=field instanceof PDFRadioGroup?field.acroField.getOnValues():[];
+    const radioChoices=new Map<PDFName,string>();radioOnValues.forEach((state,index)=>{if(choices[index]!==undefined&&!radioChoices.has(state))radioChoices.set(state,choices[index]!);});
     const widgets = field.acroField.getWidgets().map(widget => {
       const pageIndex = doc.getPages().findIndex(page => {
         const annots = page.node.Annots();
         for (let i = 0; annots && i < annots.size(); i++) if (doc.context.lookup(annots.get(i)) === widget.dict) return true;
         return false;
       });
-      return { page: pageIndex + 1, rect: widget.getRectangle(), choice: widget.getOnValue()?.decodeText() };
+      const onValue=widget.getOnValue();
+      return { page: pageIndex + 1, rect: widget.getRectangle(), choice: field instanceof PDFRadioGroup?(onValue?radioChoices.get(onValue):undefined):onValue?.decodeText() };
     }).filter(widget => widget.page > 0);
-    return { name: field.getName(), type, value, choices, selected, multiline, required: field.isRequired(), readOnly: field.isReadOnly(), widgets };
+    return { name: field.getName(), type, value, choices, selected, multiline, required: field.isRequired(), readOnly: field.isReadOnly(), widgets,
+      ...(field instanceof PDFDropdown||field instanceof PDFOptionList?{multiSelect:field.isMultiselect(),choiceExportValues:field.acroField.getOptions().map(option=>option.value.decodeText())}:{}),
+      ...(field instanceof PDFDropdown?{editable:field.isEditable()}: {}) };
   });
   progress(emit, 'finalizing', 1, 1, 'Form inspection complete');
   if (!fieldInfo.length) throw new PdfOperationError('NO_FORM_FIELDS', 'No supported AcroForm fields were detected.');
@@ -310,6 +315,7 @@ export async function fillForms(files: InputFile[], options: Record<string, unkn
   if (hasXfa(file.buffer)) throw new PdfOperationError('UNSUPPORTED_FORM', 'This PDF uses XFA forms, which are not currently editable in DocFlow.');
   const doc = await loadPdf(file);
   const { form, fields } = getAcroForm(file, doc);
+  for(const field of fields)if(field instanceof PDFDropdown||field instanceof PDFOptionList){if(field.acroField.getOptions().some(option=>option.value.decodeText()!==(option.display??option.value).decodeText()))throw new PdfOperationError('UNSUPPORTED_FORM','Choice fields with separate display labels and export values are not yet supported. Use a compatible PDF editor.');}
   const rawValues = typeof options.values === 'string' ? options.values : '{}';
   let values: Record<string, unknown>;
   try { values = JSON.parse(rawValues) as Record<string, unknown>; } catch { throw new PdfOperationError('INVALID_FORM_VALUES', 'Form values must be valid JSON.'); }
@@ -326,8 +332,11 @@ export async function fillForms(files: InputFile[], options: Record<string, unkn
       else field.uncheck();
     }
     else if (field instanceof PDFRadioGroup) { if (empty) field.clear(); else field.select(String(value)); }
-    else if (field instanceof PDFDropdown) { if (empty) field.clear(); else field.select(String(value)); }
-    else if (field instanceof PDFOptionList) field.select(Array.isArray(value) ? value.map(String) : [String(value)]);
+    else if (field instanceof PDFDropdown||field instanceof PDFOptionList) {
+      const selected=empty?[]:Array.isArray(value)?value.map(String):[String(value)];
+      if(selected.length>1&&!field.isMultiselect())throw new PdfOperationError('INVALID_FORM_VALUES','This field allows only one selection: '+field.getName());
+      if(field instanceof PDFDropdown){if(!selected.length)field.clear();else field.select(selected);}else field.select(selected);
+    }
     progress(emit, 'processing', index + 1, fields.length, `Updated field ${index + 1} of ${fields.length}`);
   });
   if (asBoolean(options.flatten, false)) {

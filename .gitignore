@@ -1,6 +1,7 @@
 node_modules/
 public/native-fonts/
 dist/
+preview-public/
 public/ocr/
 playwright-report/
 test-results/

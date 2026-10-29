@@ -3,7 +3,7 @@ import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 
 const packageInfo = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8')) as { version: string };
-const commit = process.env.GITHUB_SHA || (() => {
+const commit = process.env.GITHUB_SHA || process.env.VERCEL_GIT_COMMIT_SHA || (() => {
   try { return execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim(); }
   catch { return 'local'; }
 })();

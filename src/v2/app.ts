@@ -25,6 +25,7 @@ import {typedSignature} from './signature';
 import {V2PipelineEditor,createPipelineDraft} from './pipelineEditor';
 import {createPipeline,runPipeline,validatePipelineFiles,pipelineSummary,type PipelineReport} from './pipeline';
 import {mountPipelineReport} from './pipelineReview';
+import {V2FormFiller,createFormDraft} from './forms';
 
 const esc=(value:string):string=>value.replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]!));
 const bytes=(value:number):string=>value<1024?value+' B':value<1048576?(value/1024).toFixed(1)+' KB':(value/1048576).toFixed(1)+' MB';
@@ -64,7 +65,7 @@ function toolOptions(id:string):string{
     case 'annotate':return select('kind','Annotation',[['note','Text note'],['highlight','Highlight rectangle'],['rectangle','Outline rectangle']])+field('text','Note text','Review note','textarea')+field('pages','Pages (blank means all)','')+field('posX','Left position (%)','12','number')+field('posY','Top position (%)','12','number')+field('markWidth','Width (%)','30','number')+field('markHeight','Height (%)','12','number');
     case 'metadata-edit':return select('action','Change',[['edit','Update specified properties'],['clear','Clear standard properties']])+field('title','Title','')+field('author','Author','')+field('subject','Subject','')+field('keywords','Keywords','');
     case 'images-to-pdf':return select('pageSize','Page size',[['a4','A4'],['letter','US Letter'],['original','Original']])+select('orientation','Orientation',[['auto','Auto'],['portrait','Portrait'],['landscape','Landscape']])+field('margin','Margin (pt)','24','number');
-    case 'forms':return field('values','AcroForm values (JSON)','{}','textarea')+`<label class="df2-check"><input type="checkbox" name="flatten"> Flatten the filled fields</label>`;
+    case 'forms':return `<div data-form-host></div><label class="df2-check"><input type="checkbox" name="flatten"> Flatten the filled fields</label><p>Flattening makes fields permanent and removes their interactivity. The exported result is reviewed as an actual PDF. Rewriting invalidates existing certificate signatures. Supported text depends on the form's fonts; unsupported characters fail clearly at export.</p>`;
     default:return '';
   }
 }
@@ -102,6 +103,8 @@ class DocFlowV2 {
   private pipelineKind:string|null=null;
   private pipelineEditor:V2PipelineEditor|null=null;
   private pipelineReport:PipelineReport|null=null;
+  private formFiller:V2FormFiller|null=null;
+  private formDraft=createFormDraft();
   private nativePreviewSource:ArrayBuffer|null=null;
   private nativePreviewKey='null';
   private nativeGeneration=0;
@@ -255,6 +258,7 @@ class DocFlowV2 {
     this.root.querySelector('[data-options]')?.removeAttribute('data-options');
     this.editorDraft=createEditorDraft();this.organizerDraft=createOrganizerDraft();this.optionValues={};
     this.redactionDraft=createRedactionDraft();
+    this.formDraft=createFormDraft();
     this.pipelineKind=null;this.pipelineReport=null;
     ++this.signatureGeneration;this.signaturePad?.dispose();this.signaturePad=null;this.signatureInk='';
     ++this.nativeGeneration;this.nativeOperation?.cancel();this.nativeOperation=null;this.nativePreviewSource=null;this.nativePreviewKey='null';this.nativePreviewBusy=false;
@@ -344,7 +348,7 @@ class DocFlowV2 {
     this.root.innerHTML=this.header()+`<main id="df2-main" class="df2-work ${tool.id==='organize'?'df2-organizing':''}">
       <div class="df2-worktop">${this.crumbs()}<div class="df2-work-actions"><button class="df2-subtle" data-change-files>＋ Add files</button><button class="df2-subtle" data-reset>Start over</button></div></div>
       <div class="df2-workflow">
-        <aside class="df2-rail" aria-label="Document pages and files"><div class="df2-pane-title"><strong>${tool.multiple?'Documents':'Pages'}</strong><span>${this.files.length} ${tool.multiple?'files':'file'}</span></div>
+        <aside class="df2-rail" aria-label="Document pages and files"><div class="df2-pane-title"><strong>${tool.multiple?'Documents':'Pages'}</strong><span>${this.files.length} ${this.files.length===1?'file':'files'}</span></div>
           <div class="df2-rail-list">${this.files.map((file,i)=>`<article class="df2-file" data-file-index="${i}"><span class="df2-file-badge">PDF</span><div><b title="${esc(file.name)}">${esc(file.name)}</b><small>${bytes(file.size)}</small></div>
           ${['workflow','batch'].includes(tool.id)?`<button type="button" data-preview-file="${i}" aria-label="Preview ${esc(file.name)}" aria-pressed="${this.activeFile===i}">Preview</button>`:''}
           ${tool.multiple?`<div class="df2-file-actions"><button data-move-up="${i}" aria-label="Move ${esc(file.name)} up" ${i===0?'disabled':''}>↑</button><button data-move-down="${i}" aria-label="Move ${esc(file.name)} down" ${i===this.files.length-1?'disabled':''}>↓</button><button data-remove-file="${i}" aria-label="Remove ${esc(file.name)}">×</button></div>`:''}</article>`).join('')}
@@ -362,10 +366,10 @@ class DocFlowV2 {
           <div class="df2-inspector-help"><b>Original preserved</b><p>We create a new result. Review it before sharing or distributing.</p></div>
         </aside>
       </div>
-      <div class="df2-work-bottom"><div class="df2-run-status" role="status" data-run-status>Ready to process · ${this.files.length} files</div>
+      <div class="df2-work-bottom"><div class="df2-run-status" role="status" data-run-status>Ready to process · ${this.files.length} ${this.files.length===1?'file':'files'}</div>
         <button class="df2-btn df2-btn-outline" data-cancel-processing aria-label="Cancel processing" hidden>Cancel</button>
         <button class="df2-btn df2-btn-outline df2-mobile-options" aria-controls="df2-options" aria-expanded="false" data-mobile-options>Options</button>
-        <button class="df2-btn df2-btn-main" data-run>${tool.id==='preview'?'Download original':tool.id==='redact-secure'?'Apply permanent redactions':tool.id==='sign-visual'?'Create signed copy':'Run '+esc(tool.name)} <span aria-hidden="true">↗</span></button></div>
+        <button class="df2-btn df2-btn-main" data-run>${tool.id==='workflow'?'Run workflow':tool.id==='batch'?'Run batch':tool.id==='preview'?'Download original':tool.id==='redact-secure'?'Apply permanent redactions':tool.id==='sign-visual'?'Create signed copy':'Run '+esc(tool.name)} <span aria-hidden="true">↗</span></button></div>
     <input hidden type="file" data-add-file accept="${tool.accepts}" ${tool.multiple?'multiple':''}>
     </main>`;
     const form=this.root.querySelector<HTMLFormElement>('[data-options]');if(form)restoreOptions(form,this.optionValues);
@@ -415,6 +419,10 @@ class DocFlowV2 {
       if(this.tool?.id==='redact-secure'){
         const paper=this.root.querySelector<HTMLElement>('.df2-canvas-paper'),panel=this.root.querySelector<HTMLElement>('.df2-inspector');
         if(paper&&panel)this.redaction=new V2Redaction(canvas,paper,panel,controller.pageCount,this.redactionDraft,()=>this.invalidateResult(),page=>{void this.showPage(page);},()=>this.busy);
+      }
+      if(this.tool?.id==='forms'){
+        const host=this.root.querySelector<HTMLElement>('[data-form-host]'),paper=this.root.querySelector<HTMLElement>('.df2-canvas-paper');
+        if(host&&paper){this.formFiller=new V2FormFiller(host,canvas,paper,this.formDraft,()=>this.invalidateResult(),page=>this.showPage(page),()=>{const button=this.root.querySelector<HTMLElement>('[data-mobile-options]');if(button?.getClientRects().length){this.root.querySelector('[data-options-pane]')?.classList.add('opened');button.setAttribute('aria-expanded','true');}});await this.formFiller.load(file);if(generation!==this.renderId)return;}
       }
       if(this.tool?.id==='edit-pdf'||this.tool?.id==='sign-visual'){
         const paper=this.root.querySelector<HTMLElement>('.df2-canvas-paper');
@@ -471,6 +479,7 @@ class DocFlowV2 {
   private async showPage(page:number):Promise<void> {
     const controller=this.preview;if(!controller)return;
     this.reader?.clear();
+    this.formFiller?.clearPage();
     this.redaction?.clearPage();
     this.currentPage=Math.max(1,Math.min(page,controller.pageCount));
     const pageInput=this.root.querySelector<HTMLInputElement>('[name=readerPage]');if(pageInput)pageInput.value=String(this.currentPage);
@@ -486,6 +495,7 @@ class DocFlowV2 {
     this.editor?.show(this.currentPage);
   }
   private async freePreview(invalidate=true):Promise<void> {
+    this.formFiller?.dispose();this.formFiller=null;
     if(invalidate)++this.renderId;
     this.reader?.dispose();this.reader=null;
     this.redaction?.dispose();this.redaction=null;
@@ -507,7 +517,7 @@ class DocFlowV2 {
     const compressionMarkup=compression?`<section class="df2-compression-summary" data-compression-summary aria-label="Compression results"><strong>${compression.savedBytes>0?compression.percent+'% smaller':'No size reduction'}</strong><p>Original ${bytes(compression.input)} → Result ${bytes(compression.output)}</p><p>${compression.recompressed} of ${compression.eligible} eligible JPEG images recompressed. Text and vector objects preserved.</p>${compression.savedBytes?'':'<p>This document may already be optimised or use unsupported image encodings. Your original is available below.</p>'}</section>`:'';
     const warning=value.info?.warning?`<p class="df2-review-warning" role="status">${esc(String(value.info.warning))}</p>`:'';
     this.root.innerHTML=this.header()+`<main id="df2-main" class="df2-result">${this.crumbs()}${this.progress()}
-      <div class="df2-result-card"><span class="df2-result-check" aria-hidden="true">✓</span><p class="df2-overline">DOCUMENT READY</p>
+      <div class="df2-result-card"><span class="df2-result-check ${this.review?.kind==='pipeline'?'df2-result-queue':''}" aria-hidden="true">${this.review?.kind==='pipeline'?'≡':'✓'}</span><p class="df2-overline">${this.review?.kind==='pipeline'?'QUEUE FINISHED':'DOCUMENT READY'}</p>
         <h1>${this.review?.kind==='pipeline'?'Your queue results.':this.review?.kind==='images'?'Your images are ready.':this.review?.kind==='pdf'?'Your PDF is ready.':this.review?'Your analysis is ready.':'Your document is ready.'}</h1><p>${this.review?.kind==='pipeline'?'Check each file status and review the completed PDFs. Return to editing to retry failed or cancelled files with their original settings.':this.review?.kind==='images'?'Review each extracted image below. Download a PNG or the complete ZIP archive.':this.review?.kind==='pdf'?'Review the actual exported PDF below before downloading and sharing.':this.review?'Review the findings below and download the detailed reports.': 'Your original file has not been overwritten.'}</p>
         ${warning}${compressionMarkup}
         <div class="df2-downloads">${downloads||'<p>No downloadable file for this inspection operation.</p>'}</div>
@@ -535,6 +545,7 @@ class DocFlowV2 {
     const form=this.root.querySelector<HTMLFormElement>('[data-options]');
     if(!form)return;
     const options=readOptions(form);
+    if(tool.id==='forms'){try{if(!this.formFiller)throw Error('Wait for the form preview to finish loading.');options.values=this.formFiller.exportValues();}catch(error){this.message(error instanceof Error?error.message:'Form fields could not be read.');return;}}
     if(tool.id==='redact-secure'){
       if(!options.confirmRasterization){this.message('Please confirm the warning that every page becomes an image and document structure is removed.');return;}
       if(!this.redaction){this.message('Wait for the redaction preview to finish loading.');return;}
@@ -652,6 +663,7 @@ class DocFlowV2 {
         result=await running.result;
       }
       if(tool.id==='sign-visual'&&generation===this.processingGeneration){result.outputs[0]!.name='visually-signed.pdf';this.review={kind:'pdf',title:'Review visually signed PDF',buffer:result.outputs[0]!.buffer};}
+      if(tool.id==='forms'&&generation===this.processingGeneration)this.review={kind:'pdf',title:'Review '+(options.flatten?'flattened':'filled')+' PDF form',buffer:result.outputs[0]!.buffer};
       if(generation!==this.processingGeneration)return;
       this.result=result;
       this.busy=false;
