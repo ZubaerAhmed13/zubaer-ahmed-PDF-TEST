@@ -95,7 +95,8 @@ const rules: Record<WorkflowOperation, Record<string, FieldRule>> = {
   'remove-pages': { pages: { kind: 'string', default: '', maxLength: 180 } },
   'extract-pages': { pages: { kind: 'string', default: '', maxLength: 180 } },
   optimize: {
-    quality: { kind: 'number', default: 75, min: 35, max: 100 }
+    quality: { kind: 'number', default: 78, min: 35, max: 100 },
+    maxImageDimension: { kind: 'number', default: 2200, min: 900, max: 5000 }
   }
 };
 
@@ -142,6 +143,7 @@ export function validateStep(candidate: unknown): WorkflowStep {
   if (operation === 'page-numbers' && !Number.isInteger(options.start)) throw Error('Starting number must be an integer.');
   if (operation === 'watermark' && !String(options.text).trim()) throw Error('Enter watermark text.');
   if (operation === 'crop' && !['left','right','top','bottom'].some((key) => Number(options[key]) > 0)) throw Error('Enter a non-zero crop margin.');
+  if (operation === 'optimize') options.quality=Math.max(50,Math.min(95,Number(options.quality)));
   return { id: item.id, operation, options };
 }
 export function validateRecipe(candidate: unknown): WorkflowRecipe {
@@ -194,7 +196,8 @@ export async function executeWorkflow(
   for (const [index, step] of recipe.steps.entries()) {
     if (cancelled()) throw new DOMException('Workflow cancelled', 'AbortError');
     onProgress({ step: index + 1, totalSteps: steps.length, percent: (index / steps.length) * 100, message: 'Starting ' + step.operation });
-    const job = start(step.operation, [file], step.options, (status) => {
+    const workerOptions=step.operation==='optimize'?{...step.options,imageQuality:Number(step.options.quality)/100}:step.options;
+    const job = start(step.operation, [file], workerOptions, (status) => {
       if (!cancelled()) onProgress({
         step: index + 1,
         totalSteps: steps.length,

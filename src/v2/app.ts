@@ -22,6 +22,9 @@ import {V2Redaction,createRedactionDraft} from './redaction';
 import {redactPdf,REDACTION_MAX_BYTES,REDACTION_MAX_PAGES} from '../pdf/secureRasterRedaction';
 import {mountSignaturePad} from '../app/signaturePad';
 import {typedSignature} from './signature';
+import {V2PipelineEditor,createPipelineDraft} from './pipelineEditor';
+import {createPipeline,runPipeline,validatePipelineFiles,pipelineSummary,type PipelineReport} from './pipeline';
+import {mountPipelineReport} from './pipelineReview';
 
 const esc=(value:string):string=>value.replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]!));
 const bytes=(value:number):string=>value<1024?value+' B':value<1048576?(value/1024).toFixed(1)+' KB':(value/1048576).toFixed(1)+' MB';
@@ -38,6 +41,7 @@ const field=(name:string,title:string,value:string,kind:'text'|'number'|'textare
 const select=(name:string,title:string,values:[string,string][])=>`<label class="df2-control"><span>${title}</span><select name="${name}">${values.map(([value,label])=>`<option value="${value}">${label}</option>`).join('')}</select></label>`;
 function toolOptions(id:string):string{
   switch(id){
+    case 'workflow':case 'batch':return '<div data-pipeline-editor></div>';
     case 'sign-visual':return `<p class="df2-organize-warning">This adds a visible signature mark. It is not a digital certificate or a cryptographic signature. PDFs containing existing certificate signatures are not supported by this tool.</p><div data-signature-pad-host></div><button type="button" class="df2-btn df2-btn-outline" data-signature-place>Place drawing</button><label class="df2-control">Typed signature<input name="signatureText" maxlength="150" autocomplete="off" placeholder="Your name"></label><button type="button" class="df2-btn df2-btn-outline" data-signature-type>Place typed signature</button>`;
     case 'redact-secure':return select('redactionDpi','Raster resolution',[['115.2','Standard · 115 DPI'],['150','Higher detail · 150 DPI'],['200','Higher detail · 200 DPI'],['300','Highest detail · 300 DPI']])+`<p class="df2-organize-warning">Every page becomes an image-only PDF. Original selectable text, accessibility tags, interactive forms, attachments, digital signature validation and metadata are discarded, even on unmarked pages. Unmarked visible content stays as pixels. Output resolution is capped at 3.2 million pixels and 2,200 pixels per dimension. Maximum 15 pages and 40 MB input.</p><label class="df2-check"><input type="checkbox" name="confirmRasterization"> I understand that all pages become images and document structure is removed. I will review the exported PDF.</label>`;
     case 'preview':return `<label class="df2-control">Page number<input type="number" name="readerPage" min="1" step="1" value="1"></label><button type="button" class="df2-btn df2-btn-outline" data-reader-go>Go to page</button><p data-reader-status role="status" aria-live="polite">Preparing text selection…</p><p>Read, zoom and select existing PDF text. Downloading keeps the original bytes. Scanned pages need OCR for selectable text.</p>`;
@@ -94,6 +98,10 @@ class DocFlowV2 {
   private signaturePad:ReturnType<typeof mountSignaturePad>|null=null;
   private signatureInk='';
   private signatureGeneration=0;
+  private pipelineDraft=createPipelineDraft(false);
+  private pipelineKind:string|null=null;
+  private pipelineEditor:V2PipelineEditor|null=null;
+  private pipelineReport:PipelineReport|null=null;
   private nativePreviewSource:ArrayBuffer|null=null;
   private nativePreviewKey='null';
   private nativeGeneration=0;
@@ -217,6 +225,7 @@ class DocFlowV2 {
     const changedTool=next.id!==(this.tool?.id??null);
     this.organizer?.dispose();this.organizer=null;this.imagePreview?.dispose();this.imagePreview=null;
     this.thumbnailRail?.dispose();this.thumbnailRail=null;this.editor?.dispose();this.editor=null;
+    this.pipelineEditor?.dispose();this.pipelineEditor=null;
     await this.freePreview();
     if(navigation!==this.navigationGeneration||location.hash!==requestedHash)return;
     this.disposeReview?.();this.disposeReview=null;
@@ -246,6 +255,7 @@ class DocFlowV2 {
     this.root.querySelector('[data-options]')?.removeAttribute('data-options');
     this.editorDraft=createEditorDraft();this.organizerDraft=createOrganizerDraft();this.optionValues={};
     this.redactionDraft=createRedactionDraft();
+    this.pipelineKind=null;this.pipelineReport=null;
     ++this.signatureGeneration;this.signaturePad?.dispose();this.signaturePad=null;this.signatureInk='';
     ++this.nativeGeneration;this.nativeOperation?.cancel();this.nativeOperation=null;this.nativePreviewSource=null;this.nativePreviewKey='null';this.nativePreviewBusy=false;
     this.selected.clear();this.currentPage=1;this.activeFile=0;this.zoom=1;this.result=null;this.review=null;
@@ -277,7 +287,7 @@ class DocFlowV2 {
             <span class="df2-upload-symbol" aria-hidden="true">↥</span>
             <strong>Drag ${tool.multiple?'your files':'a file'} here</strong><span>or choose from your device</span>
             <label class="df2-btn df2-btn-main">Choose ${tool.multiple?'files':'a file'}<input type="file" data-file-input accept="${tool.accepts}" ${tool.multiple?'multiple':''}></label>
-            <small>${tool.accepts.includes('.png')?'JPG or PNG images':'PDF documents'} · ${tool.id==='redact-secure'?'40 MB · 15 pages maximum':'150 MB per file · 250 MB total'}</small>
+            <small>${tool.accepts.includes('.png')?'JPG or PNG images':'PDF documents'} · ${tool.id==='redact-secure'?'40 MB · 15 pages maximum':['workflow','batch'].includes(tool.id)?'20 PDFs · 50 MB each · 150 MB total':'150 MB per file · 250 MB total'}</small>
           </div><p class="df2-upload-note" role="status" aria-live="polite">Your original files will not be overwritten. You can review the result before downloading.</p>
         </div></div>
     </main>`;
@@ -306,7 +316,7 @@ class DocFlowV2 {
     if(good.length!==files.length||!good.length){const el=this.root.querySelector<HTMLElement>('.df2-upload-note');if(el)el.textContent='Choose supported '+(tool.accepts.includes('.png')?'JPG/PNG':'PDF')+' files only.';return;}
     if(this.busy){this.message('Cancel processing before changing files.');return;}
     const candidate=tool.multiple?[...this.files,...good]:good.slice(0,1);
-    try{validateInputBudget(candidate.map(file=>file.size));if(tool.id==='redact-secure'&&candidate.some(file=>file.size>REDACTION_MAX_BYTES))throw Error('Permanent redaction supports a maximum input file size of 40 MB.');}
+    try{validateInputBudget(candidate.map(file=>file.size));if(['workflow','batch'].includes(tool.id))validatePipelineFiles(candidate);if(tool.id==='redact-secure'&&candidate.some(file=>file.size>REDACTION_MAX_BYTES))throw Error('Permanent redaction supports a maximum input file size of 40 MB.');}
     catch(error){
       const note=this.root.querySelector<HTMLElement>('.df2-upload-note');
       const message=error instanceof Error?error.message:'These files exceed the input limit.';
@@ -317,6 +327,7 @@ class DocFlowV2 {
     this.captureOptions();
     if(this.files.length&&!tool.multiple){if(!window.confirm('Replace this document? Your current edits will be discarded.'))return;this.resetDraft();}
     this.files=candidate;
+    this.pipelineReport=null;
     this.selected.clear();this.currentPage=1;this.result=null;this.review=null;this.disposeReview?.();this.disposeReview=null;
     // One hash-route transition owns the mount; never mount the viewer twice.
     const next=base+tool.id+'/work';
@@ -329,16 +340,18 @@ class DocFlowV2 {
     this.imagePreview?.dispose();this.imagePreview=null;
     this.thumbnailRail?.dispose();this.thumbnailRail=null;
     this.editor?.dispose();this.editor=null;
+    this.pipelineEditor?.dispose();this.pipelineEditor=null;
     this.root.innerHTML=this.header()+`<main id="df2-main" class="df2-work ${tool.id==='organize'?'df2-organizing':''}">
       <div class="df2-worktop">${this.crumbs()}<div class="df2-work-actions"><button class="df2-subtle" data-change-files>＋ Add files</button><button class="df2-subtle" data-reset>Start over</button></div></div>
       <div class="df2-workflow">
         <aside class="df2-rail" aria-label="Document pages and files"><div class="df2-pane-title"><strong>${tool.multiple?'Documents':'Pages'}</strong><span>${this.files.length} ${tool.multiple?'files':'file'}</span></div>
           <div class="df2-rail-list">${this.files.map((file,i)=>`<article class="df2-file" data-file-index="${i}"><span class="df2-file-badge">PDF</span><div><b title="${esc(file.name)}">${esc(file.name)}</b><small>${bytes(file.size)}</small></div>
+          ${['workflow','batch'].includes(tool.id)?`<button type="button" data-preview-file="${i}" aria-label="Preview ${esc(file.name)}" aria-pressed="${this.activeFile===i}">Preview</button>`:''}
           ${tool.multiple?`<div class="df2-file-actions"><button data-move-up="${i}" aria-label="Move ${esc(file.name)} up" ${i===0?'disabled':''}>↑</button><button data-move-down="${i}" aria-label="Move ${esc(file.name)} down" ${i===this.files.length-1?'disabled':''}>↓</button><button data-remove-file="${i}" aria-label="Remove ${esc(file.name)}">×</button></div>`:''}</article>`).join('')}
           <div class="df2-page-thumbs" aria-label="Page thumbnails"></div></div>
         </aside>
         <section class="df2-canvas-pane" aria-label="Document preview">
-          <div class="df2-canvas-toolbar"><span class="df2-doc-name" title="${esc(this.files[0]?.name??'')}">${esc(this.files[0]?.name??'')}</span>
+          <div class="df2-canvas-toolbar"><span class="df2-doc-name" title="${esc(this.files[this.activeFile]?.name??this.files[0]?.name??'')}">${esc(this.files[this.activeFile]?.name??this.files[0]?.name??'')}</span>
             <div class="df2-zoom"><button data-page-prev aria-label="Previous page">‹</button><span data-page-label>Page 1</span><button data-page-next aria-label="Next page">›</button><span class="df2-zoom-sep"></span><button data-fit aria-label="Fit page or width" title="Switch between fit width and fit page">Fit</button><button data-zoom-out aria-label="Zoom out">−</button><span data-zoom-label>${Math.round(this.zoom*100)}%</span><button data-zoom-in aria-label="Zoom in">+</button></div></div>
           <div class="df2-page-stage" tabindex="0" aria-label="Scrollable document">${tool.id==='organize'?'<button class="df2-subtle" data-show-grid hidden>← Back to pages</button><div class="df2-page-plan-mount" data-organizer-host></div>':''}<div class="df2-canvas-paper"><canvas data-page-canvas aria-label="PDF page preview" role="img"></canvas></div>
             <p data-render-status role="status" aria-live="polite">Preparing document preview…</p>${tool.id==='edit-pdf'?'<p data-native-preview-status role="status" aria-live="polite"></p>':''}</div>
@@ -356,6 +369,8 @@ class DocFlowV2 {
     <input hidden type="file" data-add-file accept="${tool.accepts}" ${tool.multiple?'multiple':''}>
     </main>`;
     const form=this.root.querySelector<HTMLFormElement>('[data-options]');if(form)restoreOptions(form,this.optionValues);
+    const pipelineHost=this.root.querySelector<HTMLElement>('[data-pipeline-editor]');
+    if(pipelineHost){if(this.pipelineKind!==tool.id){this.pipelineDraft=createPipelineDraft(tool.id==='batch');this.pipelineKind=tool.id;}this.pipelineEditor=new V2PipelineEditor(pipelineHost,this.pipelineDraft,tool.id==='batch',()=>this.invalidateResult());const report=document.createElement('section');report.dataset.pipelineLive='';report.setAttribute('aria-label','File queue status');this.root.querySelector('.df2-page-stage')?.append(report);this.paintPipelineReport();}
     const details=form?.querySelector<HTMLDetailsElement>('details');if(details)details.open=this.optionValues._advancedOpen===true;
     const add=this.root.querySelector<HTMLInputElement>('[data-add-file]');
     add?.addEventListener('change',()=>{if(add.files){void this.receive([...add.files]);}});
@@ -493,11 +508,12 @@ class DocFlowV2 {
     const warning=value.info?.warning?`<p class="df2-review-warning" role="status">${esc(String(value.info.warning))}</p>`:'';
     this.root.innerHTML=this.header()+`<main id="df2-main" class="df2-result">${this.crumbs()}${this.progress()}
       <div class="df2-result-card"><span class="df2-result-check" aria-hidden="true">✓</span><p class="df2-overline">DOCUMENT READY</p>
-        <h1>${this.review?.kind==='images'?'Your images are ready.':this.review?.kind==='pdf'?'Your PDF is ready.':this.review?'Your analysis is ready.':'Your document is ready.'}</h1><p>${this.review?.kind==='images'?'Review each extracted image below. Download a PNG or the complete ZIP archive.':this.review?.kind==='pdf'?'Review the actual exported PDF below before downloading and sharing.':this.review?'Review the findings below and download the detailed reports.': 'Your original file has not been overwritten.'}</p>
+        <h1>${this.review?.kind==='pipeline'?'Your queue results.':this.review?.kind==='images'?'Your images are ready.':this.review?.kind==='pdf'?'Your PDF is ready.':this.review?'Your analysis is ready.':'Your document is ready.'}</h1><p>${this.review?.kind==='pipeline'?'Check each file status and review the completed PDFs. Return to editing to retry failed or cancelled files with their original settings.':this.review?.kind==='images'?'Review each extracted image below. Download a PNG or the complete ZIP archive.':this.review?.kind==='pdf'?'Review the actual exported PDF below before downloading and sharing.':this.review?'Review the findings below and download the detailed reports.': 'Your original file has not been overwritten.'}</p>
         ${warning}${compressionMarkup}
         <div class="df2-downloads">${downloads||'<p>No downloadable file for this inspection operation.</p>'}</div>
+        ${this.review?.kind==='pipeline'&&value.outputs.length?'<button type="button" class="df2-btn df2-btn-outline" data-pipeline-zip>Prepare ZIP of completed PDFs</button><p data-pipeline-zip-status role="status"></p>':''}
         ${this.review?'<div data-v2-review-container></div>':''}
-        ${value.info?`<details class="df2-result-info"><summary>Processing details</summary><pre>${esc(JSON.stringify(value.info,null,2))}</pre></details>`:''}
+        ${value.info&&this.review?.kind!=='pipeline'?`<details class="df2-result-info"><summary>Processing details</summary><pre>${esc(JSON.stringify(value.info,null,2))}</pre></details>`:''}
         <div class="df2-result-actions"><button class="df2-btn df2-btn-outline" data-return-edit>Return to editing</button><button class="df2-btn df2-btn-outline" data-again>Start another file</button><a class="df2-btn df2-btn-subtle" href="#/">See all tools →</a></div>
       </div></main>`;
     if(compression&&!compression.savedBytes&&this.files[0]){
@@ -512,6 +528,7 @@ class DocFlowV2 {
   }
   private async execute():Promise<void>{
     const tool=this.tool;
+    if(tool&&['workflow','batch'].includes(tool.id)){await this.executePipeline('run');return;}
     if(this.busy||!tool||(!tool.operation&&!['redact-secure','preview','pdf-to-images','extract-images','text-search','compare','protect-pdf','unlock-pdf','repair-pdf'].includes(tool.id))||!this.files.length)return;
     if(tool.id==='merge'&&this.files.length<2){this.message('Choose at least two PDFs to merge.');return;}
     if(tool.id==='compare'&&this.files.length!==2){this.message('Choose exactly two PDFs, A then B, to compare.');return;}
@@ -644,6 +661,42 @@ class DocFlowV2 {
     }catch(error){if(generation===this.processingGeneration)this.message(error instanceof Error?'Could not finish: '+error.message:'Processing failed.');}
     finally {if(generation===this.processingGeneration){this.setProcessing(false);if(button)button.disabled=false;this.cancel=()=>{};}}
   }
+  private paintPipelineReport():void{const host=this.root.querySelector<HTMLElement>('[data-pipeline-live]');if(host){host.replaceChildren();if(this.pipelineReport)mountPipelineReport(host,this.pipelineReport);}}
+  private async executePipeline(mode:'run'|'retry'|'check'):Promise<void>{
+    if(this.busy||!this.pipelineEditor||!this.files.length||!this.tool)return;
+    const generation=++this.processingGeneration,tool=this.tool;let report:PipelineReport;
+    try{
+      this.pipelineEditor.cancelPendingImport();
+      if(mode==='retry'&&!this.pipelineReport?.items.some(item=>item.state==='failed'||item.state==='cancelled'))throw Error('No failed or cancelled files to retry.');
+      const recipe=mode==='retry'?this.pipelineReport!.items[0]!.recipe:this.pipelineEditor.recipe;
+      report=createPipeline(this.files,recipe,mode==='retry'?this.pipelineReport!:undefined);
+    }catch(error){this.message(error instanceof Error?error.message:'Invalid workflow.');return;}
+    this.invalidateResult();this.pipelineReport=report;this.paintPipelineReport();let cancelled=false,active:RunningOperation|null=null;
+    this.cancel=()=>{cancelled=true;active?.cancel();};this.setProcessing(true);
+    try{
+      await runPipeline(report,runWorkerOperation,{cancelled:()=>cancelled||generation!==this.processingGeneration,active:job=>{active=job;if(cancelled)job?.cancel();},update:message=>{if(generation===this.processingGeneration){this.message(message);this.paintPipelineReport();}},checkOnly:mode==='check'});
+      if(generation!==this.processingGeneration)return;
+      this.paintPipelineReport();this.message((mode==='check'?'Check finished · ':'Queue finished · ')+pipelineSummary(report));
+      if(mode!=='check'){
+        const outputs=report.items.flatMap(item=>item.output?[item.output]:[]);
+        this.disposeReview?.();this.disposeReview=null;this.review={kind:'pipeline',report};this.result={outputs,info:{summary:pipelineSummary(report),warning:report.items.some(item=>['failed','cancelled'].includes(item.state))?'Some files did not complete. Review the per-file report; only completed PDFs are downloadable.':''}};
+        location.hash=base+tool.id+'/result';
+      }
+    }finally{if(generation===this.processingGeneration){this.cancel=()=>{};this.setProcessing(false);}}
+  }
+  private async preparePipelineZip():Promise<void>{
+    if(this.busy||this.stage!=='result'||this.review?.kind!=='pipeline'||!this.result)return;
+    const outputs=this.result.outputs.filter(out=>out.type==='application/pdf'),button=this.root.querySelector<HTMLButtonElement>('[data-pipeline-zip]'),status=this.root.querySelector<HTMLElement>('[data-pipeline-zip-status]');if(!button||!status||!outputs.length)return;
+    if(outputs.reduce((sum,out)=>sum+out.buffer.byteLength,0)>75*1024*1024){status.textContent='ZIP preparation supports up to 75 MB of completed PDFs. Download these PDFs individually.';return;}
+    const generation=this.processingGeneration,navigation=this.navigationGeneration;button.disabled=true;button.setAttribute('aria-busy','true');status.textContent='Preparing ZIP…';
+    try{
+      const {default:JSZip}=await import('jszip'),zip=new JSZip();outputs.forEach(out=>zip.file(out.name,out.buffer));
+      const blob=await zip.generateAsync({type:'blob',compression:'STORE'},()=>{if(generation!==this.processingGeneration||navigation!==this.navigationGeneration)throw new DOMException('Cancelled','AbortError');});
+      if(generation!==this.processingGeneration||navigation!==this.navigationGeneration)return;
+      const url=URL.createObjectURL(blob);this.links.push(url);const link=document.createElement('a');link.className='df2-output';link.href=url;link.download='docflow-results.zip';link.textContent='Download all completed PDFs · '+bytes(blob.size);this.root.querySelector('.df2-downloads')?.append(link);button.hidden=true;status.textContent='ZIP ready · '+outputs.length+' completed PDFs. ZIP preparation limit: 75 MB.';
+    }catch(error){if(generation===this.processingGeneration&&navigation===this.navigationGeneration){status.textContent=error instanceof Error?error.message:'ZIP could not be prepared.';button.disabled=false;}}
+    finally{button.setAttribute('aria-busy','false');}
+  }
   private setProcessing(value:boolean):void{
     this.busy=value;
     const run=this.root.querySelector<HTMLButtonElement>('[data-run]');if(run)run.disabled=value;
@@ -700,17 +753,22 @@ class DocFlowV2 {
     const category=target.closest<HTMLElement>('[data-category]');
     if(category){this.filter=category.dataset.category??'all';this.home();return;}
     if(target.closest('[data-open-search]')){this.openSearch();return;}
-    if(target.closest('[data-cancel-processing]')){++this.processingGeneration;this.cancel();this.cancel=()=>{};this.setProcessing(false);this.message('Cancelled · your document and settings are ready to use.');return;}
+    if(target.closest('[data-cancel-processing]')){if(this.tool&&['workflow','batch'].includes(this.tool.id)){this.cancel();this.message('Cancelling queue · completed PDFs will remain available.');return;}++this.processingGeneration;this.cancel();this.cancel=()=>{};this.setProcessing(false);this.message('Cancelled · your document and settings are ready to use.');return;}
     const t=target.closest<HTMLElement>('[data-card-tool]');
     if(t&&getTool(t.dataset.cardTool??'')?.readiness!=='active'){event.preventDefault();const tool=getTool(t.dataset.cardTool??'');if(tool){this.tool=tool;this.unavailable();}return;}
     if(target.closest('[data-return-edit]')){location.hash=base+this.tool!.id+'/work';return;}
     if(target.closest('[data-show-grid]')){this.root.querySelector('.df2-work')?.classList.remove('df2-page-preview');this.root.querySelector<HTMLButtonElement>('[data-show-grid]')!.hidden=true;return;}
     if(target.closest('[data-reset],[data-again]')){if(this.stage==='work'&&this.files.length&&!window.confirm('Start over? Your current files and edits will be discarded.'))return;this.files=[];this.resetDraft();if(this.tool)location.hash=base+this.tool.id;else location.hash='#/';return;}
     if(target.closest('[data-change-files]')){this.root.querySelector<HTMLInputElement>('[data-add-file]')?.click();return;}
+    if(target.closest('[data-pipeline-check]')){await this.executePipeline('check');return;}
+    if(target.closest('[data-pipeline-retry]')){await this.executePipeline('retry');return;}
+    if(target.closest('[data-pipeline-zip]')){await this.preparePipelineZip();return;}
+    const previewFile=target.closest<HTMLElement>('[data-preview-file]');if(previewFile){const index=Number(previewFile.dataset.previewFile);if(!Number.isInteger(index)||!this.files[index])return;this.captureOptions();this.activeFile=index;this.currentPage=1;this.workspace();return;}
     const up=target.closest<HTMLElement>('[data-move-up]'),down=target.closest<HTMLElement>('[data-move-down]'),remove=target.closest<HTMLElement>('[data-remove-file]');
     if(up||down||remove){const index=Number((up??down??remove)?.dataset.moveUp??(down??remove)?.dataset.moveDown??remove?.dataset.removeFile);
       if(!Number.isInteger(index)||index<0||index>=this.files.length)return;
       this.captureOptions();this.invalidateResult();
+      this.pipelineReport=null;
       if(remove)this.files.splice(index,1);
       else {const next=index+(up?-1:1);if(next<0||next>=this.files.length)return;[this.files[index],this.files[next]]=[this.files[next]!,this.files[index]!];}
       if(!this.files.length){location.hash=base+this.tool!.id;return;}
