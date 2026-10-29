@@ -17,8 +17,10 @@ test('typed signature can be placed, moved, undone and exported while preserving
 test('drawing is retained through browser navigation and can be placed without typing a name',async({page})=>{
   await open(page);const box=(await page.locator('.signature-drawing').boundingBox())!;await page.mouse.move(box.x+box.width*.1,box.y+box.height*.4);await page.mouse.down();await page.mouse.move(box.x+box.width*.7,box.y+box.height*.7,{steps:10});await page.mouse.up();
   const before=await page.locator('.signature-drawing').evaluate((canvas:HTMLCanvasElement)=>canvas.toDataURL());
-  await page.goBack();await page.goForward();await expect.poll(()=>page.locator('.signature-drawing').evaluate((canvas:HTMLCanvasElement)=>canvas.toDataURL())).toBe(before);
+  const ink=()=>page.locator('.signature-drawing').evaluate((canvas:HTMLCanvasElement)=>{const pixels=canvas.getContext('2d')!.getImageData(0,0,canvas.width,canvas.height).data;let count=0,hash=2166136261;for(let i=3;i<pixels.length;i+=4){if(pixels[i])count++;hash=Math.imul(hash^pixels[i]!,16777619);}return {count,hash};});const beforeInk=await ink();expect(beforeInk.count).toBeGreaterThan(100);
+  await page.goBack();await page.goForward();await expect(page.locator('.signature-drawing')).toHaveAttribute('aria-busy','false');await expect.poll(ink).toEqual(beforeInk);
   await page.getByRole('button',{name:'Place drawing',exact:true}).click();await expect(page.locator('.df2-edit-signature')).toHaveCount(1);
+  expect(await page.locator('.df2-edit-signature img').evaluate((img:HTMLImageElement,original)=>img.getAttribute('src')===original,before)).toBe(true);
 });
 test('empty and unsupported typed marks fail clearly without adding a blank signature',async({page})=>{
   await open(page);await page.getByRole('button',{name:'Place drawing',exact:true}).click();await expect(page.locator('[data-run-status]')).toContainText('Draw');
