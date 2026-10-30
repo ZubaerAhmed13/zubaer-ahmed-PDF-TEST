@@ -7,7 +7,7 @@ export default tseslint.config(
   js.configs.recommended,
   ...tseslint.configs.recommended,
   {
-    files: ['src/**/*.ts', 'tests/**/*.ts', 'e2e/**/*.ts', 'backend/**/*.ts'],
+    files: ['src/**/*.ts', 'tests/**/*.ts', 'e2e/**/*.ts', 'backend/**/*.ts', 'supabase/functions/**/*.ts'],
     languageOptions: {
       ecmaVersion: 2022,
       globals: { ...globals.browser, ...globals.node }
@@ -16,6 +16,10 @@ export default tseslint.config(
       '@typescript-eslint/no-explicit-any': 'error',
       '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }]
     }
+  },
+  {
+    files: ['supabase/functions/**/*.ts'],
+    languageOptions: {globals: {Deno: 'readonly'}}
   },
   {
     files: ['scripts/**/*.mjs'],

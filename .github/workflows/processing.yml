@@ -1,7 +1,7 @@
 name: Processing foundations
 on:
   pull_request:
-    paths: ['backend/**', 'tests/processingContracts.test.ts', 'supabase/**', '.github/workflows/processing.yml']
+    paths: ['backend/**', 'tests/processing*.test.ts', 'supabase/**', '.github/workflows/processing.yml']
   workflow_dispatch:
 permissions:
   contents: read
@@ -16,7 +16,7 @@ jobs:
       - uses: actions/setup-python@v5
         with: {python-version: '3.12'}
       - run: npm ci
-      - run: npx vitest run tests/processingContracts.test.ts
+      - run: npx vitest run tests/processing*.test.ts
       - run: npm ci --prefix backend --ignore-scripts
       - run: npm run typecheck --prefix backend
       - run: npm audit --prefix backend --audit-level=high
