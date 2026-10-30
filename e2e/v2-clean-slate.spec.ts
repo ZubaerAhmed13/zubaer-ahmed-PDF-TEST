@@ -57,9 +57,12 @@ test('new phone workspace provides zoom, settings and valid Extract Pages output
   expect(output.getPages().map(p=>p.getWidth())).toEqual([301,302]);
   expect(await page.evaluate(()=>document.documentElement.scrollWidth-innerWidth)).toBeLessThanOrEqual(1);
 });
-test('unmigrated tools are clearly shown as not yet connected',async({page})=>{
+test('OCR opens the document-first workflow with an explicit local processing notice',async({page})=>{
   await page.goto(prefix+'#/');
   await page.locator('[data-card-tool="ocr"]').click();
-  await expect(page.getByText(/not yet connected to a verified processing experience/)).toBeVisible();
-  await expect(page.locator('[data-run]')).toHaveCount(0);
+  await expect(page.getByRole('heading',{name:'OCR scanned PDF'})).toBeVisible();
+  await page.locator('[data-file-input]').setInputFiles(await pdf('scan.pdf',500));
+  await expect(page.getByLabel('Recognition language')).toBeVisible();
+  await expect(page.getByText(/No document upload/)).toBeVisible();
+  await expect(page.locator('[data-run]')).toBeEnabled();
 });
