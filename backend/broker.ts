@@ -76,8 +76,9 @@ export function createBroker(config:BrokerConfig,deps:Dependencies){
     if(path==='/maintenance'){
       if(method!=='POST')throw new TransportError(405,'method_not_allowed','Use POST for this route.');
       const hash=await sha256(bearer(request));
-      if(!/^[a-f\d]{64}$/.test(config.cleanupHash)||!equalSecret(hash,config.cleanupHash)||await service('/rest/v1/rpc/docflow_cleanup_authorize','POST',{p_hash:hash})!==true)throw new TransportError(401,'invalid_claim','A valid maintenance credential is required.');
+      if(!/^[a-f\d]{64}$/.test(config.cleanupHash)||!equalSecret(hash,config.cleanupHash))throw new TransportError(401,'invalid_claim','A valid maintenance credential is required.');
       if(Object.keys(await body(request)).length)throw new TransportError(400,'invalid_request','This action does not accept additional fields.');
+      if(await service('/rest/v1/rpc/docflow_cleanup_authorize','POST',{p_hash:hash})!==true)throw new TransportError(401,'invalid_claim','A valid maintenance credential is required.');
       let deleted=0,batches=0;
       for(let batch=0;batch<5;batch++){
         const claimed=record(await service('/rest/v1/rpc/docflow_cleanup_claim','POST',{p_limit:100}));

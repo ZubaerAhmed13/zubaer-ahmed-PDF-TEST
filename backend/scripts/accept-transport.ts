@@ -11,7 +11,7 @@ const base=new URL('../',import.meta.url),project='https://ruefkvkavvycposzahit.
 const users=JSON.parse(process.env.DOCFLOW_ACCEPTANCE_USERS??'[]') as {id:string;email:string;password:string}[];
 const publicKey=process.env.DOCFLOW_ACCEPTANCE_PUBLIC_KEY,runId=process.env.DOCFLOW_ACCEPTANCE_RUN;
 if(users.length!==2||!users.every(user=>uuid(user.id)&&/^docflow-transport-[ab]-[a-f\d-]+@example\.invalid$/.test(user.email)&&/^[a-f\d]{64}$/.test(user.password))||!publicKey||!uuid(runId))throw Error('Synthetic acceptance accounts are not configured');
-interface Fixture{name:string;base64:string;operation:string;options:Record<string,unknown>;expectedPhrases:string[];expectedPages:number;cancellationOnly?:boolean}
+interface Fixture{name:string;base64:string;operation:string;options:Record<string,unknown>;expectedPhrases:string[];expectedPages:number;cancellationOnly?:boolean;expectReduction?:boolean}
 const fixtures=JSON.parse(await readFile(new URL('fixtures/transport.json',base),'utf8')) as Fixture[];
 const digest=(bytes:Uint8Array|string)=>createHash('sha256').update(bytes).digest('hex');
 function key(label:string){const bytes=Buffer.from(digest(runId!+label).slice(0,32),'hex');bytes[6]=(bytes[6]!&15)|64;bytes[8]=(bytes[8]!&63)|128;const hex=bytes.toString('hex');return [hex.slice(0,8),hex.slice(8,12),hex.slice(12,16),hex.slice(16,20),hex.slice(20)].join('-');}
@@ -57,7 +57,8 @@ for(const fixture of fixtures.filter(fixture=>!fixture.cancellationOnly)){
   if(starts.some(response=>response.status!==202&&response.status!==503))throw Error('Unexpected start response');
   const job=await poll(created.id,'completed');if(job.attempt!==1)throw Error('Duplicate start consumed another attempt');
   const result=await download(created.id,fixture.name);if(result.metadata.pages!==fixture.expectedPages)throw Error('Unexpected output page count');
-  if(fixture.operation==='compress'&&result.metadata.size>=Buffer.from(fixture.base64,'base64').length)throw Error('Compression did not reduce this synthetic raster');
+  if(fixture.expectReduction&&result.metadata.size>=Buffer.from(fixture.base64,'base64').length)throw Error('Compression did not reduce this supported synthetic raster');
+  if(fixture.name==='compression.pdf'&&result.metadata.sha256!==digest(Buffer.from(fixture.base64,'base64')))throw Error('Unsupported image encoding did not preserve the original bytes');
   completed.push(created.id);evidence.push({name:fixture.name,job:created.id,state:'completed',attempt:job.attempt,inputBytes:Buffer.from(fixture.base64,'base64').length,output:result.metadata,elapsedMs:Date.now()-startedAt,ownerIsolation:true,concurrentStarts:starts.length});await checkpoint();console.log('DOCFLOW_ACCEPTED',fixture.name,created.id);
 }
 

@@ -1,8 +1,10 @@
-"""Reproducible, synthetic-only inputs for the explicitly invoked hosted probe."""
+"""Synthetic-only inputs for the explicitly invoked hosted probe."""
 import base64
 import io
 import json
 import tempfile
+import random
+import zlib
 from pathlib import Path
 from docx import Document
 from openpyxl import Workbook
@@ -89,8 +91,35 @@ with tempfile.TemporaryDirectory() as temp:
     pdf.showPage()
     pdf.save()
     add('compression.pdf', content.getvalue(), 'compress', {'jpegQuality': 75, 'dpi': 96, 'maxImagePixels': 1200}, ['DocFlow compression keeps searchable text'], 1)
+    # The first PDF deliberately has a filter array, which the conservative
+    # engine preserves. This second input uses the supported scalar Flate filter.
+    rng = random.Random(20261030)
+    raw = bytes(96+4*rng.randrange(16) for _ in range(900*900))
+    image_data = zlib.compress(raw)
+    stream = b'q 600 0 0 600 0 0 cm /Im0 Do Q\nBT /F1 12 Tf 30 30 Td (Supported image compression preserves text) Tj ET\n'
+    objects = [b'<< /Type /Catalog /Pages 2 0 R >>', b'<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+               b'<< /Type /Page /Parent 2 0 R /MediaBox [0 0 600 600] /Resources << /XObject << /Im0 5 0 R >> /Font << /F1 6 0 R >> >> /Contents 4 0 R >>',
+               b'<< /Length '+str(len(stream)).encode()+b' >>\nstream\n'+stream+b'endstream',
+               b'<< /Type /XObject /Subtype /Image /Width 900 /Height 900 /ColorSpace /DeviceGray /BitsPerComponent 8 /Filter /FlateDecode /Length '+str(len(image_data)).encode()+b' >>\nstream\n'+image_data+b'\nendstream',
+               b'<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>']
+    data = bytearray(b'%PDF-1.7\n%\xe2\xe3\xcf\xd3\n')
+    offsets = [0]
+    for index, obj in enumerate(objects, 1):
+        offsets.append(len(data))
+        data.extend(str(index).encode()+b' 0 obj\n'+obj+b'\nendobj\n')
+    xref = len(data)
+    data.extend(b'xref\n0 7\n0000000000 65535 f \n')
+    for offset in offsets[1:]: data.extend(f'{offset:010d} 00000 n \n'.encode())
+    data.extend(b'trailer\n<< /Size 7 /Root 1 0 R >>\nstartxref\n'+str(xref).encode()+b'\n%%EOF\n')
+    add('supported-compression.pdf', bytes(data), 'compress', {'jpegQuality': 75, 'dpi': 72, 'maxImagePixels': 1200}, ['Supported image compression preserves text'], 1)
+    fixtures[-1]['expectReduction'] = True
 
 target = Path(__file__).resolve().parents[1]/'fixtures'/'transport.json'
 target.parent.mkdir(exist_ok=True)
+# Retain the exact measured inputs when extending a corpus. Deleting this file
+# intentionally regenerates the full corpus, including Office archive metadata.
+if target.exists():
+    existing = {item['name']: item for item in json.loads(target.read_text())}
+    fixtures = [existing.get(item['name'], item) for item in fixtures]
 target.write_text(json.dumps(fixtures, separators=(',', ':'))+'\n')
 print(f'Wrote {len(fixtures)} synthetic fixtures ({target.stat().st_size} bytes)')

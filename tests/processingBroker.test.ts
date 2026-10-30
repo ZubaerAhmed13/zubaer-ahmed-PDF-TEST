@@ -140,4 +140,16 @@ describe('durable physical cleanup',()=>{
     expect((await maintain(handler)).status).toBe(200);expect((await maintain(handler)).status).toBe(401);
     expect(calls.filter(call=>call.url.endsWith('/rpc/docflow_cleanup_claim'))).toHaveLength(1);
   });
+  it('does not consume a maintenance token on malformed, unexpected or oversized request bodies',async()=>{
+    for(const [type,body,status] of [['text/plain','{}',415],['application/json','{"unexpected":true}',400],['application/json',' '.repeat(17000),413]] as const){
+      let consumed=false;
+      const {handler,calls}=setup({cleanupHash},url=>{
+        if(url.endsWith('/rpc/docflow_cleanup_authorize')){const allowed=!consumed;consumed=true;return Response.json(allowed);}
+        if(url.endsWith('/rpc/docflow_cleanup_claim'))return Response.json({busy:false,names:[],lease});
+        if(url.endsWith('/rpc/docflow_cleanup_ack'))return Response.json(true);
+      });
+      const malformed=await handler(new Request(origin+'/functions/v1/docflow-processing/maintenance',{method:'POST',headers:{authorization:'Bearer '+secret,'content-type':type},body}));
+      expect(malformed.status).toBe(status);expect(calls).toHaveLength(0);expect((await maintain(handler)).status).toBe(200);
+    }
+  });
 });
