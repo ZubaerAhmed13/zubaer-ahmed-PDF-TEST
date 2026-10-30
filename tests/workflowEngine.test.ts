@@ -8,6 +8,12 @@ import type { OperationProgress } from '../src/pdf/types';
 
 const header = (): ArrayBuffer => Uint8Array.of(37,80,68,70,45,49,46,55).buffer;
 
+it('passes effective JPEG quality and image dimensions to the compression worker',async()=>{
+  let options:Record<string,unknown>={};const start:WorkflowStarter=(_op,_files,value)=>{options=value;return {cancel:()=>{},result:Promise.resolve({outputs:[{name:'out.pdf',type:'application/pdf',buffer:header()}]})};};
+  await executeWorkflow({name:'in.pdf',type:'application/pdf',buffer:header()},[{id:'compress',operation:'optimize',options:{quality:60,maxImageDimension:1200}}],start,()=>false,()=>{},()=>{});
+  expect(options.imageQuality).toBe(.6);expect(options.maxImageDimension).toBe(1200);expect(validateStep({id:'legacy',operation:'optimize',options:{quality:35}}).options.quality).toBe(50);
+});
+
 describe('Phase 4 workflow orchestration', () => {
   it('supports a multi-step chain and passes each PDF output into the next step', async () => {
     const calls: Array<{ op: string; inputSize: number }> = [];

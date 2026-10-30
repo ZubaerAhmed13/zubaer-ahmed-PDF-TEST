@@ -24,6 +24,7 @@ export interface EditObject extends Rect {
   opacity?: number;
 }
 export interface EditPlan {
+  source?: import('./nativeModel').NativeEditPlan;
   objects: EditObject[];
   crops: Record<string, Rect>;
   removedComments: string[];

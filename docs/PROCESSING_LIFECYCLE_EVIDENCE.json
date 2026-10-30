@@ -1,0 +1,37 @@
+{
+  "date": "2026-10-29",
+  "project": "ruefkvkavvycposzahit",
+  "migration_version": "20261029202039",
+  "migration_name": "docflow_processing_expiry",
+  "migration_sha256": "00fe1eba5ef41ce002ee7f5907da67b002ba88d87899306b82d2e5bad11eee70",
+  "postgres_source_md5": {
+    "docflow_expire_jobs": "700fb8a0c126dea165d17a527af4d306",
+    "docflow_job_action": "851d2b45c70b4ecc4a9e08100b555554"
+  },
+  "applied_suites": {
+    "docflow_processing_jobs.sql": "passed",
+    "docflow_processing_limits.sql": "passed",
+    "docflow_stale_owner_recovery.sql": "passed",
+    "docflow_processing_expiry.sql": "passed",
+    "docflow_expiry_backlog_recovery.sql": "passed",
+    "docflow_expiry_target_read.sql": "passed"
+  },
+  "observed_before_fix": [
+    "Owner active job limit reached after a dead lease",
+    "Owner active job limit reached behind 100 historical overdue jobs",
+    "Read returned overdue completed output outside the 100-row sweep"
+  ],
+  "persisted_synthetic_jobs": 0,
+  "persisted_synthetic_users": 0,
+  "storage_objects_created": 0,
+  "sandboxes_created": 0,
+  "new_security_advisor_findings": 0,
+  "existing_advisories": [
+    "Intentional private claims RLS deny-all table without policies",
+    "Existing Auth leaked-password protection disabled"
+  ],
+  "fresh_read_only_review": "findings fixed and independently rechecked",
+  "authenticated_transport_verified": false,
+  "physical_storage_purge_verified": false,
+  "accepting_user_documents": false
+}

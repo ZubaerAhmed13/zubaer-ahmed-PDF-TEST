@@ -1,5 +1,7 @@
 # DocFlow Professional
 
+This branch contains the **DocFlow 2.0 preview**, with 22 of the 29 tool adapters connected. It now includes actual replacement/removal of supported PDF text and image objects, with shared undo and a preview of the saved PDF. See [delivery progress](docs/DELIVERY_PROGRESS.md) and [native editing acceptance](docs/NATIVE_CONTENT_ACCEPTANCE.md). The U1 release described below remains the historical production baseline until v2 parity and release checks pass.
+
 A local-first PDF workspace with 29 tools, built with TypeScript/Vite. PDF processing stays in the browser. Optional Supabase accounts synchronise favourite/recent tool IDs only.
 
 Production: https://zubaerahmed13.github.io/zubaer-ahmed-PDF-TEST/
@@ -27,7 +29,7 @@ Earlier releases: [A1.1 native highlights](docs/A1_1_RELEASE.md), [R7 product fi
 [Capability/evidence matrix](docs/CAPABILITIES.md) · [Preservation baseline](docs/R0_PRESERVATION_MATRIX.md)
 
 ## Boundaries
-Visual signatures are not certificate signatures; existing page-text replacement is not implemented. Crop hides content; basic properties editing is not hidden-data sanitisation. Redaction rasterises all pages and removes source text/vectors/forms/tags/signatures. OCR processes selected ranges in chunks of up to 30 pages with English/German models and approximate Unicode placement. Comparison uses heuristic page matching and downscaled visuals, bounded to the first 50 pages per document; uncertain matches require review.
+Visual signatures are not certificate signatures. The v2 source editor supports tested line-level text and image replacements; paragraph reflow, universal font coverage and tagged/clipped source editing remain unsupported. Images with source transparency or blend effects are guarded. Crop hides content; basic properties editing is not hidden-data sanitisation. Redaction rasterises all pages and removes source text/vectors/forms/tags/signatures. OCR processes selected ranges in chunks of up to 30 pages with English/German models and approximate Unicode placement. Comparison uses heuristic page matching and downscaled visuals, bounded to the first 50 pages per document; uncertain matches require review.
 
 Page-copy operations do not guarantee bookmarks, attachments, labels or editable forms. Whole-file buffers are required; no arbitrary multi-gigabyte, print-proof colour or PDF/UA claim. Offline availability depends on cached assets and browser support. Real Safari/iOS offline acceptance is separate.
 
