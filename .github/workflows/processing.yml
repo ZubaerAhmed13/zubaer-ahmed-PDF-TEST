@@ -17,6 +17,7 @@ jobs:
         with: {python-version: '3.12'}
       - run: npm ci
       - run: npx vitest run tests/processing*.test.ts
+      - run: node --input-type=module -e "await import('./backend/http.ts'); await import('./backend/contracts.ts')"
       - run: npm ci --prefix backend --ignore-scripts
       - run: npm run typecheck --prefix backend
       - run: npm audit --prefix backend --audit-level=high

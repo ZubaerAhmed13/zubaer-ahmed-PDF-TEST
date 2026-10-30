@@ -1,6 +1,8 @@
 /** Shared bounded transport. No provider credentials or document bytes are logged. */
 export class TransportError extends Error {
-  constructor(readonly status:number,readonly code:string,message:string){super(message);}
+  readonly status:number;
+  readonly code:string;
+  constructor(status:number,code:string,message:string){super(message);this.status=status;this.code=code;}
 }
 export async function readBytes(source:{body:ReadableStream<Uint8Array>|null;headers:Headers},maximum:number):Promise<Uint8Array>{
   const length=source.headers.get('content-length');
