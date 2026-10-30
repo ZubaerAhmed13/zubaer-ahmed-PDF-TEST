@@ -1,4 +1,4 @@
-import {normalizeEditableFields,type InspectedFormField} from '../pdf/formFields';
+import {normalizeEditableFields,formChoiceOptions,type InspectedFormField} from '../pdf/formFields';
 import {runWorkerOperation,type RunningOperation} from '../pdf/workerClient';
 import {renderedPage} from '../pdf/render';
 type Value=string|boolean|string[];
@@ -37,21 +37,21 @@ export class V2FormFiller{
     const textInput=field.type==='text'||(field.type==='dropdown'&&field.editable);
     if(textInput)input=document.createElement(field.multiline?'textarea':'input');
     else if(field.type==='checkbox'||(field.type==='radio'&&overlay)){input=document.createElement('input');input.type=field.type;}
-    else {input=document.createElement('select');input.multiple=field.multiSelect===true;if(input.multiple)input.size=Math.min(5,Math.max(2,field.choices?.length??2));else input.append(new Option('Select an option',''));for(const value of field.choices??[])input.append(new Option(value,value));}
+    else {input=document.createElement('select');input.multiple=field.multiSelect===true;if(input.multiple)input.size=Math.min(5,Math.max(2,field.choices?.length??2));else input.append(new Option('Select an option',''));for(const {label,value} of formChoiceOptions(field))input.append(new Option(label,value));}
     if(input instanceof HTMLInputElement&&textInput){input.type='text';if(field.editable){const list=document.createElement('datalist');list.id='df2-form-options-'+crypto.randomUUID();for(const choice of field.choices??[])list.append(new Option(choice,choice));input.setAttribute('list',list.id);(overlay?this.overlay:this.host).append(list);}}
     if(input instanceof HTMLInputElement||input instanceof HTMLTextAreaElement)input.autocomplete='off';
     input.setAttribute('aria-label',label);input.required=field.required===true;input.disabled=field.readOnly===true;input.dataset.formField=field.name;
     if(input instanceof HTMLInputElement&&input.type==='radio')input.name='df2-form-radio-'+this.fields.indexOf(field);
     const binding={field,choice,overlay};this.bindings.set(input,binding);this.sync(input,binding);
-    const change=()=>{if(this.disposed||input.disabled)return;let value:Value=input.value;if(input instanceof HTMLInputElement){if(input.type==='checkbox')value=input.checked;if(input.type==='radio'){if(!input.checked)return;value=choice??'';}}if(input instanceof HTMLSelectElement&&input.multiple)value=[...input.selectedOptions].map(option=>option.value);this.draft.values.set(field.name,value);if(JSON.stringify(value)===JSON.stringify(original(field)))this.draft.modified.delete(field.name);else this.draft.modified.add(field.name);input.removeAttribute('aria-invalid');for(const [other,meta] of this.bindings)if(other!==input&&meta.field.name===field.name)this.sync(other,meta);this.changed();};
-    input.addEventListener(textInput?'input':'change',change);return input;
+    const change=()=>{if(this.disposed||input.disabled)return;let value:Value=input.value;if(field.type==='dropdown'&&field.editable)value=formChoiceOptions(field).find(choice=>choice.label===input.value)?.value??input.value;if(input instanceof HTMLInputElement){if(input.type==='checkbox')value=input.checked;if(input.type==='radio'){if(!input.checked)return;value=choice??'';}}if(input instanceof HTMLSelectElement&&input.multiple)value=[...input.selectedOptions].map(option=>option.value);this.draft.values.set(field.name,value);if(JSON.stringify(value)===JSON.stringify(original(field)))this.draft.modified.delete(field.name);else this.draft.modified.add(field.name);input.removeAttribute('aria-invalid');for(const [other,meta] of this.bindings)if(other!==input&&meta.field.name===field.name)this.sync(other,meta);this.changed();};
+    input.addEventListener(textInput?'input':'change',change);if(field.type==='dropdown'&&field.editable)input.addEventListener('blur',()=>this.sync(input,binding));return input;
   }
   private sync(input:Control,{field,choice}:Binding):void{
     const value=this.draft.values.get(field.name);
     if(input instanceof HTMLInputElement&&input.type==='checkbox')input.checked=value===true;
     else if(input instanceof HTMLInputElement&&input.type==='radio')input.checked=value===choice;
     else if(input instanceof HTMLSelectElement&&input.multiple)for(const option of input.options)option.selected=Array.isArray(value)&&value.includes(option.value);
-    else {const text=typeof value==='string'?value:'';if(input.value!==text)input.value=text;}
+    else {let text=typeof value==='string'?value:'';if(field.type==='dropdown'&&field.editable)text=formChoiceOptions(field).find(choice=>choice.value===text)?.label??text;if(input.value!==text)input.value=text;}
   }
   private paintList():void{
     this.status.textContent=this.fields.length+' form fields · Values stay in this document session. Review the exported PDF before sharing.';

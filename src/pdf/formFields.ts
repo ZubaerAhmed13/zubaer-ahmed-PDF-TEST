@@ -16,12 +16,21 @@ export interface InspectedFormField {
 
 const MAX_VISUAL_CHOICES=200;
 
+/** Choice labels are presentation; PDF /V values are export codes. */
+export function formChoiceOptions(field:Pick<InspectedFormField,'choices'|'choiceExportValues'>):{label:string;value:string}[]{
+  const labels=field.choices??[],codes=field.choiceExportValues??labels;
+  if(codes.length!==labels.length)throw Error('This form has an inconsistent choice label/value mapping.');
+  const paired=codes.some((code,index)=>code!==labels[index]);
+  if(paired&&([...labels,...codes].some(value=>!value)||new Set(labels).size!==labels.length||new Set(codes).size!==codes.length))throw Error('Choice fields with repeated or empty labels/export values cannot be mapped safely here.');
+  return labels.map((label,index)=>({label,value:codes[index]!}));
+}
+
 export function normalizeEditableFields(source:unknown):InspectedFormField[]{
   if(Array.isArray(source)&&source.reduce((sum,item)=>sum+(item&&typeof item==='object'&&Array.isArray(item.widgets)?item.widgets.length:0),0)>1000)throw Error('This form has more than 1,000 widgets and is too complex for these controls.');
   const fields=normalizeInspectedFields(source);
   if(fields.length>250)throw Error('This form has more than 250 fields. Use a smaller form or a compatible desktop editor.');
   if(fields.some(field=>(field.choices?.length??0)>200))throw Error('A form field has more than 200 choices and cannot be edited safely here.');
-  if(fields.some(field=>field.choiceExportValues?.some((value,index)=>value!==field.choices?.[index])))throw Error('Choice fields with separate display labels and export values are not yet supported. Use a compatible PDF editor.');
+  for(const field of fields)if(field.type==='dropdown'||field.type==='option-list')formChoiceOptions(field);
   if(fields.some(field=>field.editable&&field.multiSelect))throw Error('Editable multi-select dropdowns are not supported by these controls.');
   if(fields.reduce((sum,field)=>sum+(field.choices?.length??0),0)>5000||fields.reduce((sum,field)=>sum+(field.widgets?.length??0)*Math.max(1,field.choices?.length??0),0)>20000)throw Error('This form has too many combined choice controls and is too complex for this editor.');
   return fields;
