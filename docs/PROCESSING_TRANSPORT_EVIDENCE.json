@@ -1,0 +1,479 @@
+{
+  "sourceWorker": "dc396d0d65cb235a877426b4b5ef087e26899f73",
+  "sourceAcceptance": "4da69dd8d554ec8f645fb7fba14df0cce7535741",
+  "controlPlane": {
+    "cron": {
+      "active": true,
+      "command": "select docflow_private.dispatch_processing_cleanup();",
+      "schedule": "*/5 * * * *"
+    },
+    "jobs": [
+      {
+        "id": "b7f9cd96-13e3-49be-8275-a6fe02bde754",
+        "state": "completed",
+        "output": {
+          "name": "result.pdf",
+          "size": 26903,
+          "type": "application/pdf",
+          "pages": 2,
+          "sha256": "f52afd07d51686ed0f6187dc7be465e86b0cc368e9ea8f4a43e90bf8254d9667"
+        },
+        "attempt": 1,
+        "details": {
+          "engine": "1b955c361f0d1bdf2b21241712e3c66d0a3da6ef1240e54553147722c4c54812",
+          "operation": {
+            "format": "pptx",
+            "entries": 53,
+            "expandedBytes": 118595,
+            "fontSubstitution": "Open replacement fonts may change pagination; review the converted document."
+          },
+          "processingMs": 1186
+        },
+        "errorCode": null,
+        "operation": "office-to-pdf"
+      },
+      {
+        "id": "a5d7d6eb-d028-49bc-9cb7-31781c5fef34",
+        "state": "completed",
+        "output": {
+          "name": "result.pdf",
+          "size": 25484,
+          "type": "application/pdf",
+          "pages": 2,
+          "sha256": "29b786447f9b34de4120fe4ed2fb6f0bd37d5b2dc2c06001ac5be59c5e182807"
+        },
+        "attempt": 1,
+        "details": {
+          "engine": "1b955c361f0d1bdf2b21241712e3c66d0a3da6ef1240e54553147722c4c54812",
+          "operation": {
+            "format": "xlsx",
+            "entries": 14,
+            "expandedBytes": 20930,
+            "fontSubstitution": "Open replacement fonts may change pagination; review the converted document."
+          },
+          "processingMs": 1082
+        },
+        "errorCode": null,
+        "operation": "office-to-pdf"
+      },
+      {
+        "id": "8f845f33-91f5-4a44-8c65-cc58c7f1cafe",
+        "state": "completed",
+        "output": {
+          "name": "result.pdf",
+          "size": 80417,
+          "type": "application/pdf",
+          "pages": 1,
+          "sha256": "54043d4d30371b48e68fb88bddcce650e4cb0b9c30ec372809371c5fa52b35d0"
+        },
+        "attempt": 1,
+        "details": {
+          "engine": "1b955c361f0d1bdf2b21241712e3c66d0a3da6ef1240e54553147722c4c54812",
+          "operation": {
+            "deskew": false,
+            "rotate": false,
+            "languages": [
+              "eng"
+            ]
+          },
+          "processingMs": 1372
+        },
+        "errorCode": null,
+        "operation": "ocr"
+      },
+      {
+        "id": "343cd021-fcfc-4683-b74b-e64d6aa415d0",
+        "state": "completed",
+        "output": {
+          "name": "result.pdf",
+          "size": 86782,
+          "type": "application/pdf",
+          "pages": 1,
+          "sha256": "3977bd43a5f51836ca22f8a5d298357c29b2d674583edd2b75adc9e613106156"
+        },
+        "attempt": 1,
+        "details": {
+          "engine": "1b955c361f0d1bdf2b21241712e3c66d0a3da6ef1240e54553147722c4c54812",
+          "operation": {
+            "deskew": false,
+            "rotate": false,
+            "languages": [
+              "eng",
+              "deu"
+            ]
+          },
+          "processingMs": 1590
+        },
+        "errorCode": null,
+        "operation": "ocr"
+      },
+      {
+        "id": "19ccf91f-7408-4852-adc1-66b3df02d640",
+        "state": "expired",
+        "output": null,
+        "attempt": 1,
+        "details": null,
+        "errorCode": "job_expired",
+        "operation": "office-to-pdf"
+      },
+      {
+        "id": "3e70998b-bec0-4692-b8d8-4ad2423ce564",
+        "state": "completed",
+        "output": {
+          "name": "result.pdf",
+          "size": 5746,
+          "type": "application/pdf",
+          "pages": 1,
+          "sha256": "0a99c64ad6e4c8febd4cd6ba7a85b68a5f26f73e8aceeeebaad7369b84a08c74"
+        },
+        "attempt": 1,
+        "details": {
+          "engine": "1b955c361f0d1bdf2b21241712e3c66d0a3da6ef1240e54553147722c4c54812",
+          "operation": {
+            "bytesSaved": 0,
+            "imagesChanged": 0,
+            "imagesSkipped": 1
+          },
+          "processingMs": 334
+        },
+        "errorCode": null,
+        "operation": "compress"
+      },
+      {
+        "id": "c8995a93-5bcc-452f-a1ec-aa56eb3b6fd8",
+        "state": "cancelled",
+        "output": null,
+        "attempt": 1,
+        "details": null,
+        "errorCode": null,
+        "operation": "ocr"
+      },
+      {
+        "id": "382fe01d-e922-4669-a5f2-e473f8245ed5",
+        "state": "completed",
+        "output": {
+          "name": "result.pdf",
+          "size": 66923,
+          "type": "application/pdf",
+          "pages": 1,
+          "sha256": "1b984d48ee4f9cba847a0033b719d2eaf45d7f876b276f33a900479e503ba861"
+        },
+        "attempt": 1,
+        "details": {
+          "engine": "1b955c361f0d1bdf2b21241712e3c66d0a3da6ef1240e54553147722c4c54812",
+          "operation": {
+            "bytesSaved": 395808,
+            "imagesChanged": 1,
+            "imagesSkipped": 0
+          },
+          "processingMs": 201
+        },
+        "errorCode": null,
+        "operation": "compress"
+      },
+      {
+        "id": "3ed5f335-330a-4cdc-b648-7eebde3226be",
+        "state": "cancelled",
+        "output": null,
+        "attempt": 0,
+        "details": null,
+        "errorCode": null,
+        "operation": "office-to-pdf"
+      },
+      {
+        "id": "878053c6-ce3d-4465-b2d8-2d495a82579a",
+        "state": "failed",
+        "output": null,
+        "attempt": 1,
+        "details": null,
+        "errorCode": "unsupported_input",
+        "operation": "compress"
+      }
+    ],
+    "verifiedAt": "2026-10-30T18:40:25.644305+00:00",
+    "physicalPurge": {
+      "replayedObjectsAfter": 0,
+      "replayedObjectsBefore": 1,
+      "expiredOutputObjectsAfter": 0
+    },
+    "startsRetained": 9,
+    "maintenanceResponses": [
+      {
+        "id": 6,
+        "body": "{\"error\":{\"code\":\"invalid_claim\",\"message\":\"A valid maintenance credential is required.\"}}",
+        "error": null,
+        "status": 401
+      },
+      {
+        "id": 7,
+        "body": "{\"deleted\":0,\"batches\":1,\"busy\":false}",
+        "error": null,
+        "status": 200
+      },
+      {
+        "id": 10,
+        "body": "{\"error\":{\"code\":\"resource_limit\",\"message\":\"The response exceeds the file limit.\"}}",
+        "error": null,
+        "status": 413
+      },
+      {
+        "id": 9,
+        "body": "{\"error\":{\"code\":\"invalid_request\",\"message\":\"This action does not accept additional fields.\"}}",
+        "error": null,
+        "status": 400
+      },
+      {
+        "id": 11,
+        "body": "{\"error\":{\"code\":\"invalid_claim\",\"message\":\"A valid maintenance credential is required.\"}}",
+        "error": null,
+        "status": 401
+      },
+      {
+        "id": 12,
+        "body": "{\"deleted\":0,\"batches\":1,\"busy\":false}",
+        "error": null,
+        "status": 200
+      },
+      {
+        "id": 13,
+        "body": "{\"deleted\":2,\"batches\":2,\"busy\":false}",
+        "error": null,
+        "status": 200
+      }
+    ],
+    "normalUploadsEnabled": false
+  },
+  "hosted": {
+    "deployment": "dpl_AQaBd3xALV8QTjGGcYShQK1bPk49",
+    "reportUrl": "https://docflow-processing-staging-dtq8xjgxs-bhuyainria-7304.vercel.app/acceptance/results.json",
+    "runId": "f795d89b-f78a-4489-967d-faeb93b99799",
+    "source": "4da69dd8d554ec8f645fb7fba14df0cce7535741",
+    "evidence": [
+      {
+        "name": "office.docx",
+        "job": "19ccf91f-7408-4852-adc1-66b3df02d640",
+        "state": "completed",
+        "attempt": 1,
+        "inputBytes": 36812,
+        "output": {
+          "name": "result.pdf",
+          "type": "application/pdf",
+          "size": 27050,
+          "sha256": "12db889d6eb6f7daa3fd99f9fe2ba05087d03aaa1516e3652c3c5ad052b133d0",
+          "pages": 2
+        },
+        "elapsedMs": 8647,
+        "ownerIsolation": true,
+        "concurrentStarts": 1
+      },
+      {
+        "name": "office.pptx",
+        "job": "b7f9cd96-13e3-49be-8275-a6fe02bde754",
+        "state": "completed",
+        "attempt": 1,
+        "inputBytes": 35372,
+        "output": {
+          "name": "result.pdf",
+          "type": "application/pdf",
+          "size": 26903,
+          "sha256": "f52afd07d51686ed0f6187dc7be465e86b0cc368e9ea8f4a43e90bf8254d9667",
+          "pages": 2
+        },
+        "elapsedMs": 13012,
+        "ownerIsolation": true,
+        "concurrentStarts": 1
+      },
+      {
+        "name": "office.xlsx",
+        "job": "a5d7d6eb-d028-49bc-9cb7-31781c5fef34",
+        "state": "completed",
+        "attempt": 1,
+        "inputBytes": 7110,
+        "output": {
+          "name": "result.pdf",
+          "type": "application/pdf",
+          "size": 25484,
+          "sha256": "29b786447f9b34de4120fe4ed2fb6f0bd37d5b2dc2c06001ac5be59c5e182807",
+          "pages": 2
+        },
+        "elapsedMs": 8420,
+        "ownerIsolation": true,
+        "concurrentStarts": 1
+      },
+      {
+        "name": "ocr-eng.pdf",
+        "job": "8f845f33-91f5-4a44-8c65-cc58c7f1cafe",
+        "state": "completed",
+        "attempt": 1,
+        "inputBytes": 75264,
+        "output": {
+          "name": "result.pdf",
+          "type": "application/pdf",
+          "size": 80417,
+          "sha256": "54043d4d30371b48e68fb88bddcce650e4cb0b9c30ec372809371c5fa52b35d0",
+          "pages": 1
+        },
+        "elapsedMs": 7708,
+        "ownerIsolation": true,
+        "concurrentStarts": 1
+      },
+      {
+        "name": "ocr-deu.pdf",
+        "job": "343cd021-fcfc-4683-b74b-e64d6aa415d0",
+        "state": "completed",
+        "attempt": 1,
+        "inputBytes": 81400,
+        "output": {
+          "name": "result.pdf",
+          "type": "application/pdf",
+          "size": 86782,
+          "sha256": "3977bd43a5f51836ca22f8a5d298357c29b2d674583edd2b75adc9e613106156",
+          "pages": 1
+        },
+        "elapsedMs": 7674,
+        "ownerIsolation": true,
+        "concurrentStarts": 1
+      },
+      {
+        "name": "compression.pdf",
+        "job": "3e70998b-bec0-4692-b8d8-4ad2423ce564",
+        "state": "completed",
+        "attempt": 1,
+        "inputBytes": 5746,
+        "output": {
+          "name": "result.pdf",
+          "type": "application/pdf",
+          "size": 5746,
+          "sha256": "0a99c64ad6e4c8febd4cd6ba7a85b68a5f26f73e8aceeeebaad7369b84a08c74",
+          "pages": 1
+        },
+        "elapsedMs": 6285,
+        "ownerIsolation": true,
+        "concurrentStarts": 2
+      },
+      {
+        "name": "supported-compression.pdf",
+        "job": "382fe01d-e922-4669-a5f2-e473f8245ed5",
+        "state": "completed",
+        "attempt": 1,
+        "inputBytes": 462731,
+        "output": {
+          "name": "result.pdf",
+          "type": "application/pdf",
+          "size": 66923,
+          "sha256": "1b984d48ee4f9cba847a0033b719d2eaf45d7f876b276f33a900479e503ba861",
+          "pages": 1
+        },
+        "elapsedMs": 20938,
+        "ownerIsolation": true,
+        "concurrentStarts": 2
+      },
+      {
+        "name": "live-cancel",
+        "job": "c8995a93-5bcc-452f-a1ec-aa56eb3b6fd8",
+        "observedExecuting": true,
+        "vmStopped": true,
+        "state": "cancelled"
+      },
+      {
+        "name": "malformed",
+        "job": "878053c6-ce3d-4465-b2d8-2d495a82579a",
+        "state": "failed",
+        "outputUnavailable": true
+      },
+      {
+        "name": "upload-replay",
+        "job": "3ed5f335-330a-4cdc-b648-7eebde3226be",
+        "recreatedAfterCancel": true,
+        "purgeVerification": "external-control-plane-required"
+      },
+      {
+        "name": "expiry",
+        "job": "19ccf91f-7408-4852-adc1-66b3df02d640",
+        "state": "expired",
+        "newLinkRejected": true,
+        "previousLinkUnavailable": true,
+        "linkStillValidAtCheck": true
+      }
+    ],
+    "outputs": [
+      {
+        "name": "office.docx.pdf"
+      },
+      {
+        "name": "office.pptx.pdf"
+      },
+      {
+        "name": "office.xlsx.pdf"
+      },
+      {
+        "name": "ocr-eng.pdf.pdf"
+      },
+      {
+        "name": "ocr-deu.pdf.pdf"
+      },
+      {
+        "name": "compression.pdf.pdf"
+      },
+      {
+        "name": "supported-compression.pdf.pdf"
+      }
+    ]
+  },
+  "independentVerification": [
+    {
+      "name": "office.docx",
+      "pages": 2,
+      "bytes": 27050,
+      "independentlyRendered": true,
+      "expectedTextPresent": true
+    },
+    {
+      "name": "office.pptx",
+      "pages": 2,
+      "bytes": 26903,
+      "independentlyRendered": true,
+      "expectedTextPresent": true
+    },
+    {
+      "name": "office.xlsx",
+      "pages": 2,
+      "bytes": 25484,
+      "independentlyRendered": true,
+      "expectedTextPresent": true
+    },
+    {
+      "name": "ocr-eng.pdf",
+      "pages": 1,
+      "bytes": 80417,
+      "independentlyRendered": true,
+      "cer": 0.0,
+      "wer": 0.0,
+      "originalScanPixelsIdentical": true
+    },
+    {
+      "name": "ocr-deu.pdf",
+      "pages": 1,
+      "bytes": 86782,
+      "independentlyRendered": true,
+      "cer": 0.0,
+      "wer": 0.0,
+      "originalScanPixelsIdentical": true
+    },
+    {
+      "name": "compression.pdf",
+      "pages": 1,
+      "bytes": 5746,
+      "independentlyRendered": true,
+      "expectedTextPresent": true
+    },
+    {
+      "name": "supported-compression.pdf",
+      "pages": 1,
+      "bytes": 66923,
+      "independentlyRendered": true,
+      "expectedTextPresent": true
+    }
+  ],
+  "scope": "Synthetic build-time authenticated transport, not browser UI or broad production fidelity. Reused completed jobs have recheck elapsed times; do not treat those as fresh processing latency."
+}

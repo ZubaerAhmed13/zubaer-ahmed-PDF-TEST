@@ -12,11 +12,11 @@ Continue inline from the approved processing-backend design and implementation p
 
 - [x] Create a CLI-generated migration for service-only transport configuration and bounded, progressing physical cleanup candidates. Select actual stored objects so historical empty job rows cannot starve cleanup. Delete objects only through the Storage API; keep quota history and cover the two-hour signed-write replay window.
 - [x] Keep Vercel deployment protection. Store its narrowly scoped automation credential in Supabase Vault and keep backend maintenance credentials server-side. Add a protected scheduled cleanup endpoint; do not broaden frontend access.
-- [ ] Apply and run transactional ownership/cleanup/RLS tests; check advisors. Deploy the exact source using the already measured engine snapshot while it remains valid.
+- [x] Apply and run transactional ownership/cleanup/RLS tests; check advisors. Deploy the exact source using the already measured engine snapshot while it remains valid.
 
 ## Task 3 — real authenticated acceptance
 
-- [ ] Use disposable synthetic accounts/documents to verify create/upload/start/poll/download, owner isolation, real OCR/Office/compression outputs, cancellation stopping the actual VM, expiry, replay cleanup and failure recovery. Never email synthetic accounts or use a real user document.
+- [x] Use disposable synthetic accounts/documents to verify create/upload/start/poll/download, owner isolation, real OCR/Office/compression outputs, cancellation stopping the actual VM, expiry, replay cleanup and failure recovery. Never email synthetic accounts or use a real user document.
 - [ ] Record measured output artifacts, actual limits, cost/resource bounds and remaining fidelity classes. Keep user uploads disabled until these gates pass.
 
 ## Task 4 — v2 processing UI and release acceptance

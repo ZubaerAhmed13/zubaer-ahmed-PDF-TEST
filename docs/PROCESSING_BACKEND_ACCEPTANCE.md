@@ -1,6 +1,6 @@
-# Processing backend acceptance — in progress
+# Processing backend acceptance — transport verified, browser integration in progress
 
-Native editing is published at f46b720. This stage has not enabled server document upload in the v2 UI.
+Native editing is published at f46b720. Authenticated hosted transport is verified at 4da69dd8. This stage has not enabled server document upload in the v2 UI.
 
 ## Verified locally
 
@@ -37,8 +37,22 @@ The database function-body hashes match the committed migration source. The CLI-
 
 - Expand the hosted corpus beyond synthetic fixtures: Office font/layout fidelity, diacritics, mixed scan/text pages, skew/rotation and low-quality scans. Retain actual output artifacts for independent review.
 - Real broker ownership/load/error acceptance, beyond the completed SQL quota/lease/output probes. Existing preference tables are untouched.
-- Authenticated broker, real VM cancellation, signed input/output validation, expiry and Storage API purge, including the fixed two-hour signed-upload replay window.
+- Expand failure/load coverage beyond the now-verified authenticated broker, real VM cancellation, signed input/output validation, expiry and physical Storage API purge. Exercise cleanup cursor wrap/failure recovery at larger real-object scale.
 - Browser → authenticated job → verified output acceptance and explicit upload/retention notice. No remote capability is advertised until those pass.
 - Repair/PDF-A and PDF → editable Office are separate evidence gates. No PDF/A or editable-Office fidelity claim is made here.
 
 Supabase advisors report the intentional deny-all private claims table as [RLS-without-policy](https://supabase.com/docs/guides/database/database-linter?lint=0008_rls_enabled_no_policy) (INFO). The existing project also has [leaked password protection disabled](https://supabase.com/docs/guides/auth/password-security#password-strength-and-leaked-password-protection) (WARN); no global Auth setting was changed by this migration.
+
+## Authenticated transport — 30 October
+
+[Measured evidence](PROCESSING_TRANSPORT_EVIDENCE.json) records seven actual output cases: two-page DOCX/PPTX/XLSX, English/German OCR, exact-original preservation for an unsupported compression encoding, and supported Flate image compression from 462,731 to 66,923 bytes. All output bytes were downloaded through the authenticated broker, checked against their hashes, independently reopened/rendered using PDFium, and visually inspected across ten pages. Both OCR cases measured CER/WER 0.0 with unchanged scan pixels. These small synthetic fixtures do not establish broad production fidelity. Reused completed jobs in the final probe have recheck elapsed times, not fresh processing latency.
+
+Two confirmed synthetic accounts verified anonymous/client-selected-owner rejection and cross-owner read/start/cancel/download isolation. Two concurrent starts of the supported compression job consumed one attempt. A twenty-page OCR job was observed executing and then cancelled; the actual VM was stopped. A malformed PDF failed without downloadable output. A cancelled upload was recreated using its still-valid signed upload credential; the real cleanup endpoint deleted that object. Forced expiry of a synthetic completed job rejected new links and removed its output while the previously issued download link was still valid. The cleanup response measured two deletions, and Storage metadata confirmed both objects absent. A final purge removed the other six outputs: zero objects and zero active jobs remain, with nine daily starts retained.
+
+The broker authenticates users with Supabase Auth and workers with hashed per-job claims. The Vercel worker stays protected; its project-scoped bypass remains in Vault and never enters the processing VM. The deployed worker's JavaScript imports are explicitly rewritten and import-tested in CI. The initial hosted checks exposed the native-Node TypeScript and emitted-import defects; both were reproduced and fixed before successful acceptance.
+
+Application cleanup runs every five minutes through pg_cron/pg_net. Hosted Supabase preserves publicly readable queued request headers, so a lasting cleanup credential was retired. Each dispatch now creates a random, single-use token valid for sixty seconds. The broker validates the bounded request before atomically consuming it. Review found and reproduced the earlier validation-order bug; its regression and independent recheck passed. Actual network replay produced one 200 and one 401; malformed/oversized requests produced 400/413 while a valid request still succeeded. No provider/service credential is queued.
+
+Final advisors add `extension_in_public` for pg_net's extension registration; its actual objects are in `net`. The extension is non-relocatable. A guarded idle reinstall was not applied because the native confirmation expired; no schema or queue was changed by that attempt. Resolve or explicitly accept this registration warning during release review. The two earlier advisor findings remain. Normal document processing stays disabled; only the two synthetic acceptance owners are allowlisted while browser integration continues.
+
+The controlled acceptance runs only during an explicitly enabled preview build, with synthetic credentials in encrypted environment variables. It creates no HTTP test endpoint. [Protected output artifacts](https://docflow-processing-staging-dtq8xjgxs-bhuyainria-7304.vercel.app/acceptance/results.json) retain the actual synthetic PDFs for review. Engine snapshot retention remains seven days from 29 October; a durable production image and measured capacity/cost remain release gates.
