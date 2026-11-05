@@ -1,6 +1,6 @@
 # DocFlow 2.0 hosted preview
 
-5 November 2026. [Open the verified v2 staging preview](https://docflow-v2-preview-ibpax8ux1-bhuyainria-7304.vercel.app/zubaer-ahmed-PDF-TEST/). The preview requires Vercel account access. The rebuild remains in draft PR #36; GitHub Pages promotion is still gated on full release acceptance.
+5 November 2026. [Open the verified v2 staging preview](https://docflow-v2-preview-pr64jnais-bhuyainria-7304.vercel.app/zubaer-ahmed-PDF-TEST/). The preview requires Vercel account access. The rebuild remains in draft PR #36; GitHub Pages promotion is still gated on full release acceptance.
 
 - Source: `adfdda5a5e68253a812e8bc1fdd6b2dbb0c89564`.
 - Project: `docflow-v2-preview`, `prj_fsHXd83a0h2ATsqAxCuCFrtwoSII`, team `team_4VtWGFD5vMH5UwLvIRKK3syR`.
@@ -23,8 +23,14 @@ The subsequent source `67fca54` adds the definite-rejection recovery fix and cor
 
 The existing engine snapshot was rechecked read-only on 5 November: status `created`, region `fra1`, expiry `2026-11-06T18:37:26.847Z`. No VM was started and no snapshot was rebuilt. Maintenance had succeeded at `2026-11-05T11:30:00.734597Z`, with zero active jobs, zero rolling-day starts and zero Storage objects. Old terminal rows have aged out through the committed cleanup policy after the full 24-hour quota window; no quota history was manually deleted.
 
-## Current verified staging preview
+## Earlier offline and processing preview
 
 Deployment `dpl_2UqJjr7tu9v8A5qABYtjzFWn8LD7` is READY with target `staging` and source `09b8462a732476237035b1287c3b6546511e393a`. Authenticated requests returned HTTP 200 for release identity, index, JavaScript, CSS, manifest and service worker. The release identity matched the source. The broker returned 204 with the current preview origin in its CORS header and 403 for the retired preview origin. Normal processing remains disabled with two synthetic owners allowed.
 
 The v2 CI matrix passed 335 browser cases. It exercises offline behavior, safe updates, automated accessibility, long documents, and server workspace behavior using intercepted responses. Hosted interactive smoke is pending authenticated browser access. The earlier interactive attempt reached Vercel sign-in. [Exact preview](https://docflow-v2-preview-ibpax8ux1-bhuyainria-7304.vercel.app/zubaer-ahmed-PDF-TEST/) · [Test evidence](PROCESSING_BROWSER_UI_EVIDENCE.json).
+
+## Current preview with PDF handoff
+
+The protected preview `dpl_GzmG4MmyAET3w23BHxaZyDKVL8E6` is READY at source `de912daae40bd3186c891dc47d5a61d14712bf0b`. Authenticated requests returned HTTP 200 for the matching release identity, index, JavaScript, CSS, manifest and service worker. The broker accepted the new preview origin with HTTP 204 and rejected the retired origin with HTTP 403. Normal server uploads remain disabled. [Current preview](https://docflow-v2-preview-pr64jnais-bhuyainria-7304.vercel.app/zubaer-ahmed-PDF-TEST/).
+
+Chromium passed 115 cases, Firefox 113 and WebKit 113, with four browser-specific skips. The handoff tests exported the selected second split part at 270 degrees and verified that a rejected or cancelled handoff leaves the result downloadable. WebKit also reloaded and processed PDF and OCR fixtures after the test server was shut down. The quality and processing jobs passed. The protected deployment received authenticated HTTP checks. Hosted interactive use, real devices and full legacy parity are still open. [Browser run](https://github.com/ZubaerAhmed13/zubaer-ahmed-PDF-TEST/actions/runs/42115960110).
