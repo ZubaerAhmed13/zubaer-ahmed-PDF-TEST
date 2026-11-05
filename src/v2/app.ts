@@ -29,6 +29,8 @@ import {V2FormFiller,createFormDraft} from './forms';
 import {scanOptions} from '../pdf/scanProcessing';
 import {V2ServerProcessing,serverProcessingAvailable} from './serverProcessing';
 import {prepareServerInput,serverSettings} from './serverTools';
+import {configureWorkProtection} from '../app/workProtection';
+import {openOfflineDialog} from './offlineDialog';
 
 const esc=(value:string):string=>value.replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]!));
 const bytes=(value:number):string=>value<1024?value+' B':value<1048576?(value/1024).toFixed(1)+' KB':(value/1048576).toFixed(1)+' MB';
@@ -140,6 +142,7 @@ class DocFlowV2 {
   private stage:Stage='upload';
 
   constructor(private readonly root:HTMLDivElement){
+    configureWorkProtection(()=>({busy:this.busy||this.nativePreviewBusy||this.editor?.nativeBusy===true||this.serverProcessing?.held===true,hasWork:this.files.length>0||this.result!==null}),()=>{++this.processingGeneration;this.cancel();this.serverProcessing?.dispose();this.serverProcessing=null;this.files=[];this.resetDraft();void this.freePreview();});
     window.addEventListener('hashchange',()=>void this.navigate());
     this.root.addEventListener('click',event=>void this.click(event));
     this.root.addEventListener('input',event=>{this.onInput(event);this.invalidateOcrPreview(event);});
@@ -167,6 +170,7 @@ class DocFlowV2 {
             <a href="#/"><span>All tools</span></a><a href="#/tools/merge">Merge PDF</a><a href="#/tools/split">Split PDF</a>
           </nav>
           <span class="df2-version">NEW EXPERIENCE · 2.0 PREVIEW</span>
+          <button class="df2-iconbutton" data-open-offline aria-label="Offline and storage" title="Offline &amp; storage">⇣</button>
           <button class="df2-iconbutton" data-open-search aria-label="Search PDF tools" title="Search PDF tools">⌕</button>
         </div>
       </header>`;
@@ -363,14 +367,14 @@ class DocFlowV2 {
     this.thumbnailRail?.dispose();this.thumbnailRail=null;
     this.editor?.dispose();this.editor=null;
     this.pipelineEditor?.dispose();this.pipelineEditor=null;
-    this.root.innerHTML=this.header()+`<main id="df2-main" class="df2-work ${tool.id==='organize'?'df2-organizing':''}">
+    this.root.innerHTML=this.header()+`<main id="df2-main" class="df2-work ${tool.id==='organize'?'df2-organizing':''}"><h1 class="df2-sr-only">${esc(tool.name)} workspace</h1>
       <div class="df2-worktop">${this.crumbs()}<div class="df2-work-actions"><button class="df2-subtle" data-change-files>＋ Add files</button><button class="df2-subtle" data-reset>Start over</button></div></div>
       <div class="df2-workflow">
         <aside class="df2-rail" aria-label="Document pages and files"><div class="df2-pane-title"><strong>${tool.multiple?'Documents':'Pages'}</strong><span>${this.files.length} ${this.files.length===1?'file':'files'}</span></div>
           <div class="df2-rail-list">${this.files.map((file,i)=>`<article class="df2-file" data-file-index="${i}"><span class="df2-file-badge">${tool.id==='office-to-pdf'?esc(file.name.split('.').pop()!.toUpperCase()):'PDF'}</span><div><b title="${esc(file.name)}">${esc(file.name)}</b><small>${bytes(file.size)}</small></div>
           ${['workflow','batch'].includes(tool.id)?`<button type="button" data-preview-file="${i}" aria-label="Preview ${esc(file.name)}" aria-pressed="${this.activeFile===i}">Preview</button>`:''}
           ${tool.multiple?`<div class="df2-file-actions"><button data-move-up="${i}" aria-label="Move ${esc(file.name)} up" ${i===0?'disabled':''}>↑</button><button data-move-down="${i}" aria-label="Move ${esc(file.name)} down" ${i===this.files.length-1?'disabled':''}>↓</button><button data-remove-file="${i}" aria-label="Remove ${esc(file.name)}">×</button></div>`:''}</article>`).join('')}
-          <div class="df2-page-thumbs" aria-label="Page thumbnails"></div></div>
+          <div class="df2-page-thumbs" role="group" aria-label="Page thumbnails"></div></div>
         </aside>
         <section class="df2-canvas-pane" aria-label="Document preview">
           <div class="df2-canvas-toolbar"><span class="df2-doc-name" title="${esc(this.files[this.activeFile]?.name??this.files[0]?.name??'')}">${esc(this.files[this.activeFile]?.name??this.files[0]?.name??'')}</span>
@@ -603,6 +607,7 @@ class DocFlowV2 {
       if(!this.organizer){this.message('Wait for the page preview to finish loading.');return;}
       options.order=this.organizer.getOrder().join(',');
     }
+    if(tool.id==='rotate')options.degrees=Number(options.degrees);
     if(tool.id==='compress'){
       Object.assign(options,compressionSettings(options));
     }
@@ -838,6 +843,7 @@ class DocFlowV2 {
     if(target.closest('a[href="#df2-catalog"]')){event.preventDefault();this.root.querySelector('#df2-catalog')?.scrollIntoView({behavior:'smooth'});return;}
     const category=target.closest<HTMLElement>('[data-category]');
     if(category){this.filter=category.dataset.category??'all';this.home();return;}
+    if(target.closest('[data-open-offline]')){openOfflineDialog(target.closest<HTMLElement>('[data-open-offline]'));return;}
     if(target.closest('[data-open-search]')){this.openSearch();return;}
     if(target.closest('[data-ocr-preview]')){await this.previewOcr();return;}
     if(target.closest('[data-cancel-processing]')){if(this.serverProcessing?.held){await this.serverProcessing.cancel();return;}if(this.tool&&['workflow','batch'].includes(this.tool.id)){this.cancel();this.message('Cancelling queue · completed PDFs will remain available.');return;}++this.processingGeneration;this.cancel();this.cancel=()=>{};this.setProcessing(false);this.message('Cancelled · your document and settings are ready to use.');return;}

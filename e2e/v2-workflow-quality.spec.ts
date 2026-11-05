@@ -3,6 +3,8 @@ import {PDFDocument,PDFName,PDFNumber,PDFRawStream,StandardFonts} from 'pdf-lib'
 import {getDocument} from 'pdfjs-dist/legacy/build/pdf.mjs';
 import {readFile} from 'node:fs/promises';
 
+// Font-delay interception is verified independently of PWA asset preparation.
+test.use({serviceWorkers:'block'});
 const base='/zubaer-ahmed-PDF-TEST/';
 async function fixture(){
   const pdf=await PDFDocument.create();const font=await pdf.embedFont(StandardFonts.Helvetica);
