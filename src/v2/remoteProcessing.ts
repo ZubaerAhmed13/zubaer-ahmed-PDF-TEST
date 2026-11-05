@@ -90,7 +90,15 @@ export function startRemoteProcessing(file:File,settings:RemoteSettings,consent:
       if(cancelRequested){settleKnown(null);await checkCancellation();}
       preparedRequest=request;creationSent=true;creationUncertain=true;
       let created:Record<string,unknown>;
-      try{created=await api('/jobs','POST',request);}catch(error){if(!(error instanceof RemoteProcessingError&&error.code==='network_error'))throw error;created=await api('/jobs','POST',request);}
+      try{created=await api('/jobs','POST',request);}catch(error){
+        if(!(error instanceof RemoteProcessingError&&error.code==='network_error')){
+          // These first-response rejections occur before the broker's create RPC.
+          // A rejection after a lost response cannot prove the first call did not create.
+          if(error instanceof RemoteProcessingError&&['authentication_required','authentication_changed','processing_not_ready','cleanup_unavailable','invalid_request','origin_not_allowed','resource_limit'].includes(error.code)){creationUncertain=false;creationSent=false;}
+          throw error;
+        }
+        created=await api('/jobs','POST',request);
+      }
       current=job(created.job);creationUncertain=false;settleKnown(current.id);await checkCancellation();
       const extension=file.name.split('.').pop()!.toLowerCase(),root=identity!.id+'/'+current.id+'/';
       if(created.upload){

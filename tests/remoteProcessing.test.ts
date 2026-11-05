@@ -95,3 +95,11 @@ it('stops a local download on cancellation while reporting that the server compl
   const operation=s.start(),result=operation.result.catch(e=>e);await ready;
   try{expect((await operation.cancel()).state).toBe('completed');expect(signal?.aborted).toBe(true);}finally{release();await result;}
 });
+it('releases a definite pre-creation staging rejection without pretending a job exists',async()=>{
+  const s=setup(url=>url.endsWith('/jobs')?Response.json({error:{code:'processing_not_ready',message:'Server document processing is not enabled yet.'}},{status:503}):undefined);
+  const operation=s.start();await expect(operation.result).rejects.toThrow(/not enabled/i);expect(await operation.check()).toBeNull();expect((await operation.cancel()).state).toBe('cancelled');expect(s.calls.filter(c=>c.url.endsWith('/jobs'))).toHaveLength(1);
+});
+it('keeps creation uncertain when a lost first response is followed by a staging rejection',async()=>{
+  let attempts=0;const s=setup(url=>{if(!url.endsWith('/jobs'))return;if(attempts++===0)throw Error('response lost');return Response.json({error:{code:'processing_not_ready',message:'Not enabled'}},{status:503});});
+  const operation=s.start();await expect(operation.result).rejects.toThrow(/not enabled/i);await expect(operation.check()).rejects.toThrow(/not enabled/i);expect(s.calls.filter(c=>c.url.endsWith('/jobs'))).toHaveLength(3);
+});

@@ -2,9 +2,9 @@ import {test,expect,type Page} from '@playwright/test';
 import {PDFDocument,StandardFonts} from 'pdf-lib';
 import {createHash} from 'node:crypto';
 test.use({serviceWorkers:'block'});
-const prefix='/zubaer-ahmed-PDF-TEST/',project='https://processing-test.invalid',owner='10000000-0000-4000-8000-000000000001',id='20000000-0000-4000-8000-000000000001';
+const prefix='/zubaer-ahmed-PDF-TEST/',project='https://ruefkvkavvycposzahit.supabase.co',owner='10000000-0000-4000-8000-000000000001',id='20000000-0000-4000-8000-000000000001';
 async function pdfBytes(){const pdf=await PDFDocument.create(),font=await pdf.embedFont(StandardFonts.Helvetica);pdf.addPage([500,300]).drawText('Verified server output',{font,x:25,y:220,size:20});return Buffer.from(await pdf.save());}
-async function setup(page:Page,options:{running?:boolean;failDownload?:boolean;failCreate?:boolean;failCancel?:boolean}={}){
+async function setup(page:Page,options:{running?:boolean;failDownload?:boolean;failCreate?:boolean;failCancel?:boolean;disabled?:boolean}={}){
   const bytes=await pdfBytes(),meta={name:'result.pdf',type:'application/pdf',size:bytes.length,pages:1,sha256:createHash('sha256').update(bytes).digest('hex')};
   const calls:{path:string;method:string;body:Record<string,unknown>|null}[]=[];
   let state='queued',creates=0,downloads=0,failCancel=options.failCancel??false;
@@ -16,7 +16,7 @@ async function setup(page:Page,options:{running?:boolean;failDownload?:boolean;f
     if(method==='OPTIONS'){await route.fulfill({status:204,headers});return;}
     calls.push({path,method,body:method==='POST'?request.postDataJSON():null});
     if(path==='/auth/v1/token'){await json({access_token:'browser-test-access',refresh_token:'browser-test-refresh',expires_in:3600,user:{id:owner,email:'reader@example.invalid'}});return;}
-    if(path.endsWith('/jobs')){if(options.failCreate&&creates++<2){await route.abort('failed');return;}await json({job:{id,state,phase:'awaiting_upload'},upload:{url:project+'/storage/v1/object/upload/sign/docflow-processing/'+owner+'/'+id+'/input/0.pdf?token=test'}});return;}
+    if(path.endsWith('/jobs')){if(options.disabled){await json({error:{code:'processing_not_ready',message:'Server document processing is not enabled yet.'}},503);return;}if(options.failCreate&&creates++<2){await route.abort('failed');return;}await json({job:{id,state,phase:'awaiting_upload'},upload:{url:project+'/storage/v1/object/upload/sign/docflow-processing/'+owner+'/'+id+'/input/0.pdf?token=test'}});return;}
     if(path.includes('/object/upload/')){await json({Key:'input'});return;}
     if(path.endsWith('/start')){state=options.running?'running':'completed';await json({job:{id,state,phase:'processing'}},202);return;}
     if(path.endsWith('/cancel')){if(cancelGate)await cancelGate;if(failCancel){await json({error:{code:'unavailable',message:'Unavailable'}},503);return;}state='cancelled';await json({job:{id,state,phase:'cancelled'},cleanupPending:false});return;}
@@ -60,4 +60,9 @@ test('waits for cancellation before navigating and honors the latest requested r
   const s=await setup(page,{running:true});await signIn(page);await consentAndRun(page);await expect.poll(()=>s.calls.filter(c=>c.path.endsWith('/start')).length).toBe(1);s.holdCancel();page.on('dialog',dialog=>void dialog.accept());
   await page.locator('.df2-nav a[href="#/tools/merge"]').click();await expect.poll(()=>s.calls.filter(c=>c.path.endsWith('/cancel')).length).toBe(1);await expect(page).toHaveURL(/#\/tools\/ocr\/work$/);await expect(page.locator('.df2-file')).toContainText('scan.pdf');
   await page.locator('.df2-nav a[href="#/tools/split"]').click();s.releaseCancel();await expect(page).toHaveURL(/#\/tools\/split$/);await expect(page.getByRole('heading',{name:'Split PDF',exact:true})).toBeVisible();
+});
+
+test('can finish a definite staging rejection without creating another job',async({page})=>{
+  const s=await setup(page,{disabled:true});await signIn(page);await consentAndRun(page);await expect(page.locator('[data-server-job]')).toContainText('not enabled');
+  await page.getByRole('button',{name:'Check server status'}).click();await expect(page.locator('[data-server-job]')).toContainText('No server job');await page.getByRole('button',{name:'Finish this attempt'}).click();await expect(page.locator('[data-run]')).toBeEnabled();expect(s.calls.filter(c=>c.path.endsWith('/jobs'))).toHaveLength(1);
 });

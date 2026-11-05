@@ -9,7 +9,7 @@ Continue draft PR #36 from source 1a865b2. Keep the production release unchanged
 3. One processing session owns the workspace until terminal status is confirmed. Preserve the source after failures. Serialize recovery actions. Check/retrieve recovery waits until the original attempt settles, so early observations cannot unlock a new paid attempt.
 4. Device OCR is the default. Server OCR requires a configured build flag, an existing confirmed account, and fresh explicit consent naming Supabase/Vercel and retention. Server mode processes the whole document; local page/correction controls are disabled. Consent is excluded from option snapshots.
 5. Navigation awaits real cancellation acknowledgement, shares a pending cancellation between route requests, honors the newest navigation generation, and ignores disposed result callbacks. Unknown status retains the original workspace and account controls.
-6. Browser CI uses an invalid, fully intercepted service origin and fake public configuration. Verify consent, actual PDF result review, cancellation uncertainty/retry, completed download retry, same-key unknown-create recovery, and overlapping navigation in Chromium/Firefox/WebKit. Actual hosted processing acceptance remains separate evidence.
+6. Browser CI uses the CSP-permitted Supabase origin, fully intercepted before navigation and fake public configuration. Verify consent, actual PDF result review, cancellation uncertainty/retry, completed download retry, same-key unknown-create recovery, and overlapping navigation in Chromium/Firefox/WebKit. Actual hosted processing acceptance remains separate evidence.
 
 ## Verification ledger
 
@@ -17,10 +17,12 @@ Continue draft PR #36 from source 1a865b2. Keep the production release unchanged
 - Shared auth regressions: tab session, offline sign-out, refresh, and refresh-after-sign-out pass.
 - Session regressions: uncertain attempts cannot restart; retry/late-result disposal; retrieve-only; terminal-release requirement; no concurrent retrieval; no pre-settlement recovery checks. The two timing guards had failing regressions before their fixes.
 - Fresh read-only review found no remaining critical/important defects in the combined UI/auth/session diff. A premature check could leave stale `none` status after later uncertain creation; recovery checks now require settled initial work. Concurrent retrieval also waits for that work to settle.
-- 279 local unit tests, typecheck, lint, build and provenance checks pass. Browser CI is pending. Do not claim hosted browser-to-backend acceptance.
+- 281 local unit tests, typecheck, lint, build and provenance checks pass. Browser CI is pending. Do not claim hosted browser-to-backend acceptance.
 
 Ruling: keep normal uploads disabled and expose server mode only via explicit build configuration. The staging snapshot had seven-day retention from 29 October, so its current validity must be reverified before spending a real processing start. No image rebuild or production capacity expansion is implied by UI work.
 
 Deferred minor: switching server → device → server resets automatic deskew/rotation checkboxes. Error/recovery retention is verified separately. Add a browser regression and preserve these toggles in the next UI refinement.
 
 Managed interactive preview returned a Vite allowed-host error for its exact terminal.local URL. No local interactive smoke is claimed; do not weaken runtime security to make the preview pass.
+
+CI investigation: all five new journeys initially failed at sign-in because the fake .invalid origin was correctly blocked by the production CSP before interception. Trace console evidence confirms the boundary. Use the existing CSP-permitted origin with a fake publishable key and route every service request to synthetic responses; keep production CSP unchanged. Existing Chromium 89 and Firefox 88 journeys passed. A separate failing-then-passing unit regression covers definite first-response staging rejection; a lost first response followed by rejection remains uncertain. Added a browser journey for the definite-rejection exit.
