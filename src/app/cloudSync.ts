@@ -2,12 +2,13 @@
  * Optional, explicit Supabase preference sync.
  *
  * No PDF bytes, document text, filenames, form values or PDF passwords are
- * sent through this module. All existing PDF operations remain local/offline.
+ * sent through this module. Document processing requires separate, explicit upload consent.
  * Auth tokens are scoped to the current tab via sessionStorage.
  */
 const endpoint = (import.meta.env.VITE_SUPABASE_URL ?? '').replace(/\/$/, '');
 const publishableKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY ?? '';
 const SESSION_KEY = 'docflow.cloud-session.v1';
+let authenticationGeneration=0;
 
 export interface CloudToolState {
   favorite_tools: string[];
@@ -88,6 +89,7 @@ async function api(path: string, method: string, payload?: unknown, accessToken?
   const response = await fetch(endpoint + path, {
     method,
     cache: 'no-store',
+    credentials:'omit',redirect:'error',signal:AbortSignal.timeout(15000),
     headers: {
       apikey: publishableKey,
       ...(accessToken ? { Authorization: 'Bearer ' + accessToken } : {}),
@@ -111,9 +113,11 @@ async function api(path: string, method: string, payload?: unknown, accessToken?
 
 async function activeSession(): Promise<CloudSession> {
   const current = readSession();
-  if (!current) throw new Error('Sign in before using cloud preferences.');
+  if (!current) throw new Error('Sign in to DocFlow before continuing.');
   if (current.expires_at > Date.now() + 30000) return current;
+  const generation=authenticationGeneration;
   const result = await api('/auth/v1/token?grant_type=refresh_token', 'POST', { refresh_token: current.refresh_token });
+  if(generation!==authenticationGeneration)throw Error('Your account changed. Sign in again.');
   const session = parseSession(result as Record<string, unknown>);
   if (!session) {
     saveSession(null);
@@ -123,12 +127,32 @@ async function activeSession(): Promise<CloudSession> {
   return session;
 }
 
+/** Shared tab-scoped account; mounting processing controls never contacts Auth. */
+export function processingConnection():{projectUrl:string;publishableKey:string}|null{
+  try{const url=new URL(endpoint);if(url.protocol!=='https:'||url.pathname!=='/'||url.username||url.password||url.search||url.hash||!publishableKey.startsWith('sb_publishable_'))return null;return {projectUrl:url.origin,publishableKey};}catch{return null;}
+}
+export function processingProfile():{id:string;email?:string}|null{return readSession()?.user??null;}
+export async function getProcessingIdentity():Promise<{id:string;accessToken:string}>{const session=await activeSession();return {id:session.user.id,accessToken:session.access_token};}
+export async function signInForProcessing(email:string,password:string):Promise<void>{
+  if(!processingConnection())throw Error('DocFlow sign-in is not configured in this build.');
+  if(!email.trim()||email.length>320||!password||password.length>1024)throw Error('Enter your account email and password.');
+  const generation=++authenticationGeneration;
+  const data=await api('/auth/v1/token?grant_type=password','POST',{email:email.trim(),password});
+  if(generation!==authenticationGeneration)throw Error('Your account changed. Sign in again.');
+  const session=parseSession(data as Record<string,unknown>);if(!session)throw Error('Sign-in response did not contain an active session.');saveSession(session);
+}
+export async function signOutForProcessing():Promise<void>{
+  ++authenticationGeneration;const session=readSession();saveSession(null);
+  if(session)try{await api('/auth/v1/logout','POST',undefined,session.access_token);}catch{/* Local sign-out succeeds offline. */}
+}
+
 /**
  * Supabase email confirmation can redirect back with a one-time session in
  * the URL fragment. Scrub it immediately, validate it with Supabase Auth, then
  * store it only in sessionStorage. Never persist the token in browser history.
  */
 export async function finishEmailConfirmation(): Promise<void> {
+  const generation=authenticationGeneration;
   const fragment = location.hash.startsWith('#') ? location.hash.slice(1) : '';
   const params = new URLSearchParams(fragment);
   const accessToken = params.get('access_token');
@@ -141,7 +165,7 @@ export async function finishEmailConfirmation(): Promise<void> {
     const user = await api('/auth/v1/user', 'GET', undefined, accessToken);
     if (!user || typeof user !== 'object') return;
     const profile = user as Record<string, unknown>;
-    if (typeof profile.id !== 'string') return;
+    if (typeof profile.id !== 'string'||generation!==authenticationGeneration) return;
     saveSession({
       access_token: accessToken,
       refresh_token: refreshToken,
@@ -246,10 +270,7 @@ export function mountCloudPanel(host: HTMLElement, options: CloudPanelOptions): 
   credentials.addEventListener('submit', (event) => {
     event.preventDefault();
     void working('Signing in…', async () => {
-      const data = await api('/auth/v1/token?grant_type=password', 'POST', { email: email.value.trim(), password: password.value });
-      const session = parseSession(data as Record<string, unknown>);
-      if (!session) throw new Error('Sign-in response did not contain an active session.');
-      saveSession(session);
+      await signInForProcessing(email.value,password.value);
       return 'Signed in. Choose Save or Restore to synchronize preferences.';
     });
   });
@@ -257,9 +278,11 @@ export function mountCloudPanel(host: HTMLElement, options: CloudPanelOptions): 
   signUp.addEventListener('click', () => {
     if (!credentials.reportValidity()) return;
     void working('Creating account…', async () => {
+      const generation=++authenticationGeneration;
       const redirect = encodeURIComponent(location.origin + location.pathname);
       const data = await api('/auth/v1/signup?redirect_to=' + redirect, 'POST', { email: email.value.trim(), password: password.value });
       const session = parseSession(data as Record<string, unknown>);
+      if(generation!==authenticationGeneration)throw Error('Your account changed. Sign in again.');
       if (session) saveSession(session);
       return session ? 'Account created. You can now save preferences.' : 'Check your email for an account confirmation, then sign in here.';
     });
@@ -291,12 +314,7 @@ export function mountCloudPanel(host: HTMLElement, options: CloudPanelOptions): 
 
   signOut.addEventListener('click', () => {
     void working('Signing out…', async () => {
-      const session = readSession();
-      saveSession(null);
-      if (session) {
-        try { await api('/auth/v1/logout', 'POST', undefined, session.access_token); }
-        catch { /* Local sign-out still succeeds if offline. */ }
-      }
+      await signOutForProcessing();
       return 'Signed out of cloud preferences. Local tools remain available.';
     });
   });

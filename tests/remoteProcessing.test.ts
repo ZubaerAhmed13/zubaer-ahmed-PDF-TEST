@@ -62,3 +62,36 @@ it('recovers the same job when a successful create response body resets after it
   let creates=0;const s=setup(url=>url.endsWith('/jobs')&&creates++===0?new Response(new ReadableStream({start(controller){controller.error(new Error('connection reset after headers'));}}),{status:201,headers:{'content-type':'application/json'}}):undefined);
   await s.start().result;const payloads=s.calls.filter(call=>call.url.endsWith('/jobs')).map(call=>JSON.parse(String(call.init.body)));expect(payloads).toHaveLength(2);expect(payloads[0].idempotencyKey).toBe(payloads[1].idempotencyKey);
 });
+it('allows an explicit cancellation retry after a failed acknowledgement',async()=>{
+  let release:()=>void=()=>{},entered:()=>void=()=>{},attempts=0;
+  const gate=new Promise<void>(r=>{release=r;}),uploading=new Promise<void>(r=>{entered=r;});
+  const s=setup(async(url,init)=>{if(init.method==='PUT'){entered();await gate;throw Error('transfer stopped');}if(url.endsWith('/cancel')&&attempts++===0)return Response.json({error:{code:'unavailable'}},{status:503});});
+  const operation=s.start(),failure=operation.result.catch(e=>e);await uploading;
+  await expect(operation.cancel()).rejects.toThrow(/not confirmed/i);release();await failure;
+  expect((await operation.cancel()).state).toBe('cancelled');expect(attempts).toBe(2);
+});
+it('retrieves a completed output again without creating or starting another job',async()=>{
+  let downloads=0;const s=setup(url=>url.includes('/object/sign/')&&downloads++===0?new Response('',{status:503}):undefined);
+  const operation=s.start();await expect(operation.result).rejects.toThrow(/download/i);
+  expect((await operation.check())?.state).toBe('completed');expect((await operation.retrieve()).outputs[0]?.buffer).toEqual(bytes.buffer);
+  expect(s.calls.filter(c=>c.url.endsWith('/jobs'))).toHaveLength(1);expect(s.calls.filter(c=>c.url.endsWith('/start'))).toHaveLength(1);
+});
+it('recovers an unknown creation with its original key and cancels without uploading',async()=>{
+  let creates=0;const s=setup(url=>url.endsWith('/jobs')&&creates++<2?new Response(new ReadableStream({start(c){c.error(Error('reset'));}}),{status:201}):undefined);
+  const operation=s.start();await expect(operation.result).rejects.toThrow(/incomplete/i);expect(operation.jobId()).toBeNull();
+  expect((await operation.check())?.id).toBe(id);expect((await operation.cancel()).state).toBe('cancelled');
+  const requests=s.calls.filter(c=>c.url.endsWith('/jobs')).map(c=>JSON.parse(String(c.init.body)));
+  expect(new Set(requests.map(r=>r.idempotencyKey)).size).toBe(1);expect(s.calls.some(c=>c.init.method==='PUT'||c.url.endsWith('/start'))).toBe(false);
+});
+it('checks expiry before retrying a completed download',async()=>{
+  let expired=false;const s=setup(url=>expired&&url.endsWith('/jobs/'+id)?Response.json({job:{id,state:'expired',phase:'expired'}}):undefined);
+  const operation=s.start();await operation.result;expired=true;const count=s.calls.length;
+  await expect(operation.retrieve()).rejects.toThrow(/completed|expired/i);expect(s.calls.slice(count).some(c=>c.url.endsWith('/downloads'))).toBe(false);
+});
+it('stops a local download on cancellation while reporting that the server completed',async()=>{
+  let entered:()=>void=()=>{},release:()=>void=()=>{},signal:AbortSignal|undefined;
+  const ready=new Promise<void>(r=>{entered=r;}),gate=new Promise<void>(r=>{release=r;});
+  const s=setup(async(url,init)=>{if(url.includes('/object/sign/')){signal=init.signal??undefined;entered();await gate;}return undefined;});
+  const operation=s.start(),result=operation.result.catch(e=>e);await ready;
+  try{expect((await operation.cancel()).state).toBe('completed');expect(signal?.aborted).toBe(true);}finally{release();await result;}
+});

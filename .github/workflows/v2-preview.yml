@@ -5,6 +5,9 @@ on:
     branches: [main]
     paths:
       - 'src/v2/**'
+      - 'src/app/cloudSync.ts'
+      - 'backend/contracts.ts'
+      - 'backend/http.ts'
       - 'src/pdf/**'
       - 'src/workers/**'
       - 'package*.json'
@@ -26,6 +29,10 @@ jobs:
   v2-browser:
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    env:
+      VITE_DOCFLOW_SERVER_PROCESSING: "1"
+      VITE_SUPABASE_URL: https://processing-test.invalid
+      VITE_SUPABASE_PUBLISHABLE_KEY: sb_publishable_browser_test_only
     strategy:
       fail-fast: false
       matrix:

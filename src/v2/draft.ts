@@ -8,7 +8,7 @@ export const createOrganizerDraft=():OrganizerDraft=>({order:[],history:[],futur
 export function safeOptionValues(form:HTMLFormElement):Record<string,string|boolean>{
   const values:Record<string,string|boolean>={};
   for(const el of form.elements){
-    if(!(el instanceof HTMLInputElement||el instanceof HTMLSelectElement||el instanceof HTMLTextAreaElement)||!el.name)continue;
+    if(!(el instanceof HTMLInputElement||el instanceof HTMLSelectElement||el instanceof HTMLTextAreaElement)||!el.name||el.hasAttribute('data-private-option'))continue;
     if(el instanceof HTMLInputElement&&['password','file'].includes(el.type))continue;
     values[el.name]=el instanceof HTMLInputElement&&el.type==='checkbox'?el.checked:el.value;
   }
@@ -17,6 +17,7 @@ export function safeOptionValues(form:HTMLFormElement):Record<string,string|bool
 export function restoreOptions(form:HTMLFormElement,values:Record<string,string|boolean>):void{
   for(const el of form.elements){
     if(!(el instanceof HTMLInputElement||el instanceof HTMLSelectElement||el instanceof HTMLTextAreaElement))continue;
+    if(el.hasAttribute('data-private-option'))continue;
     const value=values[el.name];if(value===undefined)continue;
     if(el instanceof HTMLInputElement&&['password','file'].includes(el.type))continue;
     if(el instanceof HTMLInputElement&&el.type==='checkbox')el.checked=value===true;

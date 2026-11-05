@@ -6,9 +6,9 @@ export type RemoteSettings={operation:'ocr';options:OcrOptions}|{operation:'comp
 export interface ProcessingIdentity{id:string;accessToken:string}
 export interface RemoteConfig{projectUrl:string;publishableKey:string}
 interface Dependencies{fetch:typeof fetch;identity:()=>Promise<ProcessingIdentity>;sleep?:(milliseconds:number)=>Promise<void>;progress?:(message:string)=>void}
-interface RemoteJob{id:string;state:'queued'|'running'|'cancelling'|'cancelled'|'completed'|'failed'|'expired';phase:string;errorCode?:string}
+export interface RemoteJob{id:string;state:'queued'|'running'|'cancelling'|'cancelled'|'completed'|'failed'|'expired';phase:string;errorCode?:string}
 export interface Cancellation{state:RemoteJob['state'];cleanupPending:boolean}
-export interface RemoteOperation{result:Promise<OperationResult>;cancel:()=>Promise<Cancellation>;jobId:()=>string|null;requestKey:string}
+export interface RemoteOperation{result:Promise<OperationResult>;cancel:()=>Promise<Cancellation>;jobId:()=>string|null;requestKey:string;check:()=>Promise<RemoteJob|null>;retrieve:()=>Promise<OperationResult>}
 export class RemoteProcessingError extends Error{
   readonly code:string;
   constructor(code:string,message:string){super(message);this.code=code;}
@@ -24,7 +24,8 @@ function job(value:unknown,id?:string):RemoteJob{
 export function startRemoteProcessing(file:File,settings:RemoteSettings,consent:boolean,config:RemoteConfig,deps:Dependencies):RemoteOperation{
   const requestKey=crypto.randomUUID(),sleep=deps.sleep??(ms=>new Promise(resolve=>setTimeout(resolve,ms)));
   let origin:string;try{const url=new URL(config.projectUrl);if(url.protocol!=='https:'||url.pathname!=='/'||url.username||url.password||url.search||url.hash||!config.publishableKey.startsWith('sb_publishable_'))throw Error();origin=url.origin;}catch{throw new Error('Server processing is not configured in this build.');}
-  let current:RemoteJob|null=null,identity:ProcessingIdentity|null=null,cancelRequested=false,creationSent=false,knownSettled=false;
+  let current:RemoteJob|null=null,identity:ProcessingIdentity|null=null,cancelRequested=false,creationSent=false,knownSettled=false,creationUncertain=false;
+  let preparedRequest:ReturnType<typeof parseCreateJobRequest>|null=null,cancellationFailure:unknown=null;
   let resolveKnown:(id:string|null)=>void=()=>{};const known=new Promise<string|null>(resolve=>{resolveKnown=resolve;});
   const settleKnown=(id:string|null)=>{if(!knownSettled){knownSettled=true;resolveKnown(id);}};
   let transfer:AbortController|null=null,cancellation:Promise<Cancellation>|null=null;
@@ -38,12 +39,34 @@ export function startRemoteProcessing(file:File,settings:RemoteSettings,consent:
     if(!response.ok){const error=value.error&&typeof value.error==='object'?value.error as Record<string,unknown>:{};throw new RemoteProcessingError(typeof error.code==='string'?error.code:'server_error',typeof error.message==='string'?error.message:'Server processing is temporarily unavailable.');}
     return value;
   }
+  async function check():Promise<RemoteJob|null>{
+    if(!current&&creationUncertain&&preparedRequest){current=job((await api('/jobs','POST',preparedRequest)).job);creationUncertain=false;}
+    if(current)current=job((await api('/jobs/'+current.id)).job,current.id);
+    return current;
+  }
+  async function download(id:string):Promise<OperationResult>{
+    const value=await api('/jobs/'+id+'/downloads'),metadata=validateOutput(value.output);
+    const root=identity!.id+'/'+id+'/';
+    let url:string;try{url=validateStorageUrl(value.url,origin,'docflow-processing/'+root+'output/result.pdf','download');}catch{throw new Error('The server returned a file link outside this job scope.');}
+    note('Downloading verified PDF…');transfer=new AbortController();
+    const response=await deps.fetch(url,{credentials:'omit',redirect:'error',cache:'no-store',signal:AbortSignal.any([transfer.signal,AbortSignal.timeout(60000)])});
+    if(!response.ok)throw new Error('The completed PDF could not be downloaded. Check the job before retrying.');
+    const bytes=await readBytes(response,LIMITS.outputBytes);transfer=null;
+    if(bytes.length!==metadata.size||new TextDecoder().decode(bytes.subarray(0,5))!=='%PDF-'||await sha256(bytes)!==metadata.sha256)throw new Error('The downloaded PDF failed verification; its bytes do not match the verified output.');
+    return {outputs:[{name:settings.operation==='ocr'?'searchable-ocr.pdf':'processed.pdf',type:'application/pdf',buffer:bytes.buffer.slice(bytes.byteOffset,bytes.byteOffset+bytes.byteLength) as ArrayBuffer}],info:{provider:'DocFlow · Supabase temporary storage + isolated Vercel processing',job:id,operation:settings.operation,pages:metadata.pages,sha256:metadata.sha256,warning:settings.operation==='ocr'?'OCR can make mistakes. Review names, numbers and page appearance before sharing.':''}};
+  }
+  async function retrieve():Promise<OperationResult>{
+    const status=await check();if(status?.state!=='completed')throw Error('Only a completed, unexpired server job can be retrieved.');
+    return download(status.id);
+  }
   function cancel():Promise<Cancellation>{
     if(cancellation)return cancellation;
-    if(current?.state==='completed')return Promise.resolve({state:'completed',cleanupPending:false});
+    if(current?.state==='completed'){cancelRequested=true;transfer?.abort();return Promise.resolve({state:'completed',cleanupPending:false});}
     cancelRequested=true;transfer?.abort();deps.progress?.('Requesting server cancellation…');
+    cancellationFailure=null;
     cancellation=(async()=>{
-      const id=await known;
+      let id=current?.id??await known;
+      if(!id&&creationUncertain)id=(await check())?.id??null;
       if(!id){if(creationSent)throw Error('Server cancellation is not confirmed. Check the job before retrying.');deps.progress?.('Cancelled before upload.');return {state:'cancelled',cleanupPending:false} as Cancellation;}
       try{
         const value=await api('/jobs/'+id+'/cancel','POST',{});current=job(value.job,id);let cleanupPending=value.cleanupPending===true;
@@ -53,7 +76,7 @@ export function startRemoteProcessing(file:File,settings:RemoteSettings,consent:
         deps.progress?.(current.state==='cancelled'?'Server processing cancelled.':current.state==='completed'?'The server finished before cancellation. Its output remains available until expiry.':'Server job stopped.');
         return {state:current.state,cleanupPending};
       }catch{throw new RemoteProcessingError('cancellation_pending','Server cancellation is not confirmed. Check the job before retrying.');}
-    })();return cancellation;
+    })().catch(error=>{cancellation=null;cancellationFailure=error;throw error;});return cancellation;
   }
   async function checkCancellation(){if(cancelRequested){await cancel();throw new DOMException('Processing cancelled','AbortError');}}
   const result=(async():Promise<OperationResult>=>{
@@ -65,10 +88,10 @@ export function startRemoteProcessing(file:File,settings:RemoteSettings,consent:
       if(buffer.byteLength!==file.size)throw new Error('The selected file could not be read completely.');
       const request=parseCreateJobRequest({...settings,idempotencyKey:requestKey,consent:{accepted:true,noticeVersion:NOTICE_VERSION},files:[{name:file.name,type:file.type,size:buffer.byteLength,sha256:await sha256(new Uint8Array(buffer))}]});
       if(cancelRequested){settleKnown(null);await checkCancellation();}
-      creationSent=true;
+      preparedRequest=request;creationSent=true;creationUncertain=true;
       let created:Record<string,unknown>;
       try{created=await api('/jobs','POST',request);}catch(error){if(!(error instanceof RemoteProcessingError&&error.code==='network_error'))throw error;created=await api('/jobs','POST',request);}
-      current=job(created.job);settleKnown(current.id);await checkCancellation();
+      current=job(created.job);creationUncertain=false;settleKnown(current.id);await checkCancellation();
       const extension=file.name.split('.').pop()!.toLowerCase(),root=identity!.id+'/'+current.id+'/';
       if(created.upload){
         const upload=record(created.upload);let url:string;try{url=validateStorageUrl(upload.url,origin,'docflow-processing/'+root+'input/0.'+extension,'upload');}catch{throw new Error('The server returned a file link outside this job scope.');}
@@ -85,16 +108,10 @@ export function startRemoteProcessing(file:File,settings:RemoteSettings,consent:
       }
       await checkCancellation();
       if(current.state!=='completed')throw new Error(current.state==='expired'?'This server job expired. Select the original file again.':current.state==='cancelled'?'This server job was cancelled.':'The server could not process this document ('+(current.errorCode??'worker_error')+'). Your original file is unchanged.');
-      const value=await api('/jobs/'+current.id+'/downloads'),metadata=validateOutput(value.output);
-      let url:string;try{url=validateStorageUrl(value.url,origin,'docflow-processing/'+root+'output/result.pdf','download');}catch{throw new Error('The server returned a file link outside this job scope.');}
-      note('Downloading verified PDF…');transfer=new AbortController();const response=await deps.fetch(url,{credentials:'omit',redirect:'error',cache:'no-store',signal:AbortSignal.any([transfer.signal,AbortSignal.timeout(60000)])});if(!response.ok)throw new Error('The completed PDF could not be downloaded. Check the job before retrying.');
-      const bytes=await readBytes(response,LIMITS.outputBytes);transfer=null;
-      if(bytes.length!==metadata.size||new TextDecoder().decode(bytes.subarray(0,5))!=='%PDF-'||await sha256(bytes)!==metadata.sha256)throw new Error('The downloaded PDF failed verification; its bytes do not match the verified output.');
-      await checkCancellation();
-      return {outputs:[{name:settings.operation==='ocr'?'searchable-ocr.pdf':'processed.pdf',type:'application/pdf',buffer:bytes.buffer.slice(bytes.byteOffset,bytes.byteOffset+bytes.byteLength) as ArrayBuffer}],info:{provider:'DocFlow · Supabase temporary storage + isolated Vercel processing',job:current.id,operation:settings.operation,pages:metadata.pages,sha256:metadata.sha256,warning:settings.operation==='ocr'?'OCR can make mistakes. Review names, numbers and page appearance before sharing.':''}};
+      const output=await download(current.id);await checkCancellation();return output;
     }catch(error){
       settleKnown(current?.id??null);
-      if(cancelRequested){await cancel();throw new DOMException('Processing cancelled','AbortError');}
+      if(cancelRequested){if(cancellationFailure)throw cancellationFailure;await cancel();throw new DOMException('Processing cancelled','AbortError');}
       if(current&&!terminal.has(current.state)){
         try{await cancel();}catch{throw new RemoteProcessingError('cleanup_pending',(error instanceof Error?error.message:'Processing failed.')+' Server cancellation is not confirmed. Check this job before retrying.');}
       }
@@ -102,5 +119,5 @@ export function startRemoteProcessing(file:File,settings:RemoteSettings,consent:
     }
     finally{settleKnown(current?.id??null);transfer=null;}
   })();
-  return {result,cancel,jobId:()=>current?.id??null,requestKey};
+  return {result,cancel,check,retrieve,jobId:()=>current?.id??null,requestKey};
 }
