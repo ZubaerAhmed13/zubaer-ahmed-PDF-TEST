@@ -47,10 +47,11 @@ async function download(id:string,label:string){const value=await json(await api
 }
 
 const first=fixtures.find(fixture=>fixture.name==='office.docx')!;
+const smoke=process.env.DOCFLOW_ACCEPT_SMOKE==='1';
 if((await http(broker+'/api/v1/jobs',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(request(first,'anonymous'))})).status!==401)throw Error('Anonymous create was accepted');
 if((await api('/jobs','POST',{...request(first,'wrong-owner'),owner:users[1]!.id})).status!==400)throw Error('Client-selected owner was accepted');
 const completed:string[]=[];
-for(const fixture of fixtures.filter(fixture=>!fixture.cancellationOnly)){
+for(const fixture of smoke?[first]:fixtures.filter(fixture=>!fixture.cancellationOnly)){
   const startedAt=Date.now(),created=await create(fixture,fixture.name);
   for(const [suffix,method] of [['','GET'],['/start','POST'],['/cancel','POST'],['/downloads','GET']])if((await api('/jobs/'+created.id+suffix,method,method==='POST'?{}:undefined,1)).status!==404)throw Error('Cross-owner access was accepted');
   const starts=await Promise.all(Array.from({length:fixture.operation==='compress'?2:1},()=>api('/jobs/'+created.id+'/start','POST',{})));
@@ -60,6 +61,11 @@ for(const fixture of fixtures.filter(fixture=>!fixture.cancellationOnly)){
   if(fixture.expectReduction&&result.metadata.size>=Buffer.from(fixture.base64,'base64').length)throw Error('Compression did not reduce this supported synthetic raster');
   if(fixture.name==='compression.pdf'&&result.metadata.sha256!==digest(Buffer.from(fixture.base64,'base64')))throw Error('Unsupported image encoding did not preserve the original bytes');
   completed.push(created.id);evidence.push({name:fixture.name,job:created.id,state:'completed',attempt:job.attempt,inputBytes:Buffer.from(fixture.base64,'base64').length,output:result.metadata,elapsedMs:Date.now()-startedAt,ownerIsolation:true,concurrentStarts:starts.length});await checkpoint();console.log('DOCFLOW_ACCEPTED',fixture.name,created.id);
+}
+
+if(smoke){
+  console.log('DOCFLOW_TRANSPORT_SMOKE_PASSED');
+  process.exit(0);
 }
 
 const cancellation=fixtures.find(fixture=>fixture.cancellationOnly)!;

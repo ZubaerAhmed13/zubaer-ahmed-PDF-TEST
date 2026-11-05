@@ -62,6 +62,10 @@ for output in report['outputs']:
             measurement['expectedTextPresent'] = True
         measurements.append(measurement)
 
-assert len(measurements)==7, 'The seven real hosted output cases were not present'
+if sys.argv[2:] == ['--smoke']:
+    assert [item['name'] for item in measurements] == ['office.docx'], 'Expected one hosted DOCX smoke output'
+else:
+    assert not sys.argv[2:], 'Unrecognized verification option'
+    assert len(measurements)==7, 'The seven real hosted output cases were not present'
 (output_dir/'independent-verification.json').write_text(json.dumps(measurements, indent=2)+'\n')
 print(json.dumps(measurements, indent=2))
