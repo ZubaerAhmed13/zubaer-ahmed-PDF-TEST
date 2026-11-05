@@ -9,15 +9,17 @@ const path=a+'/'+job+'/input/0.pdf',outputPath=a+'/'+job+'/output/result.pdf';
 const metadata={name:'result.pdf',type:'application/pdf',size:20,sha256:'b'.repeat(64),pages:1};
 const claimHash=createHash('sha256').update('d'.repeat(64)).digest('hex');
 const row=()=>({id:job,owner_id:a,state:'queued',phase:'awaiting_upload',attempt:0,operation:'ocr',request:input,input_path:path,output_path:null,output:null,details:null,error_code:null,created_at:'2026-10-30T12:00:00Z',expires_at:'2026-10-30T12:30:00Z'});
-const config:BrokerConfig={projectUrl:origin,serviceKey:'server-only-key',workerUrl:'https://worker.vercel.app',workerBypass:'server-only-bypass',cleanupHash:'c'.repeat(64),enabled:true,cleanupReady:true,allowedOwners:[],allowedOrigins:['https://docflow.example']};
+const config:BrokerConfig={projectUrl:origin,serviceKey:'server-only-key',workerUrl:'https://worker.vercel.app',workerBypass:'server-only-bypass',cleanupHash:'c'.repeat(64),enabled:true,cleanupReady:true,workerReady:true,allowedOwners:[],allowedOrigins:['https://docflow.example']};
 function setup(overrides:Partial<BrokerConfig>={},change?:(url:string,init:RequestInit,body:Record<string,unknown>)=>Response|undefined){
   let record:Record<string,unknown>=row();const calls:{url:string;method:string;body:Record<string,unknown>;headers:Headers}[]=[];
   const fetcher:typeof fetch=async(resource,init={})=>{
     const url=String(resource),headers=new Headers(init.headers),body=typeof init.body==='string'?JSON.parse(init.body):{};
     calls.push({url,method:init.method??'GET',body,headers});const replacement=change?.(url,init,body);if(replacement)return replacement;
     if(url===origin+'/rest/v1/rpc/docflow_cleanup_authorize')return Response.json(true);
+    if(url.endsWith('/rpc/docflow_record_worker_check'))return Response.json(body.p_ready===true);
+    if(url==='https://worker.vercel.app/api/health')return Response.json({service:'docflow-processing',snapshotVerified:true,expiresAt:null});
     if(url===origin+'/auth/v1/user'){const token=headers.get('authorization');return token==='Bearer owner-a'?Response.json({id:a,role:'authenticated'}):token==='Bearer owner-b'?Response.json({id:b,role:'authenticated'}):Response.json({msg:'invalid'}, {status:401});}
-    if(url===origin+'/rest/v1/rpc/docflow_job_action'){
+    if(url===origin+'/rest/v1/rpc/docflow_job_action'||url===origin+'/rest/v1/rpc/docflow_admit_job'){
       const payload=body.p_payload as Record<string,unknown>,action=body.p_action;
       if(['read','start','cancel'].includes(String(action))&&payload.owner!==record.owner_id)return Response.json({message:'Job not found'},{status:400});
       if(action==='create'){expect(payload.owner).toBe(a);expect(payload.request).toMatchObject({operation:'ocr'});expect(payload.requestHash).toMatch(/^[a-f0-9]{64}$/);return Response.json(record);}
@@ -76,6 +78,28 @@ describe('processing broker boundary',()=>{
   it('keeps normal uploads disabled while allowing only named synthetic acceptance owners',async()=>{
     const closed=setup({enabled:false});expect((await closed.request('/jobs','POST',input)).status).toBe(503);const staged=setup({enabled:false,allowedOwners:[a]});expect((await staged.request('/jobs','POST',input)).status).toBe(201);
   });
+  it('blocks new uploads and starts when the worker is unavailable, while keeping job recovery available',async()=>{
+    const config={workerReady:false};
+    const {request,calls}=setup(config);
+    const created=await request('/jobs','POST',input);
+    expect(created.status).toBe(503);
+    expect(await created.json()).toMatchObject({error:{code:'processing_not_ready'}});
+    expect((await request('/jobs/'+job+'/start','POST',{})).status).toBe(503);
+    expect(calls.some(call=>['create','start'].includes(String(call.body.p_action))||call.url.includes('/storage/'))).toBe(false);
+    expect((await request('/jobs/'+job)).status).toBe(200);
+    expect((await request('/jobs/'+job+'/cancel','POST',{})).status).toBe(200);
+  });
+  it('honors the database admission fence if readiness changes during a request',async()=>{
+    const {request,calls}=setup({},url=>url.endsWith('/rpc/docflow_admit_job')
+      ?Response.json({message:'Processing worker unavailable'},{status:400}):undefined);
+    for(const path of ['/jobs','/jobs/'+job+'/start']){
+      const response=await request(path,'POST',path==='/jobs'?input:{});
+      expect(response.status).toBe(503);
+      expect(await response.json()).toMatchObject({error:{code:'processing_not_ready'}});
+    }
+    expect(calls.some(call=>call.url.includes('/upload/sign/')||call.url.endsWith('/api/process'))).toBe(false);
+    expect((await request('/jobs/'+job)).status).toBe(200);
+  });
   it('does not issue upload credentials while durable cleanup is unhealthy',async()=>{
     const {request,calls}=setup({cleanupReady:false});expect((await request('/jobs','POST',input)).status).toBe(503);expect(calls.some(call=>call.url.includes('/storage/'))).toBe(false);
   });
@@ -106,9 +130,41 @@ describe('durable physical cleanup',()=>{
     let claims=0;
     const {handler,calls}=setup({cleanupHash},(url)=>url.endsWith('/rpc/docflow_cleanup_claim')?Response.json({busy:false,names:claims++===0?[path,outputPath]:[],lease}):url.endsWith('/rpc/docflow_cleanup_ack')?Response.json(true):undefined);
     expect((await maintain(handler,'owner-a')).status).toBe(401);expect(calls).toHaveLength(0);
-    const response=await maintain(handler);expect(response.status).toBe(200);expect(await response.json()).toEqual({deleted:2,batches:2,busy:false});
+    const response=await maintain(handler);expect(response.status).toBe(200);expect(await response.json()).toEqual({deleted:2,batches:2,busy:false,workerReady:true});
     expect(calls.find(call=>call.method==='DELETE')?.body).toEqual({prefixes:[path,outputPath]});
     expect(calls.filter(call=>call.url.endsWith('/rpc/docflow_cleanup_ack')).map(call=>call.body)).toEqual([{p_lease:lease,p_ok:true,p_deleted:2},{p_lease:lease,p_ok:true,p_deleted:0}]);
+  });
+  it('records worker health after cleanup with only worker credentials',async()=>{
+    const expiresAt='2026-10-31T12:00:00.000Z';
+    const {handler,calls}=setup({cleanupHash},url=>{
+      if(url.endsWith('/rpc/docflow_cleanup_claim'))return Response.json({busy:false,names:[],lease});
+      if(url.endsWith('/rpc/docflow_cleanup_ack'))return Response.json(true);
+      if(url.endsWith('/api/health'))return Response.json({service:'docflow-processing',snapshotVerified:true,expiresAt});
+      if(url.endsWith('/rpc/docflow_record_worker_check'))return Response.json(true);
+    });
+    const response=await maintain(handler);
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({workerReady:true});
+    const probe=calls.find(call=>call.url.endsWith('/api/health'));
+    expect(probe?.headers.get('x-vercel-protection-bypass')).toBe('server-only-bypass');
+    expect(probe?.headers.has('authorization')).toBe(false);
+    expect(probe?.headers.has('apikey')).toBe(false);
+    expect(calls.find(call=>call.url.endsWith('/rpc/docflow_record_worker_check'))?.body).toEqual({
+      p_worker_url:'https://worker.vercel.app',p_cleanup_hash:cleanupHash,p_ready:true,p_expires_at:expiresAt,
+    });
+  });
+  it('records an unavailable worker without failing successful file cleanup',async()=>{
+    const {handler,calls}=setup({cleanupHash},url=>{
+      if(url.endsWith('/rpc/docflow_cleanup_claim'))return Response.json({busy:false,names:[path],lease});
+      if(url.endsWith('/rpc/docflow_cleanup_ack'))return Response.json(true);
+      if(url.endsWith('/api/health'))return Response.json({snapshotVerified:false},{status:503});
+      if(url.endsWith('/rpc/docflow_record_worker_check'))return Response.json(true);
+    });
+    const response=await maintain(handler);
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({deleted:5,workerReady:false});
+    expect(calls.find(call=>call.url.endsWith('/rpc/docflow_cleanup_ack'))?.body.p_ok).toBe(true);
+    expect(calls.find(call=>call.url.endsWith('/rpc/docflow_record_worker_check'))?.body.p_ready).toBe(false);
   });
   it('marks cleanup unhealthy after a Storage failure and leaves candidates for scheduled retry',async()=>{
     const {handler,calls}=setup({cleanupHash},(url,init)=>url.endsWith('/rpc/docflow_cleanup_claim')?Response.json({busy:false,names:[path],lease}):url.endsWith('/rpc/docflow_cleanup_ack')?Response.json(true):init.method==='DELETE'?Response.json({message:'temporary failure'},{status:503}):undefined);

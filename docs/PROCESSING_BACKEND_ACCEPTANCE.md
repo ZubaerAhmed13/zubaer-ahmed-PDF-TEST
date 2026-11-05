@@ -60,3 +60,13 @@ The controlled acceptance runs only during an explicitly enabled preview build, 
 5 November read-only recheck: the same three advisor findings remain, including pg_net's [extension registration warning](https://supabase.com/docs/guides/database/database-linter?lint=0014_extension_in_public). Cleanup succeeded at 11:30 UTC; normal processing is disabled, with zero active jobs and zero Storage objects. The nine 30 October starts are outside the rolling 24-hour window and their terminal rows have aged out through the committed retention policy. The snapshot still exists and now reports expiry `2026-11-06T18:37:26.847Z` (seven days from its last recorded use). No VM start or image rebuild was performed during this UI continuation.
 
 The staging recheck at 17:24 Berlin time on 5 November found zero active jobs, stored objects and starts in the preceding 24 hours. The last successful cleanup was at 17:20. The current preview origin passed preflight and the retired origin was rejected. The existing snapshot expires at 19:37 Berlin time on 6 November. [Staging evidence](PROCESSING_BROWSER_UI_EVIDENCE.json).
+
+## Scheduled worker readiness
+
+Each successful five-minute cleanup run checks the protected worker's engine snapshot through the provider metadata API. It records the exact worker address, check time and snapshot expiry in the private maintenance row. The check uses no document, storage object, processing quota or worker VM. The cleanup result is recorded before the worker probe.
+
+The broker requires a recent successful check for new upload links and job starts. A check is valid for up to ten minutes and stops three minutes before a finite snapshot expiry. Job admission checks the exact deployment again in the database before creating or starting a job. Existing status, download and cancellation routes remain available. Cancellation can open and stop a running VM even if the image for new jobs has expired.
+
+The broker's `/health` response exposes cleanup and worker readiness as booleans. The protected worker `/api/health` reports current provider status and expiry, with HTTP 503 for unavailable or mismatched images. Successful metadata checks do not extend snapshot retention. Supabase Free also retains its provider inactivity policy. [Snapshot retention](https://vercel.com/docs/sandbox/concepts/snapshots#snapshot-retention) · [Supabase plans](https://supabase.com/pricing).
+
+Roll out the database migration first, then verify the protected worker preview before pointing the broker at its immutable deployment URL. Deploy the updated broker and verify a scheduled tick. Keep normal uploads disabled in staging. Roll back the broker and its worker URL together if the new worker fails verification.

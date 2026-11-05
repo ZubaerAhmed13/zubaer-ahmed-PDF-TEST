@@ -3,7 +3,7 @@ import {TransportError,bearer,equalSecret,opaqueToken,readBytes,readJson,record,
 
 export interface BrokerConfig {
   projectUrl:string;serviceKey:string;workerUrl:string;workerBypass:string;cleanupHash:string;
-  enabled:boolean;cleanupReady:boolean;allowedOwners:string[];allowedOrigins:string[];
+  enabled:boolean;cleanupReady:boolean;workerReady:boolean;allowedOwners:string[];allowedOrigins:string[];
 }
 interface Job {
   id:string;owner_id:string;state:string;phase:string;attempt:number;operation:string;
@@ -20,6 +20,9 @@ function checkedJob(value:unknown,owner?:string):Job{
 }
 function publicJob(job:Job){return {id:job.id,operation:job.operation,state:job.state,phase:job.phase,attempt:job.attempt,createdAt:job.created_at,expiresAt:job.expires_at,...(job.state==='completed'?{output:validateOutput(job.output)}:{}),...(job.error_code?{errorCode:['unsupported_input','engine_error','deadline','worker_error','job_expired'].includes(job.error_code)?job.error_code:'worker_error'}:{})};}
 function rpcFailure(message:string):TransportError{
+  if(message==='Processing worker unavailable')return new TransportError(503,'processing_not_ready','The processing worker is temporarily unavailable. Try again later.');
+  if(message==='Processing disabled')return new TransportError(503,'processing_not_ready','Server document processing is not enabled yet.');
+  if(message==='Processing cleanup unavailable')return new TransportError(503,'cleanup_unavailable','Temporary file cleanup is unavailable. Try again later.');
   if(message==='Job not found')return new TransportError(404,'job_not_found','This job is unavailable.');
   if(/quota|limit reached/i.test(message))return new TransportError(429,'processing_limit','The processing limit has been reached. Try again later.');
   if(/expired/i.test(message))return new TransportError(410,'job_expired','This job has expired. Select the original file again.');
@@ -32,15 +35,20 @@ export function createBroker(config:BrokerConfig,deps:Dependencies){
   const project=new URL(config.projectUrl),worker=new URL(config.workerUrl),now=deps.now??Date.now,token=deps.token??opaqueToken;
   if(project.protocol!=='https:'||project.pathname!=='/'||project.username||project.password||project.search||project.hash||worker.protocol!=='https:'||worker.pathname!=='/'||worker.username||worker.password||worker.search||worker.hash)throw Error('Invalid fixed processing origins');
   const serviceHeaders={apikey:config.serviceKey,authorization:'Bearer '+config.serviceKey,'content-type':'application/json'};
-  async function upstream(url:string,init:RequestInit={}):Promise<Response>{
-    try{return await deps.fetch(url,{...init,redirect:'error',cache:'no-store',signal:AbortSignal.timeout(15000)});}catch{throw new TransportError(503,'service_unavailable','The processing service could not be reached.');}
+  async function upstream(url:string,init:RequestInit={},timeout=15000):Promise<Response>{
+    try{return await deps.fetch(url,{...init,redirect:'error',cache:'no-store',signal:AbortSignal.timeout(timeout)});}catch{throw new TransportError(503,'service_unavailable','The processing service could not be reached.');}
   }
   async function service(path:string,method:string,payload?:unknown):Promise<unknown>{
     const response=await upstream(project.origin+path,{method,headers:serviceHeaders,...(payload===undefined?{}:{body:JSON.stringify(payload)})});
     const data=await readJson(response,65536);
     if(!response.ok)throw rpcFailure(typeof record(data).message==='string'?String(record(data).message):'');return data;
   }
-  const action=(name:string,payload:Record<string,unknown>)=>service('/rest/v1/rpc/docflow_job_action','POST',{p_action:name,p_payload:payload});
+  const action=(name:string,payload:Record<string,unknown>)=>{
+    const rpc=name==='create'||name==='start'?'docflow_admit_job':'docflow_job_action';
+    return service('/rest/v1/rpc/'+rpc,'POST',{
+      p_action:name,p_payload:payload,...(rpc==='docflow_admit_job'?{p_worker_url:worker.origin}:{}),
+    });
+  };
   async function owner(request:Request):Promise<string>{
     const response=await upstream(project.origin+'/auth/v1/user',{headers:{apikey:config.serviceKey,authorization:'Bearer '+bearer(request)}});
     if(!response.ok){if(response.status>=500)throw new TransportError(503,'service_unavailable','Authentication is temporarily unavailable.');throw new TransportError(401,'authentication_required','Sign in to continue.');}
@@ -66,13 +74,42 @@ export function createBroker(config:BrokerConfig,deps:Dependencies){
     const response=await upstream(worker.origin+'/api/'+kind,{method:'POST',headers:{'content-type':'application/json','x-vercel-protection-bypass':config.workerBypass},body:JSON.stringify({job,...(kind==='process'?{claim}:{cancelClaim:claim})})});
     if(!response.ok)throw new TransportError(503,'dispatch_pending','The worker did not acknowledge this request. Check job status before retrying.');
   }
+  async function checkWorker(cleanupHash:string):Promise<boolean>{
+    let ready=false,expiresAt:string|null=null;
+    try{
+      const response=await upstream(worker.origin+'/api/health',{
+        headers:{'x-vercel-protection-bypass':config.workerBypass},
+      },5000);
+      if(response.ok){
+        const health=record(await readJson(response,1024)),expiry=health.expiresAt;
+        if(health.service==='docflow-processing'&&health.snapshotVerified===true&&
+           (expiry===null||typeof expiry==='string'&&Number.isFinite(Date.parse(expiry)))){
+          ready=true;expiresAt=expiry===null?null:new Date(expiry).toISOString();
+        }
+      }
+    }catch{/* Record an unavailable worker without disrupting file cleanup. */}
+    const recorded=await service('/rest/v1/rpc/docflow_record_worker_check','POST',{
+      p_worker_url:worker.origin,p_cleanup_hash:cleanupHash,p_ready:ready,p_expires_at:expiresAt,
+    });
+    return ready&&recorded===true;
+  }
+  function requireProcessing(user:string):void{
+    if(!config.cleanupReady)throw new TransportError(503,'cleanup_unavailable','Temporary file cleanup is unavailable. Try again later.');
+    if(!config.enabled&&!config.allowedOwners.includes(user))throw new TransportError(503,'processing_not_ready','Server document processing is not enabled yet.');
+    if(!config.workerReady)throw new TransportError(503,'processing_not_ready','The processing worker is temporarily unavailable. Try again later.');
+  }
   async function body(request:Request){if(!/^application\/json(?:;|$)/i.test(request.headers.get('content-type')??''))throw new TransportError(415,'invalid_request','Send JSON request data.');return record(await readJson(request));}
   function active(job:Job):void{if(job.state==='expired'||Date.parse(job.expires_at)<=now())throw new TransportError(410,'job_expired','This job has expired. Select the original file again.');}
   const json=(value:unknown,status=200)=>Response.json(value,{status,headers:{'cache-control':'no-store','x-content-type-options':'nosniff'}});
 
   async function handle(request:Request):Promise<Response>{
     const path=new URL(request.url).pathname.replace(/^\/(?:functions\/v1\/)?docflow-processing(?=\/|$)/,''),method=request.method;
-    if(path==='/health'&&method==='GET')return json({service:'docflow-broker',acceptingDocuments:config.enabled&&config.cleanupReady});
+    if(path==='/health'&&method==='GET')return json({
+      service:'docflow-broker',
+      cleanupReady:config.cleanupReady,
+      workerReady:config.workerReady,
+      acceptingDocuments:config.enabled&&config.cleanupReady&&config.workerReady,
+    });
     if(path==='/maintenance'){
       if(method!=='POST')throw new TransportError(405,'method_not_allowed','Use POST for this route.');
       const hash=await sha256(bearer(request));
@@ -97,7 +134,7 @@ export function createBroker(config:BrokerConfig,deps:Dependencies){
         if(!ok||acknowledged!==true)throw new TransportError(503,'cleanup_unavailable','Temporary file cleanup is unavailable.');
         deleted+=count;batches++;if(count===0)break;
       }
-      return json({deleted,batches,busy:false});
+      return json({deleted,batches,busy:false,workerReady:await checkWorker(hash)});
     }
     const callback=path.match(/^\/worker\/jobs\/([a-f\d-]+)\/(claim|attach|finish|cancel-claim|cancelled)$/i);
     if(callback){
@@ -151,8 +188,7 @@ export function createBroker(config:BrokerConfig,deps:Dependencies){
     const user=await owner(request);
     if(!id){
       if(method!=='POST')throw new TransportError(405,'method_not_allowed','Use POST for this route.');
-      if(!config.cleanupReady)throw new TransportError(503,'cleanup_unavailable','Temporary file cleanup is unavailable. Try again later.');
-      if(!config.enabled&&!config.allowedOwners.includes(user))throw new TransportError(503,'processing_not_ready','Server document processing is not enabled yet.');
+      requireProcessing(user);
       let parsed:CreateJobRequest;try{parsed=parseCreateJobRequest(await body(request));}catch(error){if(error instanceof TransportError)throw error;throw new TransportError(400,'invalid_request',error instanceof Error?error.message:'Invalid processing request.');}
       const job=checkedJob(await action('create',{owner:user,idempotencyKey:parsed.idempotencyKey,requestHash:await sha256(JSON.stringify(parsed)),request:parsed}),user);active(job);
       if(job.state!=='queued'||job.phase!=='awaiting_upload')return json({job:publicJob(job)});
@@ -172,8 +208,8 @@ export function createBroker(config:BrokerConfig,deps:Dependencies){
         if(result.dispatch===true)await dispatch('cancel',id,claim);
         return json({job:publicJob(cancelled),cleanupPending:await purge(cancelled)},cancelled.state==='cancelling'?202:200);
       }
-      active(job);if(!config.cleanupReady)throw new TransportError(503,'cleanup_unavailable','Temporary file cleanup is unavailable. Try again later.');if(!config.enabled&&!config.allowedOwners.includes(user))throw new TransportError(503,'processing_not_ready','Server document processing is not enabled yet.');
-      if(job.state!=='queued')return json({job:publicJob(job)},202);
+      active(job);if(job.state!=='queued')return json({job:publicJob(job)},202);
+      requireProcessing(user);
       const saved=paths(job),head=await upstream(project.origin+'/storage/v1/object/'+bucket+'/'+saved.input,{method:'HEAD',headers:serviceHeaders});
       if(head.status===404)throw new TransportError(409,'upload_required','Finish uploading the input before starting.');
       if(!head.ok)throw new TransportError(503,'storage_unavailable','The uploaded file could not be checked.');
