@@ -546,6 +546,6 @@ a{color:inherit;text-decoration:none}
 
 .df2-ocr-local { border: 0; padding: 0; margin: 0; min-width: 0; }
 .df2-ocr-local legend { font-weight: 600; margin-bottom: 12px; }
-[data-ocr-server] { font-size: 13px; line-height: 1.6; }
+[data-processing-server] { font-size: 13px; line-height: 1.6; }
 [data-server-recovery] { display: flex; flex-direction: column; gap: 10px; }
-[data-server-recovery][hidden], [data-ocr-server][hidden], [data-ocr-local][hidden] { display: none; }
+[data-server-recovery][hidden], [data-processing-server][hidden], [data-processing-local][hidden] { display: none; }

@@ -28,6 +28,7 @@ import {mountPipelineReport} from './pipelineReview';
 import {V2FormFiller,createFormDraft} from './forms';
 import {scanOptions} from '../pdf/scanProcessing';
 import {V2ServerProcessing,serverProcessingAvailable} from './serverProcessing';
+import {prepareServerInput,serverSettings} from './serverTools';
 
 const esc=(value:string):string=>value.replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]!));
 const bytes=(value:number):string=>value<1024?value+' B':value<1048576?(value/1024).toFixed(1)+' KB':(value/1048576).toFixed(1)+' MB';
@@ -44,7 +45,8 @@ const field=(name:string,title:string,value:string,kind:'text'|'number'|'textare
 const select=(name:string,title:string,values:[string,string][])=>`<label class="df2-control"><span>${title}</span><select name="${name}">${values.map(([value,label])=>`<option value="${value}">${label}</option>`).join('')}</select></label>`;
 function toolOptions(id:string):string{
   switch(id){
-    case 'ocr':return (serverProcessingAvailable()?select('processingMode','Processing location',[['device','On this device'],['server','Temporary server processing']]):'')+select('language','Recognition language',[['eng','English'],['deu','German (Deutsch)'],['eng+deu','English + German']])+`<fieldset data-ocr-local class="df2-ocr-local"><legend>On-device recognition</legend>`+field('pages','Pages (blank means all)','')+`<label class="df2-control">Maximum pages per run (1–30)<input name="maxPages" type="number" min="1" max="30" step="1" value="10" required></label><label class="df2-check"><input name="skipExistingText" type="checkbox" checked> Skip pages with existing selectable text</label><details><summary>Recognition preview and corrections</summary>${select('rotation','Recognition rotation',[['0','No rotation'],['90','90° clockwise'],['180','180°'],['270','270° clockwise']])}${field('deskew','Deskew angle (−15° to 15°)','0','number')}${select('cleanup','Recognition cleanup',[['original','Original appearance'],['grayscale','Grayscale'],['contrast','Higher contrast'],['binary','Black and white']])}${field('previewPage','Preview page','1','number')}<button type="button" class="df2-btn df2-btn-outline" data-ocr-preview>Review recognition preview</button><p data-ocr-preview-status role="status" aria-live="polite"></p><div data-ocr-preview-pair></div></details><p class="df2-organize-warning">OCR runs on this device using English/German models served by DocFlow. No document upload. Maximum 40 MB input and 30 selected pages per run. Unprocessed pages stay unchanged; retry them from your original. Corrections affect recognition only; the source scan stays visible. OCR can make mistakes and does not certify accessibility. Adding a text layer invalidates existing digital signatures. Review important names and numbers.</p></fieldset><div data-ocr-server hidden></div>`;
+    case 'ocr':return (serverProcessingAvailable()?select('processingMode','Processing location',[['device','On this device'],['server','Temporary server processing']]):'')+select('language','Recognition language',[['eng','English'],['deu','German (Deutsch)'],['eng+deu','English + German']])+`<fieldset data-ocr-local data-processing-local class="df2-ocr-local"><legend>On-device recognition</legend>`+field('pages','Pages (blank means all)','')+`<label class="df2-control">Maximum pages per run (1–30)<input name="maxPages" type="number" min="1" max="30" step="1" value="10" required></label><label class="df2-check"><input name="skipExistingText" type="checkbox" checked> Skip pages with existing selectable text</label><details><summary>Recognition preview and corrections</summary>${select('rotation','Recognition rotation',[['0','No rotation'],['90','90° clockwise'],['180','180°'],['270','270° clockwise']])}${field('deskew','Deskew angle (−15° to 15°)','0','number')}${select('cleanup','Recognition cleanup',[['original','Original appearance'],['grayscale','Grayscale'],['contrast','Higher contrast'],['binary','Black and white']])}${field('previewPage','Preview page','1','number')}<button type="button" class="df2-btn df2-btn-outline" data-ocr-preview>Review recognition preview</button><p data-ocr-preview-status role="status" aria-live="polite"></p><div data-ocr-preview-pair></div></details><p class="df2-organize-warning">OCR runs on this device using English/German models served by DocFlow. No document upload. Maximum 40 MB input and 30 selected pages per run. Unprocessed pages stay unchanged; retry them from your original. Corrections affect recognition only; the source scan stays visible. OCR can make mistakes and does not certify accessibility. Adding a text layer invalidates existing digital signatures. Review important names and numbers.</p></fieldset><div data-ocr-server data-processing-server hidden></div>`;
+    case 'office-to-pdf':return '<div data-processing-server></div>';
     case 'workflow':case 'batch':return '<div data-pipeline-editor></div>';
     case 'sign-visual':return `<p class="df2-organize-warning">This adds a visible signature mark. It is not a digital certificate or a cryptographic signature. PDFs containing existing certificate signatures are not supported by this tool.</p><div data-signature-pad-host></div><button type="button" class="df2-btn df2-btn-outline" data-signature-place>Place drawing</button><label class="df2-control">Typed signature<input name="signatureText" maxlength="150" autocomplete="off" placeholder="Your name"></label><button type="button" class="df2-btn df2-btn-outline" data-signature-type>Place typed signature</button>`;
     case 'redact-secure':return select('redactionDpi','Raster resolution',[['115.2','Standard · 115 DPI'],['150','Higher detail · 150 DPI'],['200','Higher detail · 200 DPI'],['300','Highest detail · 300 DPI']])+`<p class="df2-organize-warning">Every page becomes an image-only PDF. Original selectable text, accessibility tags, interactive forms, attachments, digital signature validation and metadata are discarded, even on unmarked pages. Unmarked visible content stays as pixels. Output resolution is capped at 3.2 million pixels and 2,200 pixels per dimension. Maximum 15 pages and 40 MB input.</p><label class="df2-check"><input type="checkbox" name="confirmRasterization"> I understand that all pages become images and document structure is removed. I will review the exported PDF.</label>`;
@@ -57,7 +59,7 @@ function toolOptions(id:string):string{
     case 'compare': return select('mode','Comparison',[['both','Text + visual'],['text','Text only'],['visual','Visual only']])+select('maxPages','Check first pages',[['10','10 pages'],['20','20 pages'],['35','35 pages'],['50','50 pages']])+`<p class="df2-organize-warning">Upload exactly two PDFs, A then B. Matches are heuristic; visually small edits may not be detected. Reports are for review, not legal certification.</p>`;
     case 'pdf-to-images': return select('format','Image format',[['png','PNG · lossless'],['jpeg','JPG · smaller']])+select('scale','Image resolution',[['1','Standard · 1×'],['1.5','High · 1.5×'],['2','Very high · 2×']])+`<p class="df2-organize-warning">Converts the visual appearance of each page into an image. Original selectable text and PDF vector objects are not preserved in images.</p>`;
     case 'organize': return `<p class="df2-organize-warning">Arrange page cards in the document area. Reordering preserves page contents. Duplicated pages may increase file size.</p>`;
-    case 'compress': return select('compressionPreset','Image compression',[['balanced','Balanced quality'],['quality','Higher image quality'],['small','Smaller images'],['custom','Custom settings']])+`<details class="df2-compression-details"><summary>Advanced compression</summary><label class="df2-control">JPEG image quality (%)<input name="jpegQuality" type="number" min="50" max="95" step="1" value="79"></label><label class="df2-control">Maximum image dimension (px)<input name="maxImagePixels" type="number" min="900" max="5000" step="1" value="2200"></label><p>Images above this pixel size are downsampled. This is a pixel limit, not DPI. Smaller images and lower quality can reduce detail.</p></details><p class="df2-organize-warning">Recompresses eligible RGB JPEG images while preserving text and vectors. Other encodings are left unchanged. Results depend on the document.</p>`;
+    case 'compress': return (serverProcessingAvailable()?select('processingMode','Processing location',[['device','On this device'],['server','Temporary server processing']]):'')+'<fieldset data-processing-local class="df2-ocr-local"><legend>On-device compression</legend>'+select('compressionPreset','Image compression',[['balanced','Balanced quality'],['quality','Higher image quality'],['small','Smaller images'],['custom','Custom settings']])+`<details class="df2-compression-details"><summary>Advanced compression</summary><label class="df2-control">JPEG image quality (%)<input name="jpegQuality" type="number" min="50" max="95" step="1" value="79"></label><label class="df2-control">Maximum image dimension (px)<input name="maxImagePixels" type="number" min="900" max="5000" step="1" value="2200"></label><p>Images above this pixel size are downsampled. This is a pixel limit, not DPI. Smaller images and lower quality can reduce detail.</p></details><p class="df2-organize-warning">Recompresses eligible RGB JPEG images while preserving text and vectors. Other encodings are left unchanged. Results depend on the document.</p></fieldset><div data-processing-server hidden></div>`;
     case 'split':return select('mode','Split method',[['selected','Selected pages'],['ranges','Page ranges'],['individual','Individual pages'],['every','Every N pages']])+field('pages','Pages to extract','1')+field('ranges','Separate ranges (semicolon)','1-2;3-4')+field('every','Pages in each part','5','number');
     case 'remove-pages':return field('pages','Pages to remove','');
     case 'extract-pages':return field('pages','Pages to extract','');
@@ -266,7 +268,7 @@ class DocFlowV2 {
   private captureOptions():void{
     if(this.signaturePad)this.signatureInk=this.signaturePad.getData();
     const form=this.root.querySelector<HTMLFormElement>('[data-options]');
-    if(form){this.optionValues=safeOptionValues(form);this.optionValues._advancedOpen=form.querySelector<HTMLDetailsElement>('details')?.open??false;}
+    if(form){this.optionValues={...this.optionValues,...safeOptionValues(form)};this.optionValues._advancedOpen=form.querySelector<HTMLDetailsElement>('details')?.open??false;}
   }
   private resetDraft():void{
     // The outgoing form belongs to the discarded document. A following route
@@ -307,7 +309,7 @@ class DocFlowV2 {
             <span class="df2-upload-symbol" aria-hidden="true">↥</span>
             <strong>Drag ${tool.multiple?'your files':'a file'} here</strong><span>or choose from your device</span>
             <label class="df2-btn df2-btn-main">Choose ${tool.multiple?'files':'a file'}<input type="file" data-file-input accept="${tool.accepts}" ${tool.multiple?'multiple':''}></label>
-            <small>${tool.accepts.includes('.png')?'JPG or PNG images':'PDF documents'} · ${tool.id==='redact-secure'?'40 MB · 15 pages maximum':['workflow','batch'].includes(tool.id)?'20 PDFs · 50 MB each · 150 MB total':'150 MB per file · 250 MB total'}</small>
+            <small>${tool.id==='office-to-pdf'?'DOCX, PPTX or XLSX · 25 MB · 100 output pages':tool.accepts.includes('.png')?'JPG or PNG images':'PDF documents'} · ${tool.id==='office-to-pdf'?'Server processing requires sign-in and upload consent':tool.id==='redact-secure'?'40 MB · 15 pages maximum':['workflow','batch'].includes(tool.id)?'20 PDFs · 50 MB each · 150 MB total':'150 MB per file · 250 MB total'}</small>
           </div><p class="df2-upload-note" role="status" aria-live="polite">Your original files will not be overwritten. You can review the result before downloading.</p>
         </div></div>
     </main>`;
@@ -332,11 +334,11 @@ class DocFlowV2 {
   }
   private async receive(files:File[]):Promise<void> {
     const tool=this.tool;if(!tool)return;
-    const good=files.filter(file=>tool.accepts.includes('.png')?(/image\/(png|jpeg)/.test(file.type)||/\.(png|jpe?g)$/i.test(file.name)):(file.type==='application/pdf'||/\.pdf$/i.test(file.name)));
-    if(good.length!==files.length||!good.length){const el=this.root.querySelector<HTMLElement>('.df2-upload-note');if(el)el.textContent='Choose supported '+(tool.accepts.includes('.png')?'JPG/PNG':'PDF')+' files only.';return;}
+    const good=files.filter(file=>tool.id==='office-to-pdf'?/\.(docx|pptx|xlsx)$/i.test(file.name):tool.accepts.includes('.png')?(/image\/(png|jpeg)/.test(file.type)||/\.(png|jpe?g)$/i.test(file.name)):(file.type==='application/pdf'||/\.pdf$/i.test(file.name)));
+    if(good.length!==files.length||!good.length){const el=this.root.querySelector<HTMLElement>('.df2-upload-note'),message='Choose supported '+(tool.id==='office-to-pdf'?'DOCX/PPTX/XLSX':tool.accepts.includes('.png')?'JPG/PNG':'PDF')+' files only.';if(el)el.textContent=message;else this.message(message);return;}
     if(this.busy||this.serverProcessing?.held){this.message('Cancel or finish this processing attempt before changing files.');return;}
     const candidate=tool.multiple?[...this.files,...good]:good.slice(0,1);
-    try{validateInputBudget(candidate.map(file=>file.size));if(['workflow','batch'].includes(tool.id))validatePipelineFiles(candidate);if(tool.id==='redact-secure'&&candidate.some(file=>file.size>REDACTION_MAX_BYTES))throw Error('Permanent redaction supports a maximum input file size of 40 MB.');if(tool.id==='ocr'&&candidate.some(file=>file.size>40*1024*1024))throw Error('On-device OCR supports a maximum input file size of 40 MB.');}
+    try{validateInputBudget(candidate.map(file=>file.size));if(tool.id==='office-to-pdf')candidate.forEach(file=>prepareServerInput(file,serverSettings('office-to-pdf',{})));if(['workflow','batch'].includes(tool.id))validatePipelineFiles(candidate);if(tool.id==='redact-secure'&&candidate.some(file=>file.size>REDACTION_MAX_BYTES))throw Error('Permanent redaction supports a maximum input file size of 40 MB.');if(tool.id==='ocr'&&candidate.some(file=>file.size>40*1024*1024))throw Error('On-device OCR supports a maximum input file size of 40 MB.');}
     catch(error){
       const note=this.root.querySelector<HTMLElement>('.df2-upload-note');
       const message=error instanceof Error?error.message:'These files exceed the input limit.';
@@ -365,7 +367,7 @@ class DocFlowV2 {
       <div class="df2-worktop">${this.crumbs()}<div class="df2-work-actions"><button class="df2-subtle" data-change-files>＋ Add files</button><button class="df2-subtle" data-reset>Start over</button></div></div>
       <div class="df2-workflow">
         <aside class="df2-rail" aria-label="Document pages and files"><div class="df2-pane-title"><strong>${tool.multiple?'Documents':'Pages'}</strong><span>${this.files.length} ${this.files.length===1?'file':'files'}</span></div>
-          <div class="df2-rail-list">${this.files.map((file,i)=>`<article class="df2-file" data-file-index="${i}"><span class="df2-file-badge">PDF</span><div><b title="${esc(file.name)}">${esc(file.name)}</b><small>${bytes(file.size)}</small></div>
+          <div class="df2-rail-list">${this.files.map((file,i)=>`<article class="df2-file" data-file-index="${i}"><span class="df2-file-badge">${tool.id==='office-to-pdf'?esc(file.name.split('.').pop()!.toUpperCase()):'PDF'}</span><div><b title="${esc(file.name)}">${esc(file.name)}</b><small>${bytes(file.size)}</small></div>
           ${['workflow','batch'].includes(tool.id)?`<button type="button" data-preview-file="${i}" aria-label="Preview ${esc(file.name)}" aria-pressed="${this.activeFile===i}">Preview</button>`:''}
           ${tool.multiple?`<div class="df2-file-actions"><button data-move-up="${i}" aria-label="Move ${esc(file.name)} up" ${i===0?'disabled':''}>↑</button><button data-move-down="${i}" aria-label="Move ${esc(file.name)} down" ${i===this.files.length-1?'disabled':''}>↓</button><button data-remove-file="${i}" aria-label="Remove ${esc(file.name)}">×</button></div>`:''}</article>`).join('')}
           <div class="df2-page-thumbs" aria-label="Page thumbnails"></div></div>
@@ -389,7 +391,7 @@ class DocFlowV2 {
     <input hidden type="file" data-add-file accept="${tool.accepts}" ${tool.multiple?'multiple':''}>
     </main>`;
     const form=this.root.querySelector<HTMLFormElement>('[data-options]');if(form)restoreOptions(form,this.optionValues);
-    if(tool.id==='ocr')this.updateOcrMode();
+    if(['ocr','compress','office-to-pdf'].includes(tool.id))this.updateProcessingMode();
     form?.addEventListener('submit',event=>{event.preventDefault();void this.execute();});
     const pipelineHost=this.root.querySelector<HTMLElement>('[data-pipeline-editor]');
     if(pipelineHost){if(this.pipelineKind!==tool.id){this.pipelineDraft=createPipelineDraft(tool.id==='batch');this.pipelineKind=tool.id;}this.pipelineEditor=new V2PipelineEditor(pipelineHost,this.pipelineDraft,tool.id==='batch',()=>this.invalidateResult());const report=document.createElement('section');report.dataset.pipelineLive='';report.setAttribute('aria-label','File queue status');this.root.querySelector('.df2-page-stage')?.append(report);this.paintPipelineReport();}
@@ -405,6 +407,7 @@ class DocFlowV2 {
     const file=this.files[this.activeFile]??this.files[0],canvas=this.root.querySelector<HTMLCanvasElement>('[data-page-canvas]'),
       status=this.root.querySelector<HTMLElement>('[data-render-status]');
     if(!file||!canvas||!status)return;
+    if(this.tool?.id==='office-to-pdf'){canvas.hidden=true;const paper=this.root.querySelector<HTMLElement>('.df2-canvas-paper'),zoom=this.root.querySelector<HTMLElement>('.df2-zoom');if(paper)paper.hidden=true;if(zoom)zoom.hidden=true;status.textContent='Office preview is available after conversion. Your file stays on this device until you sign in, accept the upload notice and run conversion.';return;}
     if(this.tool?.id==='images-to-pdf'){
       const rail=this.root.querySelector<HTMLElement>('.df2-page-thumbs');
       if(rail){
@@ -533,7 +536,7 @@ class DocFlowV2 {
       return `<a class="df2-output" href="${url}" download="${esc(output.name)}"><span class="df2-output-icon">↓</span><span><b>${esc(output.name)}</b><small>${bytes(output.buffer.byteLength)} · Ready to download</small></span><strong>Download →</strong></a>`;
     }).join('');
     const compression=tool.id==='compress'?compressionSummary(value.info):null;
-    const compressionMarkup=compression?`<section class="df2-compression-summary" data-compression-summary aria-label="Compression results"><strong>${compression.savedBytes>0?compression.percent+'% smaller':'No size reduction'}</strong><p>Original ${bytes(compression.input)} → Result ${bytes(compression.output)}</p><p>${compression.recompressed} of ${compression.eligible} eligible JPEG images recompressed. Text and vector objects preserved.</p>${compression.savedBytes?'':'<p>This document may already be optimised or use unsupported image encodings. Your original is available below.</p>'}</section>`:'';
+    const compressionMarkup=compression?`<section class="df2-compression-summary" data-compression-summary aria-label="Compression results"><strong>${compression.savedBytes>0?compression.percent+'% smaller':'No size reduction'}</strong><p>Original ${bytes(compression.input)} → Result ${bytes(compression.output)}</p><p>${value.info?.provider?'Review image detail and page appearance in the exported PDF.':compression.recompressed+' of '+compression.eligible+' eligible JPEG images recompressed. Text and vector objects preserved.'}</p>${compression.savedBytes?'':'<p>This document may already be optimised or use unsupported image encodings. Your original is available below.</p>'}</section>`:'';
     const warning=value.info?.warning?`<p class="df2-review-warning" role="status">${esc(String(value.info.warning))}</p>`:'';
     this.root.innerHTML=this.header()+`<main id="df2-main" class="df2-result">${this.crumbs()}${this.progress()}
       <div class="df2-result-card"><span class="df2-result-check ${this.review?.kind==='pipeline'?'df2-result-queue':''}" aria-hidden="true">${this.review?.kind==='pipeline'?'≡':'✓'}</span><p class="df2-overline">${this.review?.kind==='pipeline'?'QUEUE FINISHED':'DOCUMENT READY'}</p>
@@ -558,13 +561,13 @@ class DocFlowV2 {
   private async execute():Promise<void>{
     const tool=this.tool;
     if(tool&&['workflow','batch'].includes(tool.id)){await this.executePipeline('run');return;}
-    if(this.busy||!tool||(!tool.operation&&!['ocr','redact-secure','preview','pdf-to-images','extract-images','text-search','compare','protect-pdf','unlock-pdf','repair-pdf'].includes(tool.id))||!this.files.length)return;
+    if(this.busy||!tool||(!tool.operation&&!['office-to-pdf','ocr','redact-secure','preview','pdf-to-images','extract-images','text-search','compare','protect-pdf','unlock-pdf','repair-pdf'].includes(tool.id))||!this.files.length)return;
     if(tool.id==='merge'&&this.files.length<2){this.message('Choose at least two PDFs to merge.');return;}
     if(tool.id==='compare'&&this.files.length!==2){this.message('Choose exactly two PDFs, A then B, to compare.');return;}
     const form=this.root.querySelector<HTMLFormElement>('[data-options]');
     if(!form)return;
     const options=readOptions(form);
-    if(tool.id==='ocr'&&form.querySelector<HTMLSelectElement>('[name=processingMode]')?.value==='server'){this.serverProcessing?.start(this.files[0]!);return;}
+    if(tool.id==='office-to-pdf'||['ocr','compress'].includes(tool.id)&&form.querySelector<HTMLSelectElement>('[name=processingMode]')?.value==='server'){this.serverProcessing?.start(this.files[0]!);return;}
     if(tool.id==='ocr'){if(!form.reportValidity())return;try{scanOptions(options);}catch(error){this.message(error instanceof Error?error.message:'Invalid recognition settings.');return;}}
     if(tool.id==='forms'){try{if(!this.formFiller)throw Error('Wait for the form preview to finish loading.');options.values=this.formFiller.exportValues();}catch(error){this.message(error instanceof Error?error.message:'Form fields could not be read.');return;}}
     if(tool.id==='redact-secure'){
@@ -742,15 +745,16 @@ class DocFlowV2 {
     const run=this.root.querySelector<HTMLButtonElement>('[data-run]');if(run)run.disabled=value;
     const cancel=this.root.querySelector<HTMLButtonElement>('[data-cancel-processing]');if(cancel)cancel.hidden=!value;
   }
-  private updateOcrMode():void{
-    const form=this.root.querySelector<HTMLFormElement>('[data-options]'),host=form?.querySelector<HTMLElement>('[data-ocr-server]'),local=form?.querySelector<HTMLFieldSetElement>('[data-ocr-local]');
-    if(!form||!host||!local)return;
-    const server=form.querySelector<HTMLSelectElement>('[name=processingMode]')?.value==='server'&&serverProcessingAvailable();
-    local.hidden=server;local.disabled=server;host.hidden=!server;
+  private updateProcessingMode():void{
+    const form=this.root.querySelector<HTMLFormElement>('[data-options]'),host=form?.querySelector<HTMLElement>('[data-processing-server]'),local=form?.querySelector<HTMLFieldSetElement>('[data-processing-local]');
+    if(!form||!host)return;
+    const server=(this.tool?.id==='office-to-pdf'||form.querySelector<HTMLSelectElement>('[name=processingMode]')?.value==='server')&&serverProcessingAvailable();
+    if(local){local.hidden=server;local.disabled=server;}host.hidden=!server;
     if(server&&!this.serverProcessing){
+      const operation=this.tool?.id==='compress'?'compress':this.tool?.id==='office-to-pdf'?'office-to-pdf':'ocr',toolId=this.tool!.id;
       this.serverProcessing=new V2ServerProcessing(host,form,result=>{
-        this.disposeReview?.();this.disposeReview=null;this.result=result;this.review={kind:'pdf',title:'Review server OCR PDF',buffer:result.outputs[0]!.buffer};this.serverResultReady=true;location.hash=base+'ocr/result';
-      },held=>this.setServerProcessing(held),message=>this.message(message));
+        this.disposeReview?.();this.disposeReview=null;this.result=result;this.review={kind:'pdf',title:operation==='ocr'?'Review server OCR PDF':operation==='compress'?'Review server compressed PDF':'Review converted Office PDF',buffer:result.outputs[0]!.buffer};this.serverResultReady=true;location.hash=base+toolId+'/result';
+      },held=>this.setServerProcessing(held),message=>this.message(message),operation);
       const values={...this.optionValues};delete values.processingMode;restoreOptions(form,values);
     }else if(!server&&this.serverProcessing&&!this.serverProcessing.held){this.serverProcessing.dispose();this.serverProcessing=null;host.replaceChildren();}
   }
@@ -797,7 +801,7 @@ class DocFlowV2 {
       target.setSelectionRange(start,start);
       return;
     }
-    if(target instanceof HTMLSelectElement&&target.name==='processingMode'){this.captureOptions();this.updateOcrMode();}
+    if(target instanceof HTMLSelectElement&&target.name==='processingMode'){this.captureOptions();this.updateProcessingMode();}
     if(target instanceof HTMLSelectElement&&target.name==='compressionPreset'){
       const preset=compressionPresets[target.value];
       const form=target.form;if(preset&&form){form.querySelector<HTMLInputElement>('[name=jpegQuality]')!.value=String(Math.round(preset.imageQuality*100));form.querySelector<HTMLInputElement>('[name=maxImagePixels]')!.value=String(preset.maxImageDimension);}

@@ -1,5 +1,6 @@
 import { tools, toolCategories } from '../tools/registry';
 import type { WorkerOperation } from '../pdf/types';
+import {serverProcessingAvailable} from './serverProcessing';
 
 export type V2Tool = {
   id: string; name: string; category: string; description: string; icon: string;
@@ -47,6 +48,7 @@ export const v2Tools: V2Tool[] = tools.map(t=>({
   readiness:nativeOperations[t.id] || ['ocr','workflow','batch','redact-secure','preview','pdf-to-images','extract-images','text-search','compare','protect-pdf','unlock-pdf','repair-pdf'].includes(t.id) ? 'active':'rebuilding',
   featured:['merge','split','compress','edit-pdf','organize','rotate'].includes(t.id)
 }));
+if(serverProcessingAvailable())v2Tools.push({id:'office-to-pdf',name:'Office to PDF',category:'convert',description:'Convert DOCX, PowerPoint or Excel files in a temporary server worker. Sign-in and explicit upload consent required.',icon:'▤',multiple:false,accepts:'.docx,.pptx,.xlsx',operation:null,readiness:'active',featured:false});
 export const activeTools=v2Tools.filter(t=>t.readiness==='active');
 export const getTool=(id:string): V2Tool|undefined=>v2Tools.find(t=>t.id===id);
 export const categoryLabel=(id:string):string=>groups.find(g=>g.id===id)?.label??'Tools';
