@@ -1,6 +1,6 @@
-# Processing backend acceptance — transport verified, browser integration in progress
+# Processing backend acceptance
 
-Native editing is published at f46b720. Authenticated hosted transport is verified at 4da69dd8. This stage has not enabled server document upload in the v2 UI.
+Authenticated hosted transport was verified at `4da69dd8`. Configured v2 previews expose OCR, compression and Office conversion with explicit account and consent controls. Normal processing remains disabled. The [browser checks](PROCESSING_BROWSER_UI_EVIDENCE.json) and the [actual worker evidence](PROCESSING_TRANSPORT_EVIDENCE.json) cover separate parts of the flow.
 
 ## Verified locally
 
@@ -38,7 +38,7 @@ The database function-body hashes match the committed migration source. The CLI-
 - Expand the hosted corpus beyond synthetic fixtures: Office font/layout fidelity, diacritics, mixed scan/text pages, skew/rotation and low-quality scans. Retain actual output artifacts for independent review.
 - Real broker ownership/load/error acceptance, beyond the completed SQL quota/lease/output probes. Existing preference tables are untouched.
 - Expand failure/load coverage beyond the now-verified authenticated broker, real VM cancellation, signed input/output validation, expiry and physical Storage API purge. Exercise cleanup cursor wrap/failure recovery at larger real-object scale.
-- Browser → authenticated job → verified output acceptance and explicit upload/retention notice. No remote capability is advertised until those pass.
+- Complete the protected preview journey from account sign-in and upload consent through an authenticated job and verified output. The browser controls and consent notice passed intercepted tests.
 - Repair/PDF-A and PDF → editable Office are separate evidence gates. No PDF/A or editable-Office fidelity claim is made here.
 
 Supabase advisors report the intentional deny-all private claims table as [RLS-without-policy](https://supabase.com/docs/guides/database/database-linter?lint=0008_rls_enabled_no_policy) (INFO). The existing project also has [leaked password protection disabled](https://supabase.com/docs/guides/auth/password-security#password-strength-and-leaked-password-protection) (WARN); no global Auth setting was changed by this migration.
@@ -53,8 +53,10 @@ The broker authenticates users with Supabase Auth and workers with hashed per-jo
 
 Application cleanup runs every five minutes through pg_cron/pg_net. Hosted Supabase preserves publicly readable queued request headers, so a lasting cleanup credential was retired. Each dispatch now creates a random, single-use token valid for sixty seconds. The broker validates the bounded request before atomically consuming it. Review found and reproduced the earlier validation-order bug; its regression and independent recheck passed. Actual network replay produced one 200 and one 401; malformed/oversized requests produced 400/413 while a valid request still succeeded. No provider/service credential is queued.
 
-Final advisors add `extension_in_public` for pg_net's extension registration; its actual objects are in `net`. The extension is non-relocatable. A guarded idle reinstall was not applied because the native confirmation expired; no schema or queue was changed by that attempt. Resolve or explicitly accept this registration warning during release review. The two earlier advisor findings remain. Normal document processing stays disabled; only the two synthetic acceptance owners are allowlisted while browser integration continues.
+Final advisors add `extension_in_public` for pg_net's extension registration; its actual objects are in `net`. The extension is non-relocatable. A guarded idle reinstall was not applied because the native confirmation expired; no schema or queue was changed by that attempt. Resolve or explicitly accept this registration warning during release review. The two earlier advisor findings remain. Normal document processing stays disabled; only the two synthetic acceptance owners are allowlisted for staging.
 
 The controlled acceptance runs only during an explicitly enabled preview build, with synthetic credentials in encrypted environment variables. It creates no HTTP test endpoint. [Protected output artifacts](https://docflow-processing-staging-dtq8xjgxs-bhuyainria-7304.vercel.app/acceptance/results.json) retain the actual synthetic PDFs for review. Engine snapshot retention remains seven days from 29 October; a durable production image and measured capacity/cost remain release gates.
 
 5 November read-only recheck: the same three advisor findings remain, including pg_net's [extension registration warning](https://supabase.com/docs/guides/database/database-linter?lint=0014_extension_in_public). Cleanup succeeded at 11:30 UTC; normal processing is disabled, with zero active jobs and zero Storage objects. The nine 30 October starts are outside the rolling 24-hour window and their terminal rows have aged out through the committed retention policy. The snapshot still exists and now reports expiry `2026-11-06T18:37:26.847Z` (seven days from its last recorded use). No VM start or image rebuild was performed during this UI continuation.
+
+The staging recheck at 17:24 Berlin time on 5 November found zero active jobs, stored objects and starts in the preceding 24 hours. The last successful cleanup was at 17:20. The current preview origin passed preflight and the retired origin was rejected. The existing snapshot expires at 19:37 Berlin time on 6 November. [Staging evidence](PROCESSING_BROWSER_UI_EVIDENCE.json).
