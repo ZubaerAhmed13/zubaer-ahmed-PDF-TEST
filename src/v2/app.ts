@@ -31,6 +31,7 @@ import {V2ServerProcessing,serverProcessingAvailable} from './serverProcessing';
 import {prepareServerInput,serverSettings} from './serverTools';
 import {configureWorkProtection} from '../app/workProtection';
 import {openOfflineDialog} from './offlineDialog';
+import {WorkspaceHistory,type RevisionDirection} from './workspaceHistory';
 
 const esc=(value:string):string=>value.replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]!));
 const bytes=(value:number):string=>value<1024?value+' B':value<1048576?(value/1024).toFixed(1)+' KB':(value/1048576).toFixed(1)+' MB';
@@ -38,6 +39,16 @@ const base='#/tools/';
 type Stage='upload'|'work'|'result';
 type Route={id:string|null;stage:Stage};
 type ResultHandoff={result:OperationResult;toolId:string;file:File};
+type WorkspaceRevision={id:string;stage:'work'|'result';size:number;state:{
+  files:File[];result:OperationResult|null;review:ReviewData|null;
+  optionValues:Record<string,string|boolean>;
+  editorDraft:ReturnType<typeof createEditorDraft>;organizerDraft:ReturnType<typeof createOrganizerDraft>;
+  redactionDraft:ReturnType<typeof createRedactionDraft>;formDraft:ReturnType<typeof createFormDraft>;
+  signatureInk:string;pipelineDraft:ReturnType<typeof createPipelineDraft>;pipelineKind:string|null;pipelineReport:PipelineReport|null;
+  selected:Set<number>;currentPage:number;activeFile:number;zoom:number;fitMode:'width'|'page';
+}};
+type WorkspaceTransition={kind:'handoff';handoff:ResultHandoff}|{kind:'revision';direction:RevisionDirection;revision:WorkspaceRevision};
+const clearsHistory=(id:string):boolean=>id==='redact-secure'||id==='protect-pdf';
 const route=():Route=>{
   const match=location.hash.match(/^#\/tools\/([a-z0-9-]+)(?:\/(work|result))?$/);
   return match?{id:match[1]??null,stage:(match[2]??'upload') as Stage}:{id:null,stage:'upload'};
@@ -151,6 +162,8 @@ class DocFlowV2 {
   private disposeReview:(()=>void)|null=null;
   private processingGeneration=0;
   private handoffCheck:AbortController|null=null;
+  private readonly revisions=new WorkspaceHistory<WorkspaceRevision>();
+  private revisionSwitching=false;
   private renderId=0;
   private currentPage=1;
   private zoom=1;
@@ -169,13 +182,13 @@ class DocFlowV2 {
   private stage:Stage='upload';
 
   constructor(private readonly root:HTMLDivElement){
-    configureWorkProtection(()=>({busy:this.busy||this.nativePreviewBusy||this.editor?.nativeBusy===true||this.serverProcessing?.held===true||this.handoffCheck!==null,hasWork:this.files.length>0||this.result!==null}),()=>{++this.processingGeneration;this.cancel();this.serverProcessing?.dispose();this.serverProcessing=null;this.files=[];this.resetDraft();void this.freePreview();});
+    configureWorkProtection(()=>({busy:this.busy||this.nativePreviewBusy||this.editor?.nativeBusy===true||this.serverProcessing?.held===true||this.handoffCheck!==null||this.revisionSwitching,hasWork:this.hasWork()}),()=>{++this.processingGeneration;this.cancel();this.serverProcessing?.dispose();this.serverProcessing=null;this.files=[];this.revisions.clear();this.resetDraft();void this.freePreview();});
     window.addEventListener('hashchange',()=>void this.navigate());
     this.root.addEventListener('click',event=>void this.click(event));
     this.root.addEventListener('input',event=>{this.onInput(event);this.invalidateOcrPreview(event);});
     this.root.addEventListener('change',event=>{this.invalidateResult();this.invalidateOcrPreview(event);});
     this.root.addEventListener('df2-draft-change',event=>{this.invalidateResult();if(this.tool?.id==='edit-pdf'&&this.stage==='work')void this.syncNativePreview((event as CustomEvent<{preview?:ArrayBuffer}>).detail?.preview);});
-    window.addEventListener('beforeunload',event=>{if(this.files.length){event.preventDefault();event.returnValue='';}});
+    window.addEventListener('beforeunload',event=>{if(this.hasWork()){event.preventDefault();event.returnValue='';}});
     window.addEventListener('keydown',event=>{
       if((event.metaKey||event.ctrlKey)&&event.key.toLowerCase()==='k'){
         event.preventDefault();
@@ -250,15 +263,22 @@ class DocFlowV2 {
     const input=this.root.querySelector<HTMLInputElement>('[data-tool-search]');
     input?.setSelectionRange(this.search.length,this.search.length);
   }
-  private async navigate(handoff?:ResultHandoff):Promise<void> {
+  private hasWork():boolean {
+    return this.files.length>0||this.result!==null||Boolean(this.revisions.peek('previous')||this.revisions.peek('next'));
+  }
+  private async navigate(transition?:WorkspaceTransition):Promise<void> {
     this.handoffCheck?.abort();
     this.handoffCheck=null;
     const requestedHash=location.hash;
     const next=route();
     const navigation=++this.navigationGeneration;
+    const handoff=transition?.kind==='handoff'?transition.handoff:undefined;
     const carried=handoff&&this.stage==='result'&&handoff.result===this.result
       &&handoff.toolId===next.id&&next.stage==='work'?handoff.file:null;
-    if(!carried&&next.id!==(this.tool?.id??null)&&this.files.length&&!window.confirm('Leave this document? Your current files and edits will be discarded.')){
+    const restoring=transition?.kind==='revision'&&transition.revision.id===next.id
+      &&transition.revision.stage===next.stage&&this.revisions.peek(transition.direction)===transition.revision?transition:null;
+    if(transition&&!carried&&!restoring){history.replaceState(null,'',this.lastRouteHash);return;}
+    if(!carried&&!restoring&&next.id!==(this.tool?.id??null)&&this.hasWork()&&!window.confirm('Leave this document? Your current files, edits and revisions will be discarded.')){
       history.replaceState(null,'',this.lastRouteHash);return;
     }
     if(this.serverProcessing?.held&&!this.serverResultReady){
@@ -285,7 +305,16 @@ class DocFlowV2 {
     await this.freePreview();
     if(navigation!==this.navigationGeneration||location.hash!==requestedHash)return;
     this.disposeReview?.();this.disposeReview=null;
-    if(changedTool){this.files=carried?[carried]:[];this.resetDraft();}
+    if(restoring){
+      const restored=this.revisions.move(restoring.direction,this.snapshotWorkspace())!;
+      this.resetDraft();
+      Object.assign(this,restored.state);
+    }else if(changedTool){
+      if(carried&&!clearsHistory(this.tool!.id))this.revisions.remember(this.snapshotWorkspace());
+      else this.revisions.clear();
+      this.files=carried?[carried]:[];
+      this.resetDraft();
+    }
     this.tool=next.id?getTool(next.id)??null:null;
     this.stage=next.stage;
     if(!this.tool){this.lastRouteHash=location.hash||'#/';this.home();return;}
@@ -298,13 +327,53 @@ class DocFlowV2 {
     if(this.stage==='upload')this.upload();
     else if(this.stage==='work')this.workspace();
     else this.results();
-    if(carried)window.scrollTo(0,0);
+    if(carried||restoring)window.scrollTo(0,0);
     const heading=this.root.querySelector<HTMLElement>('h1');if(heading){heading.tabIndex=-1;heading.focus({preventScroll:true});}
   }
   private captureOptions():void{
     if(this.signaturePad)this.signatureInk=this.signaturePad.getData();
     const form=this.root.querySelector<HTMLFormElement>('[data-options]');
     if(form){this.optionValues={...this.optionValues,...safeOptionValues(form)};this.optionValues._advancedOpen=form.querySelector<HTMLDetailsElement>('details')?.open??false;}
+  }
+  private snapshotWorkspace():WorkspaceRevision {
+    const {files,result,review,optionValues,editorDraft,organizerDraft,redactionDraft,formDraft,signatureInk,
+      pipelineDraft,pipelineKind,pipelineReport,selected,currentPage,activeFile,zoom,fitMode}=this;
+    const payloads=new Set<Blob|ArrayBuffer>(files);
+    result?.outputs.forEach(output=>payloads.add(output.buffer));
+    pipelineReport?.items.forEach(item=>{if(item.output)payloads.add(item.output.buffer);});
+    if(review?.kind==='pdf')payloads.add(review.buffer);
+    if(review?.kind==='images')review.images.forEach(image=>payloads.add(image.blob));
+    if(review?.kind==='compare'){
+      const {comparison}=review;
+      payloads.add(comparison.report);payloads.add(comparison.htmlReport);
+      for(const item of comparison.previews)if(item){payloads.add(item.left);payloads.add(item.right);payloads.add(item.overlay);}
+    }
+    const size=[...payloads].reduce((sum,part)=>sum+(part instanceof ArrayBuffer?part.byteLength:part.size),0)+signatureInk.length*2;
+    return {id:this.tool!.id,stage:this.stage==='result'?'result':'work',size,state:{files,result,review,
+      optionValues,editorDraft,organizerDraft,redactionDraft,formDraft,signatureInk,pipelineDraft,pipelineKind,pipelineReport,
+      selected:new Set(selected),currentPage,activeFile,zoom,fitMode}};
+  }
+  private revisionControls():string {
+    const previous=this.revisions.peek('previous'),next=this.revisions.peek('next');
+    if(!previous&&!next&&!this.revisions.limited)return '';
+    return `<nav class="df2-revisions" aria-label="Revision history">
+      <button type="button" class="df2-btn df2-btn-outline" data-revision="previous" ${previous?'':'disabled'}>← Previous revision</button>
+      <button type="button" class="df2-btn df2-btn-outline" data-revision="next" ${next?'':'disabled'}>Next revision →</button>
+      ${this.revisions.limited?'<p>Some revisions exceeded this tab’s history limit.</p>':''}
+    </nav>`;
+  }
+  private async openRevision(direction:RevisionDirection):Promise<void> {
+    const revision=this.revisions.peek(direction);
+    if(!revision||this.revisionSwitching||location.hash!==this.lastRouteHash)return;
+    if(this.busy||this.handoffCheck||this.nativePreviewBusy||this.editor?.nativeBusy||this.serverProcessing?.held){
+      this.message('Finish or cancel the current operation before switching revisions.');return;
+    }
+    const main=this.root.querySelector('main')!;
+    this.revisionSwitching=true;main.inert=true;
+    try{
+      history.pushState(null,'',base+revision.id+'/'+revision.stage);
+      await this.navigate({kind:'revision',direction,revision});
+    }finally{this.revisionSwitching=false;main.inert=false;}
   }
   private resetDraft():void{
     this.handoffCheck?.abort();
@@ -315,10 +384,10 @@ class DocFlowV2 {
     this.editorDraft=createEditorDraft();this.organizerDraft=createOrganizerDraft();this.optionValues={};
     this.redactionDraft=createRedactionDraft();
     this.formDraft=createFormDraft();
-    this.pipelineKind=null;this.pipelineReport=null;
+    this.pipelineDraft=createPipelineDraft(false);this.pipelineKind=null;this.pipelineReport=null;
     ++this.signatureGeneration;this.signaturePad?.dispose();this.signaturePad=null;this.signatureInk='';
     ++this.nativeGeneration;this.nativeOperation?.cancel();this.nativeOperation=null;this.nativePreviewSource=null;this.nativePreviewKey='null';this.nativePreviewBusy=false;
-    this.selected.clear();this.currentPage=1;this.activeFile=0;this.zoom=1;this.result=null;this.review=null;
+    this.selected.clear();this.currentPage=1;this.activeFile=0;this.zoom=1;this.fitMode='width';this.result=null;this.review=null;
     this.disposeReview?.();this.disposeReview=null;this.freeLinks();
   }
   private invalidateResult():void{if(this.stage==='work'){this.result=null;this.review=null;this.freeLinks();}}
@@ -374,7 +443,7 @@ class DocFlowV2 {
     const tool=this.tool;if(!tool)return;
     const good=files.filter(file=>tool.id==='office-to-pdf'?/\.(docx|pptx|xlsx)$/i.test(file.name):tool.accepts.includes('.png')?(/image\/(png|jpeg)/.test(file.type)||/\.(png|jpe?g)$/i.test(file.name)):(file.type==='application/pdf'||/\.pdf$/i.test(file.name)));
     if(good.length!==files.length||!good.length){const el=this.root.querySelector<HTMLElement>('.df2-upload-note'),message='Choose supported '+(tool.id==='office-to-pdf'?'DOCX/PPTX/XLSX':tool.accepts.includes('.png')?'JPG/PNG':'PDF')+' files only.';if(el)el.textContent=message;else this.message(message);return;}
-    if(this.busy||this.serverProcessing?.held){this.message('Cancel or finish this processing attempt before changing files.');return;}
+    if(this.revisionSwitching||this.busy||this.serverProcessing?.held){this.message('Cancel or finish this processing attempt before changing files.');return;}
     const candidate=tool.multiple?[...this.files,...good]:good.slice(0,1);
     try{validateToolFiles(tool,candidate);}
     catch(error){
@@ -385,7 +454,10 @@ class DocFlowV2 {
       return;
     }
     this.captureOptions();
-    if(this.files.length&&!tool.multiple){if(!window.confirm('Replace this document? Your current edits will be discarded.'))return;this.resetDraft();}
+    if(this.files.length&&!tool.multiple){
+      if(!window.confirm('Replace this document? Your current edits and revisions will be discarded.'))return;
+      this.revisions.clear();this.resetDraft();
+    }
     this.files=candidate;
     this.pipelineReport=null;
     this.selected.clear();this.currentPage=1;this.result=null;this.review=null;this.disposeReview?.();this.disposeReview=null;
@@ -403,6 +475,7 @@ class DocFlowV2 {
     this.pipelineEditor?.dispose();this.pipelineEditor=null;
     this.root.innerHTML=this.header()+`<main id="df2-main" class="df2-work ${tool.id==='organize'?'df2-organizing':''}"><h1 class="df2-sr-only">${esc(tool.name)} workspace</h1>
       <div class="df2-worktop">${this.crumbs()}<div class="df2-work-actions"><button class="df2-subtle" data-change-files>＋ Add files</button><button class="df2-subtle" data-reset>Start over</button></div></div>
+      ${this.revisionControls()}
       <div class="df2-workflow">
         <aside class="df2-rail" aria-label="Document pages and files"><div class="df2-pane-title"><strong>${tool.multiple?'Documents':'Pages'}</strong><span>${this.files.length} ${this.files.length===1?'file':'files'}</span></div>
           <div class="df2-rail-list">${this.files.map((file,i)=>`<article class="df2-file" data-file-index="${i}"><span class="df2-file-badge">${tool.id==='office-to-pdf'?esc(file.name.split('.').pop()!.toUpperCase()):'PDF'}</span><div><b title="${esc(file.name)}">${esc(file.name)}</b><small>${bytes(file.size)}</small></div>
@@ -583,7 +656,7 @@ class DocFlowV2 {
       <form data-result-handoff>
         ${pdfs.length>1?`<label class="df2-control">PDF result<select name="pdf" required><option value="">Choose a PDF</option>${pdfs.map((file,index)=>`<option value="${index}">${esc(file.name)}</option>`).join('')}</select></label>`:''}
         <label class="df2-control">Next tool<select name="tool" required><option value="">Choose a tool</option>${destinations.map(candidate=>`<option value="${candidate.id}">${esc(candidate.name)}</option>`).join('')}</select></label>
-        <p id="df2-handoff-note">Open the selected PDF on this device in a new workspace. The previous workspace closes, so download any other results you want to keep.</p>
+        <p id="df2-handoff-note">${clearsHistory(tool.id)?'Open the selected PDF on this device. This clears earlier workspaces from revision history.':'Open the selected PDF on this device. Previous revision can reopen the result while it remains in this tab’s history.'} Download any results you want to keep.</p>
         <button class="df2-btn df2-btn-outline" type="submit" aria-describedby="df2-handoff-note">Open selected PDF</button>
         <p data-handoff-status role="status"></p>
       </form>
@@ -598,6 +671,7 @@ class DocFlowV2 {
         <div class="df2-downloads">${downloads||'<p>No downloadable file for this inspection operation.</p>'}</div>
         ${this.review?.kind==='pipeline'&&value.outputs.length?'<button type="button" class="df2-btn df2-btn-outline" data-pipeline-zip>Prepare ZIP of completed PDFs</button><p data-pipeline-zip-status role="status"></p>':''}
         <div class="df2-result-actions"><button class="df2-btn df2-btn-outline" data-return-edit>Return to editing</button><button class="df2-btn df2-btn-outline" data-again>Start another file</button><a class="df2-btn df2-btn-subtle" href="#/">See all tools →</a></div>
+        ${this.revisionControls()}
         ${handoff}
         ${this.review?'<div data-v2-review-container></div>':''}
         ${value.info&&this.review?.kind!=='pipeline'?`<details class="df2-result-info"><summary>Processing details</summary><pre>${esc(JSON.stringify(value.info,null,2))}</pre></details>`:''}
@@ -625,7 +699,7 @@ class DocFlowV2 {
   private async openResultInTool(form:HTMLFormElement,handoff:ResultHandoff,destination:V2Tool):Promise<void>{
     const current=()=>form.isConnected&&this.stage==='result'&&this.result===handoff.result
       &&location.hash===this.lastRouteHash;
-    if(this.handoffCheck||!current())return;
+    if(this.handoffCheck||this.revisionSwitching||!current())return;
 
     const controller=new AbortController();
     this.handoffCheck=controller;
@@ -650,9 +724,10 @@ class DocFlowV2 {
     }
     if(!current()||controller.signal.aborted)return;
     history.pushState(null,'',base+handoff.toolId+'/work');
-    await this.navigate(handoff);
+    await this.navigate({kind:'handoff',handoff});
   }
   private async execute():Promise<void>{
+    if(this.revisionSwitching)return;
     const tool=this.tool;
     if(tool&&['workflow','batch'].includes(tool.id)){await this.executePipeline('run');return;}
     if(this.busy||!tool||(!tool.operation&&!['office-to-pdf','ocr','redact-secure','preview','pdf-to-images','extract-images','text-search','compare','protect-pdf','unlock-pdf','repair-pdf'].includes(tool.id))||!this.files.length)return;
@@ -792,6 +867,7 @@ class DocFlowV2 {
       if(tool.id==='sign-visual'&&generation===this.processingGeneration){result.outputs[0]!.name='visually-signed.pdf';this.review={kind:'pdf',title:'Review visually signed PDF',buffer:result.outputs[0]!.buffer};}
       if(tool.id==='forms'&&generation===this.processingGeneration)this.review={kind:'pdf',title:'Review '+(options.flatten?'flattened':'filled')+' PDF form',buffer:result.outputs[0]!.buffer};
       if(generation!==this.processingGeneration)return;
+      if(clearsHistory(tool.id))this.revisions.clear();
       this.result=result;
       this.busy=false;
       this.cancel=()=>{};
@@ -802,7 +878,7 @@ class DocFlowV2 {
   }
   private paintPipelineReport():void{const host=this.root.querySelector<HTMLElement>('[data-pipeline-live]');if(host){host.replaceChildren();if(this.pipelineReport)mountPipelineReport(host,this.pipelineReport);}}
   private async executePipeline(mode:'run'|'retry'|'check'):Promise<void>{
-    if(this.busy||!this.pipelineEditor||!this.files.length||!this.tool)return;
+    if(this.revisionSwitching||this.busy||!this.pipelineEditor||!this.files.length||!this.tool)return;
     const generation=++this.processingGeneration,tool=this.tool;let report:PipelineReport;
     try{
       this.pipelineEditor.cancelPendingImport();
@@ -936,13 +1012,16 @@ class DocFlowV2 {
     if(category){this.filter=category.dataset.category??'all';this.home();return;}
     if(target.closest('[data-open-offline]')){openOfflineDialog(target.closest<HTMLElement>('[data-open-offline]'));return;}
     if(target.closest('[data-open-search]')){this.openSearch();return;}
+    if(this.revisionSwitching)return;
+    const revision=target.closest<HTMLElement>('[data-revision]')?.dataset.revision;
+    if(revision==='previous'||revision==='next'){await this.openRevision(revision);return;}
     if(target.closest('[data-ocr-preview]')){await this.previewOcr();return;}
     if(target.closest('[data-cancel-processing]')){if(this.serverProcessing?.held){await this.serverProcessing.cancel();return;}if(this.tool&&['workflow','batch'].includes(this.tool.id)){this.cancel();this.message('Cancelling queue · completed PDFs will remain available.');return;}++this.processingGeneration;this.cancel();this.cancel=()=>{};this.setProcessing(false);this.message('Cancelled · your document and settings are ready to use.');return;}
     const t=target.closest<HTMLElement>('[data-card-tool]');
     if(t&&getTool(t.dataset.cardTool??'')?.readiness!=='active'){event.preventDefault();const tool=getTool(t.dataset.cardTool??'');if(tool){this.tool=tool;this.unavailable();}return;}
     if(target.closest('[data-return-edit]')){location.hash=base+this.tool!.id+'/work';return;}
     if(target.closest('[data-show-grid]')){this.root.querySelector('.df2-work')?.classList.remove('df2-page-preview');this.root.querySelector<HTMLButtonElement>('[data-show-grid]')!.hidden=true;return;}
-    if(target.closest('[data-reset],[data-again]')){if(this.serverProcessing?.held){this.message('Cancel or finish this server attempt before starting over.');return;}if(this.stage==='work'&&this.files.length&&!window.confirm('Start over? Your current files and edits will be discarded.'))return;this.files=[];this.resetDraft();if(this.tool)location.hash=base+this.tool.id;else location.hash='#/';return;}
+    if(target.closest('[data-reset],[data-again]')){if(this.serverProcessing?.held){this.message('Cancel or finish this server attempt before starting over.');return;}if(this.stage==='work'&&this.hasWork()&&!window.confirm('Start over? Your current files, edits and revisions will be discarded.'))return;this.files=[];this.revisions.clear();this.resetDraft();if(this.tool)location.hash=base+this.tool.id;else location.hash='#/';return;}
     if(target.closest('[data-change-files]')){this.root.querySelector<HTMLInputElement>('[data-add-file]')?.click();return;}
     if(target.closest('[data-pipeline-check]')){await this.executePipeline('check');return;}
     if(target.closest('[data-pipeline-retry]')){await this.executePipeline('retry');return;}
@@ -955,7 +1034,7 @@ class DocFlowV2 {
       this.pipelineReport=null;
       if(remove)this.files.splice(index,1);
       else {const next=index+(up?-1:1);if(next<0||next>=this.files.length)return;[this.files[index],this.files[next]]=[this.files[next]!,this.files[index]!];}
-      if(!this.files.length){location.hash=base+this.tool!.id;return;}
+      if(!this.files.length){this.revisions.clear();location.hash=base+this.tool!.id;return;}
       this.workspace();return;
     }
     const thumb=target.closest<HTMLElement>('[data-page]');

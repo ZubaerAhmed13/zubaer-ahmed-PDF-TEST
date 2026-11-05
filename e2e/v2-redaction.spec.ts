@@ -61,3 +61,31 @@ test('a cancelled drag removes its temporary black mask before export is allowed
   await page.mouse.move(box.x+box.width*.1,box.y+box.height*.2);await page.mouse.down();await page.mouse.move(box.x+box.width*.4,box.y+box.height*.35,{steps:6});await expect(page.locator('[data-redact-mask]')).toHaveCount(2);
   await page.locator('[data-redact-layer]').dispatchEvent('pointercancel');await page.mouse.up();await expect(page.locator('[data-redact-mask]')).toHaveCount(1);await expect(page.locator('[data-redact-count]')).toContainText('1 area');
 });
+
+test('completing permanent redaction removes unredacted workspaces from revision history',async({page})=>{
+  await page.goto(base+'#/tools/rotate');
+  await page.locator('[data-file-input]').setInputFiles(await fixture(1));
+  await page.locator('[data-run]').click();
+  const handoff=async(tool:string)=>{
+    await page.getByText('Use PDF in another tool',{exact:true}).click();
+    await page.getByRole('combobox',{name:'Next tool'}).selectOption(tool);
+    await page.getByRole('button',{name:'Open selected PDF'}).click();
+  };
+  await handoff('redact-secure');
+  await expect(page.getByRole('button',{name:/Previous revision/})).toBeEnabled();
+  await expect(page.locator('[data-redact-layer]')).toBeVisible();
+  await mark(page);
+  await page.locator('[name=confirmRasterization]').check();
+  await page.locator('[data-run]').click();
+  await expect(page.locator('[data-pdf-review-status]')).toContainText('Page 1 / 1');
+  const history=page.getByRole('navigation',{name:'Revision history'});
+  await expect(history).toHaveCount(0);
+  await handoff('preview');
+  await expect(page.locator('.df2-file')).toContainText('redacted');
+  await expect(history).toHaveCount(0);
+  page.once('dialog',dialog=>dialog.accept());
+  await page.goBack();
+  await expect(page).toHaveURL(/#\/tools\/redact-secure$/);
+  await expect(page.locator('[data-file-input]')).toBeVisible();
+  await expect(page.locator('.df2-output')).toHaveCount(0);
+});

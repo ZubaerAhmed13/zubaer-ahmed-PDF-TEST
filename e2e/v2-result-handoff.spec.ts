@@ -1,8 +1,16 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Locator, type Page } from '@playwright/test';
 import { PDFDocument } from 'pdf-lib';
 import { readFile } from 'node:fs/promises';
 
 const base = '/zubaer-ahmed-PDF-TEST/';
+
+async function downloadBytes(page: Page, link: Locator): Promise<Buffer> {
+  const pending = page.waitForEvent('download');
+  await link.click();
+  const path = await (await pending).path();
+  if (!path) throw Error('Missing PDF download');
+  return readFile(path);
+}
 
 test('opens the selected split PDF in a second tool without uploading again', async ({ page, browserName }, info) => {
   const source = await PDFDocument.create();
@@ -28,6 +36,7 @@ test('opens the selected split PDF in a second tool without uploading again', as
   await page.getByRole('combobox', { name: 'Output format' }).selectOption('pdfs');
   await page.locator('[data-run]').click();
   await expect(page.locator('.df2-output')).toHaveCount(2);
+  const splitBytes = await downloadBytes(page, page.locator('.df2-output[download="split-02.pdf"]'));
 
   await page.getByText('Use PDF in another tool', { exact: true }).click();
   await page.getByRole('combobox', { name: 'PDF result' }).selectOption('1');
@@ -47,14 +56,49 @@ test('opens the selected split PDF in a second tool without uploading again', as
   await page.getByRole('combobox', { name: 'Rotation', exact: true }).selectOption('270');
   await page.locator('[data-run]').click();
 
-  const downloading = page.waitForEvent('download');
-  await page.locator('.df2-output').click();
-  const path = await (await downloading).path();
-  if (!path) throw Error('Missing rotated PDF');
-  const result = await PDFDocument.load(await readFile(path));
+  const rotatedBytes = await downloadBytes(page, page.locator('.df2-output'));
+  const result = await PDFDocument.load(rotatedBytes);
   expect(result.getPageCount()).toBe(1);
   expect(result.getPage(0).getWidth()).toBe(477);
   expect(result.getPage(0).getRotation().angle).toBe(270);
+
+  const previous = page.getByRole('button', { name: /Previous revision/ });
+  const next = page.getByRole('button', { name: /Next revision/ });
+  await previous.click();
+  await expect(page).toHaveURL(/#\/tools\/split\/result$/);
+  expect((await downloadBytes(page, page.locator('.df2-output[download="split-02.pdf"]'))).equals(splitBytes)).toBe(true);
+  await next.click();
+  await expect(page).toHaveURL(/#\/tools\/rotate\/result$/);
+  expect((await downloadBytes(page, page.locator('.df2-output'))).equals(rotatedBytes)).toBe(true);
+
+  await previous.click();
+  await page.getByRole('button', { name: 'Return to editing' }).click();
+  await page.getByRole('button', { name: 'Options', exact: true }).click();
+  await expect(page.getByRole('combobox', { name: 'Split method' })).toHaveValue('individual');
+  await expect(page.getByRole('combobox', { name: 'Output format' })).toHaveValue('pdfs');
+  await page.locator('[data-run]').click();
+  await page.getByText('Use PDF in another tool', { exact: true }).click();
+  await page.getByRole('combobox', { name: 'PDF result' }).selectOption('0');
+  await nextTool.selectOption('merge');
+  await page.getByRole('button', { name: 'Open selected PDF' }).click();
+  await expect(page.locator('.df2-file')).toContainText('split-01.pdf');
+  await expect(next).toBeDisabled();
+  const additional = { name: 'additional.pdf', mimeType: 'application/pdf', buffer: splitBytes };
+  await page.locator('[data-add-file]').setInputFiles(additional);
+  await expect(page.locator('.df2-file')).toHaveCount(2);
+  await page.getByRole('button', { name: 'Remove additional.pdf' }).click();
+  await expect(page.locator('.df2-file')).toHaveCount(1);
+  await page.locator('[data-add-file]').setInputFiles(additional);
+  await expect(page.locator('.df2-file')).toHaveCount(2);
+  await previous.click();
+  await next.click();
+  await expect(page).toHaveURL(/#\/tools\/merge\/work$/);
+  await expect(page.locator('.df2-file')).toHaveText([/split-01.pdf/, /additional.pdf/]);
+
+  page.once('dialog', dialog => dialog.accept());
+  await page.getByRole('button', { name: 'Start over', exact: true }).click();
+  await expect(page.locator('[data-file-input]')).toBeVisible();
+  await expect(page.getByRole('navigation', { name: 'Revision history' })).toHaveCount(0);
 });
 
 test('keeps the output downloadable after a rejected or cancelled handoff', async ({ page }) => {
