@@ -14,6 +14,7 @@ import {
   rgb
 } from 'pdf-lib';
 import { PdfOperationError } from './errors';
+import { MAX_FILE_BYTES, MAX_TOTAL_BYTES } from './resourceBudget';
 import { parsePageOrder, parsePageSelection, parseSplitRanges } from './pageRanges';
 import {pdfChoiceOptions,setPdfChoiceValues,updatePdfChoiceAppearance} from './formChoices';
 import type { InputFile, OperationProgress, OperationResult, OutputFile } from './types';
@@ -97,19 +98,26 @@ export async function splitPdf(files: InputFile[], options: Record<string, unkno
   } else if (mode === 'selected') groups = [parsePageSelection(asString(options.pages), total)];
   else groups = parseSplitRanges(asString(options.ranges, `1-${total}`), total);
 
+  const separate = options.individualPdfResults === true;
   const zip = new JSZip();
   const outputs: OperationResult['outputs'] = [];
+  let totalOutput = 0;
   for (let index = 0; index < groups.length; index += 1) {
     const doc = await PDFDocument.create();
     const pages = await doc.copyPages(source, groups[index]!);
     pages.forEach((page) => doc.addPage(page));
     const name = `split-${String(index + 1).padStart(2, '0')}.pdf`;
     const bytes = await savePdf(doc);
-    if (options.individualPdfResults === true) outputs.push(pdfOutput(name, bytes));
-    else zip.file(name, bytes);
+    if (separate) {
+      totalOutput += bytes.byteLength;
+      if (bytes.byteLength > MAX_FILE_BYTES || totalOutput > MAX_TOTAL_BYTES) {
+        throw new PdfOperationError('RESOURCE_LIMIT', 'Separate PDFs are limited to 150 MB each and 250 MB combined. Choose ZIP or split fewer pages.');
+      }
+      outputs.push(pdfOutput(name, bytes));
+    } else zip.file(name, bytes);
     progress(emit, 'processing', index + 1, groups.length, `Created ${index + 1} of ${groups.length} files`);
   }
-  if (options.individualPdfResults === true) return { outputs };
+  if (separate) return { outputs };
   progress(emit, 'writing', groups.length, groups.length, 'Creating ZIP archive');
   const bytes = await zip.generateAsync({ type: 'uint8array', compression: 'DEFLATE', compressionOptions: { level: 6 } });
   return { outputs: [{ name: 'split-pdf.zip', type: 'application/zip', buffer: bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer }] };

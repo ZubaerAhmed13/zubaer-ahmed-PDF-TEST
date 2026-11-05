@@ -37,6 +37,7 @@ const bytes=(value:number):string=>value<1024?value+' B':value<1048576?(value/10
 const base='#/tools/';
 type Stage='upload'|'work'|'result';
 type Route={id:string|null;stage:Stage};
+type ResultHandoff={result:OperationResult;toolId:string;file:File};
 const route=():Route=>{
   const match=location.hash.match(/^#\/tools\/([a-z0-9-]+)(?:\/(work|result))?$/);
   return match?{id:match[1]??null,stage:(match[2]??'upload') as Stage}:{id:null,stage:'upload'};
@@ -62,7 +63,7 @@ function toolOptions(id:string):string{
     case 'pdf-to-images': return select('format','Image format',[['png','PNG · lossless'],['jpeg','JPG · smaller']])+select('scale','Image resolution',[['1','Standard · 1×'],['1.5','High · 1.5×'],['2','Very high · 2×']])+`<p class="df2-organize-warning">Converts the visual appearance of each page into an image. Original selectable text and PDF vector objects are not preserved in images.</p>`;
     case 'organize': return `<p class="df2-organize-warning">Arrange page cards in the document area. Reordering preserves page contents. Duplicated pages may increase file size.</p>`;
     case 'compress': return (serverProcessingAvailable()?select('processingMode','Processing location',[['device','On this device'],['server','Temporary server processing']]):'')+'<fieldset data-processing-local class="df2-ocr-local"><legend>On-device compression</legend>'+select('compressionPreset','Image compression',[['balanced','Balanced quality'],['quality','Higher image quality'],['small','Smaller images'],['custom','Custom settings']])+`<details class="df2-compression-details"><summary>Advanced compression</summary><label class="df2-control">JPEG image quality (%)<input name="jpegQuality" type="number" min="50" max="95" step="1" value="79"></label><label class="df2-control">Maximum image dimension (px)<input name="maxImagePixels" type="number" min="900" max="5000" step="1" value="2200"></label><p>Images above this pixel size are downsampled. This is a pixel limit, not DPI. Smaller images and lower quality can reduce detail.</p></details><p class="df2-organize-warning">Recompresses eligible RGB JPEG images while preserving text and vectors. Other encodings are left unchanged. Results depend on the document.</p></fieldset><div data-processing-server hidden></div>`;
-    case 'split':return select('mode','Split method',[['selected','Selected pages'],['ranges','Page ranges'],['individual','Individual pages'],['every','Every N pages']])+field('pages','Pages to extract','1')+field('ranges','Separate ranges (semicolon)','1-2;3-4')+field('every','Pages in each part','5','number');
+    case 'split':return select('mode','Split method',[['selected','Selected pages'],['ranges','Page ranges'],['individual','Individual pages'],['every','Every N pages']])+field('pages','Pages to extract','1')+field('ranges','Separate ranges (semicolon)','1-2;3-4')+field('every','Pages in each part','5','number')+select('splitOutput','Output format',[['zip','ZIP archive'],['pdfs','Separate PDFs']]);
     case 'remove-pages':return field('pages','Pages to remove','');
     case 'extract-pages':return field('pages','Pages to extract','');
     case 'rotate':return select('target','Rotate',[['all','All pages'],['odd','Odd pages'],['even','Even pages'],['selected','Selected pages']])+select('degrees','Rotation',[['90','90° clockwise'],['180','180°'],['270','270° clockwise']])+field('pages','Selected pages (when needed)','');
@@ -89,6 +90,31 @@ function range(pages:Iterable<number>):string{
   for(const p of nums.slice(1)){if(p===last+1)last=p;else{parts.push(start===last?String(start):start+'-'+last);start=last=p;}}
   parts.push(start===last?String(start):start+'-'+last);
   return parts.join(',');
+}
+function validateToolFiles(tool:V2Tool,files:readonly File[]):void{
+  validateInputBudget(files.map(file=>file.size));
+  if(tool.id==='office-to-pdf')files.forEach(file=>prepareServerInput(file,serverSettings('office-to-pdf',{})));
+  if(['workflow','batch'].includes(tool.id))validatePipelineFiles(files);
+  if(tool.id==='redact-secure'&&files.some(file=>file.size>REDACTION_MAX_BYTES))throw Error('Permanent redaction supports a maximum input file size of 40 MB.');
+  if(tool.id==='ocr'&&files.some(file=>file.size>40*1024*1024))throw Error('On-device OCR supports a maximum input file size of 40 MB.');
+}
+async function validateHandoffFile(tool:V2Tool,file:File,signal:AbortSignal):Promise<void>{
+  validateToolFiles(tool,[file]);
+  if(await file.slice(0,5).text()!=='%PDF-')throw Error('The selected result does not contain a valid PDF header.');
+  // Unlock and Repair are meant to handle files the regular preview cannot open.
+  if(tool.id==='unlock-pdf'||tool.id==='repair-pdf')return;
+  const buffer=await file.arrayBuffer();
+  signal.throwIfAborted();
+  const inspection=runWorkerOperation('document-inspect',[{name:file.name,type:file.type,buffer}],{},()=>{});
+  signal.addEventListener('abort',inspection.cancel,{once:true});
+  try{
+    const report=(await inspection.result).info?.inspection;
+    if(typeof report!=='string')throw Error('The PDF could not be inspected.');
+    const {pages}=JSON.parse(report) as {pages:number};
+    if(tool.id==='redact-secure'&&pages>REDACTION_MAX_PAGES){
+      throw Error('Permanent redaction supports at most 15 pages. Split this document first.');
+    }
+  }finally{signal.removeEventListener('abort',inspection.cancel);}
 }
 class DocFlowV2 {
   private files:File[]=[];
@@ -124,6 +150,7 @@ class DocFlowV2 {
   private review:ReviewData|null=null;
   private disposeReview:(()=>void)|null=null;
   private processingGeneration=0;
+  private handoffCheck:AbortController|null=null;
   private renderId=0;
   private currentPage=1;
   private zoom=1;
@@ -142,7 +169,7 @@ class DocFlowV2 {
   private stage:Stage='upload';
 
   constructor(private readonly root:HTMLDivElement){
-    configureWorkProtection(()=>({busy:this.busy||this.nativePreviewBusy||this.editor?.nativeBusy===true||this.serverProcessing?.held===true,hasWork:this.files.length>0||this.result!==null}),()=>{++this.processingGeneration;this.cancel();this.serverProcessing?.dispose();this.serverProcessing=null;this.files=[];this.resetDraft();void this.freePreview();});
+    configureWorkProtection(()=>({busy:this.busy||this.nativePreviewBusy||this.editor?.nativeBusy===true||this.serverProcessing?.held===true||this.handoffCheck!==null,hasWork:this.files.length>0||this.result!==null}),()=>{++this.processingGeneration;this.cancel();this.serverProcessing?.dispose();this.serverProcessing=null;this.files=[];this.resetDraft();void this.freePreview();});
     window.addEventListener('hashchange',()=>void this.navigate());
     this.root.addEventListener('click',event=>void this.click(event));
     this.root.addEventListener('input',event=>{this.onInput(event);this.invalidateOcrPreview(event);});
@@ -223,11 +250,15 @@ class DocFlowV2 {
     const input=this.root.querySelector<HTMLInputElement>('[data-tool-search]');
     input?.setSelectionRange(this.search.length,this.search.length);
   }
-  private async navigate():Promise<void> {
+  private async navigate(handoff?:ResultHandoff):Promise<void> {
+    this.handoffCheck?.abort();
+    this.handoffCheck=null;
     const requestedHash=location.hash;
     const next=route();
     const navigation=++this.navigationGeneration;
-    if(next.id!==(this.tool?.id??null)&&this.files.length&&!window.confirm('Leave this document? Your current files and edits will be discarded.')){
+    const carried=handoff&&this.stage==='result'&&handoff.result===this.result
+      &&handoff.toolId===next.id&&next.stage==='work'?handoff.file:null;
+    if(!carried&&next.id!==(this.tool?.id??null)&&this.files.length&&!window.confirm('Leave this document? Your current files and edits will be discarded.')){
       history.replaceState(null,'',this.lastRouteHash);return;
     }
     if(this.serverProcessing?.held&&!this.serverResultReady){
@@ -254,7 +285,7 @@ class DocFlowV2 {
     await this.freePreview();
     if(navigation!==this.navigationGeneration||location.hash!==requestedHash)return;
     this.disposeReview?.();this.disposeReview=null;
-    if(changedTool){this.files=[];this.resetDraft();}
+    if(changedTool){this.files=carried?[carried]:[];this.resetDraft();}
     this.tool=next.id?getTool(next.id)??null:null;
     this.stage=next.stage;
     if(!this.tool){this.lastRouteHash=location.hash||'#/';this.home();return;}
@@ -267,6 +298,7 @@ class DocFlowV2 {
     if(this.stage==='upload')this.upload();
     else if(this.stage==='work')this.workspace();
     else this.results();
+    if(carried)window.scrollTo(0,0);
     const heading=this.root.querySelector<HTMLElement>('h1');if(heading){heading.tabIndex=-1;heading.focus({preventScroll:true});}
   }
   private captureOptions():void{
@@ -275,6 +307,8 @@ class DocFlowV2 {
     if(form){this.optionValues={...this.optionValues,...safeOptionValues(form)};this.optionValues._advancedOpen=form.querySelector<HTMLDetailsElement>('details')?.open??false;}
   }
   private resetDraft():void{
+    this.handoffCheck?.abort();
+    this.handoffCheck=null;
     // The outgoing form belongs to the discarded document. A following route
     // transition must not capture it back into the new session.
     this.root.querySelector('[data-options]')?.removeAttribute('data-options');
@@ -342,7 +376,7 @@ class DocFlowV2 {
     if(good.length!==files.length||!good.length){const el=this.root.querySelector<HTMLElement>('.df2-upload-note'),message='Choose supported '+(tool.id==='office-to-pdf'?'DOCX/PPTX/XLSX':tool.accepts.includes('.png')?'JPG/PNG':'PDF')+' files only.';if(el)el.textContent=message;else this.message(message);return;}
     if(this.busy||this.serverProcessing?.held){this.message('Cancel or finish this processing attempt before changing files.');return;}
     const candidate=tool.multiple?[...this.files,...good]:good.slice(0,1);
-    try{validateInputBudget(candidate.map(file=>file.size));if(tool.id==='office-to-pdf')candidate.forEach(file=>prepareServerInput(file,serverSettings('office-to-pdf',{})));if(['workflow','batch'].includes(tool.id))validatePipelineFiles(candidate);if(tool.id==='redact-secure'&&candidate.some(file=>file.size>REDACTION_MAX_BYTES))throw Error('Permanent redaction supports a maximum input file size of 40 MB.');if(tool.id==='ocr'&&candidate.some(file=>file.size>40*1024*1024))throw Error('On-device OCR supports a maximum input file size of 40 MB.');}
+    try{validateToolFiles(tool,candidate);}
     catch(error){
       const note=this.root.querySelector<HTMLElement>('.df2-upload-note');
       const message=error instanceof Error?error.message:'These files exceed the input limit.';
@@ -535,10 +569,25 @@ class DocFlowV2 {
     if(!value){this.workspace();return;}
     this.disposeReview?.();this.disposeReview=null;
     this.freeLinks();
-    const downloads=value.outputs.map(output=>{
-      const url=URL.createObjectURL(new Blob([output.buffer],{type:output.type}));this.links.push(url);
-      return `<a class="df2-output" href="${url}" download="${esc(output.name)}"><span class="df2-output-icon">↓</span><span><b>${esc(output.name)}</b><small>${bytes(output.buffer.byteLength)} · Ready to download</small></span><strong>Download →</strong></a>`;
+    const files=value.outputs.map(output=>new File([output.buffer],output.name,{type:output.type}));
+    const downloads=files.map(file=>{
+      const url=URL.createObjectURL(file);this.links.push(url);
+      return `<a class="df2-output" href="${url}" download="${esc(file.name)}"><span class="df2-output-icon">↓</span><span><b>${esc(file.name)}</b><small>${bytes(file.size)} · Ready to download</small></span><strong>Download →</strong></a>`;
     }).join('');
+    const pdfs=files.filter(file=>file.type==='application/pdf'&&file.size>0);
+    const destinations=activeTools.filter(candidate=>candidate.id!==tool.id
+      &&candidate.accepts.split(',').includes('application/pdf')
+      &&(tool.id!=='protect-pdf'||candidate.id==='unlock-pdf'));
+    const handoff=pdfs.length&&destinations.length?`<details class="df2-result-handoff">
+      <summary>Use PDF in another tool</summary>
+      <form data-result-handoff>
+        ${pdfs.length>1?`<label class="df2-control">PDF result<select name="pdf" required><option value="">Choose a PDF</option>${pdfs.map((file,index)=>`<option value="${index}">${esc(file.name)}</option>`).join('')}</select></label>`:''}
+        <label class="df2-control">Next tool<select name="tool" required><option value="">Choose a tool</option>${destinations.map(candidate=>`<option value="${candidate.id}">${esc(candidate.name)}</option>`).join('')}</select></label>
+        <p id="df2-handoff-note">Open the selected PDF on this device in a new workspace. The previous workspace closes, so download any other results you want to keep.</p>
+        <button class="df2-btn df2-btn-outline" type="submit" aria-describedby="df2-handoff-note">Open selected PDF</button>
+        <p data-handoff-status role="status"></p>
+      </form>
+    </details>`:'';
     const compression=tool.id==='compress'?compressionSummary(value.info):null;
     const compressionMarkup=compression?`<section class="df2-compression-summary" data-compression-summary aria-label="Compression results"><strong>${compression.savedBytes>0?compression.percent+'% smaller':'No size reduction'}</strong><p>Original ${bytes(compression.input)} → Result ${bytes(compression.output)}</p><p>${value.info?.provider?'Review image detail and page appearance in the exported PDF.':compression.recompressed+' of '+compression.eligible+' eligible JPEG images recompressed. Text and vector objects preserved.'}</p>${compression.savedBytes?'':'<p>This document may already be optimised or use unsupported image encodings. Your original is available below.</p>'}</section>`:'';
     const warning=value.info?.warning?`<p class="df2-review-warning" role="status">${esc(String(value.info.warning))}</p>`:'';
@@ -549,9 +598,20 @@ class DocFlowV2 {
         <div class="df2-downloads">${downloads||'<p>No downloadable file for this inspection operation.</p>'}</div>
         ${this.review?.kind==='pipeline'&&value.outputs.length?'<button type="button" class="df2-btn df2-btn-outline" data-pipeline-zip>Prepare ZIP of completed PDFs</button><p data-pipeline-zip-status role="status"></p>':''}
         <div class="df2-result-actions"><button class="df2-btn df2-btn-outline" data-return-edit>Return to editing</button><button class="df2-btn df2-btn-outline" data-again>Start another file</button><a class="df2-btn df2-btn-subtle" href="#/">See all tools →</a></div>
+        ${handoff}
         ${this.review?'<div data-v2-review-container></div>':''}
         ${value.info&&this.review?.kind!=='pipeline'?`<details class="df2-result-info"><summary>Processing details</summary><pre>${esc(JSON.stringify(value.info,null,2))}</pre></details>`:''}
       </div></main>`;
+    const handoffForm=this.root.querySelector<HTMLFormElement>('[data-result-handoff]');
+    handoffForm?.addEventListener('submit',event=>{
+      event.preventDefault();
+      const selection=new FormData(handoffForm);
+      const destination=destinations.find(candidate=>candidate.id===selection.get('tool'));
+      const index=selection.get('pdf');
+      const fileIndex=typeof index==='string'&&/^\d+$/.test(index)?Number(index):-1;
+      const file=pdfs[pdfs.length===1?0:fileIndex];
+      if(destination&&file)void this.openResultInTool(handoffForm,{result:value,toolId:destination.id,file},destination);
+    });
     if(compression&&!compression.savedBytes&&this.files[0]){
       const source=document.createElement('a');const url=URL.createObjectURL(this.files[0]);this.links.push(url);
       source.href=url;source.download=this.files[0].name;source.className='df2-btn df2-btn-outline';source.textContent='Download original';
@@ -561,6 +621,36 @@ class DocFlowV2 {
       const host=this.root.querySelector<HTMLElement>('[data-v2-review-container]');
       if(host)this.disposeReview=mountReview(host,this.review);
     }
+  }
+  private async openResultInTool(form:HTMLFormElement,handoff:ResultHandoff,destination:V2Tool):Promise<void>{
+    const current=()=>form.isConnected&&this.stage==='result'&&this.result===handoff.result
+      &&location.hash===this.lastRouteHash;
+    if(this.handoffCheck||!current())return;
+
+    const controller=new AbortController();
+    this.handoffCheck=controller;
+    const signal=AbortSignal.any([controller.signal,AbortSignal.timeout(15_000)]);
+    const controls=form.querySelectorAll<HTMLSelectElement|HTMLButtonElement>('select,button');
+    const status=form.querySelector<HTMLElement>('[data-handoff-status]')!;
+    controls.forEach(control=>{control.disabled=true;});
+    status.textContent='Checking the PDF…';
+    try{
+      await validateHandoffFile(destination,handoff.file,signal);
+      signal.throwIfAborted();
+    }catch(error){
+      if(current()&&!controller.signal.aborted){
+        status.textContent=signal.aborted?'Checking this PDF timed out. Try again or download the result.':
+          error instanceof Error?error.message:'This PDF cannot be opened in the selected tool.';
+      }
+      return;
+    }finally{
+      if(this.handoffCheck===controller)this.handoffCheck=null;
+      controls.forEach(control=>{control.disabled=false;});
+      if(controller.signal.aborted&&form.isConnected)status.textContent='';
+    }
+    if(!current()||controller.signal.aborted)return;
+    history.pushState(null,'',base+handoff.toolId+'/work');
+    await this.navigate(handoff);
   }
   private async execute():Promise<void>{
     const tool=this.tool;
@@ -608,6 +698,7 @@ class DocFlowV2 {
       options.order=this.organizer.getOrder().join(',');
     }
     if(tool.id==='rotate')options.degrees=Number(options.degrees);
+    if(tool.id==='split')options.individualPdfResults=options.splitOutput==='pdfs';
     if(tool.id==='compress'){
       Object.assign(options,compressionSettings(options));
     }
