@@ -94,7 +94,18 @@ test('server OCR mode changes preserve corrections while always clearing upload 
   await setup(page);await signIn(page);await page.getByLabel('Automatically deskew scans').check();await page.getByLabel('Automatically rotate scans').check();await page.getByLabel('I agree to upload this document').check();
   await page.getByLabel('Processing location').selectOption('device');await page.getByLabel('Processing location').selectOption('server');await expect(page.getByLabel('Automatically deskew scans')).toBeChecked();await expect(page.getByLabel('Automatically rotate scans')).toBeChecked();await expect(page.getByLabel('I agree to upload this document')).not.toBeChecked();
 });
-test('phone Office workspace keeps account, consent and conversion action reachable',async({page})=>{
-  await page.setViewportSize({width:390,height:844});const s=await setup(page,{tool:'office-to-pdf',extension:'docx'});await page.getByRole('button',{name:'Options',exact:true}).click();await signIn(page);await consentAndRun(page);
+test('phone Office workspace keeps account, consent and conversion action reachable',async({page},info)=>{
+  await page.setViewportSize({width:390,height:844});const s=await setup(page,{tool:'office-to-pdf',extension:'docx'});await page.getByRole('button',{name:'Options',exact:true}).click();await signIn(page);
+  const panel=(await page.locator('[data-options]').boundingBox())!,controls=(await page.locator('[data-processing-server]').boundingBox())!;expect(controls.width).toBeGreaterThan(panel.width*.8);await page.screenshot({path:info.outputPath('server-office-phone.png')});
+  await consentAndRun(page);
   await expect(page.getByRole('heading',{name:'Review converted Office PDF'})).toBeVisible();expect(s.calls.filter(c=>c.path.endsWith('/start'))).toHaveLength(1);expect(await page.evaluate(()=>document.documentElement.scrollWidth-innerWidth)).toBeLessThanOrEqual(1);
+});
+test('result actions stay clickable while the exported PDF preview finishes sizing',async({page,context})=>{
+  await setup(page);await expect(page.locator('[data-page-label]')).toContainText('/ 1');await signIn(page);
+  let unblock:()=>void=()=>{},entered:()=>void=()=>{};const gate=new Promise<void>(r=>{unblock=r;}),blocked=new Promise<void>(r=>{entered=r;});
+  await context.route('**/assets/pdf.worker*.mjs',async route=>{entered();await gate;await route.continue();});
+  await consentAndRun(page);await blocked;const action=page.getByRole('button',{name:'Return to editing'});await action.scrollIntoViewIfNeeded();const before=(await action.boundingBox())!;
+  await page.mouse.move(before.x+before.width/2,before.y+before.height/2);await page.mouse.down();unblock();
+  try{await expect(page.locator('[data-pdf-review-status]')).toContainText('Page 1 / 1');const after=(await action.boundingBox())!;expect(Math.abs(after.y-before.y)).toBeLessThanOrEqual(1);}finally{unblock();await page.mouse.up();}
+  await expect(page.getByLabel('Processing location')).toHaveValue('server');
 });
