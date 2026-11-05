@@ -93,7 +93,8 @@ it('stops a local download on cancellation while reporting that the server compl
   const ready=new Promise<void>(r=>{entered=r;}),gate=new Promise<void>(r=>{release=r;});
   const s=setup(async(url,init)=>{if(url.includes('/object/sign/')){signal=init.signal??undefined;entered();await gate;}return undefined;});
   const operation=s.start(),result=operation.result.catch(e=>e);await ready;
-  try{expect((await operation.cancel()).state).toBe('completed');expect(signal?.aborted).toBe(true);}finally{release();await result;}
+  let outcome:unknown;try{expect((await operation.cancel()).state).toBe('completed');expect(signal?.aborted).toBe(true);}finally{release();outcome=await result;}
+  expect((outcome as Error).message).toMatch(/server finished before cancellation/i);
 });
 it('releases a definite pre-creation staging rejection without pretending a job exists',async()=>{
   const s=setup(url=>url.endsWith('/jobs')?Response.json({error:{code:'processing_not_ready',message:'Server document processing is not enabled yet.'}},{status:503}):undefined);

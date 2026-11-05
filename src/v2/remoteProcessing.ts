@@ -78,7 +78,7 @@ export function startRemoteProcessing(file:File,settings:RemoteSettings,consent:
       }catch{throw new RemoteProcessingError('cancellation_pending','Server cancellation is not confirmed. Check the job before retrying.');}
     })().catch(error=>{cancellation=null;cancellationFailure=error;throw error;});return cancellation;
   }
-  async function checkCancellation(){if(cancelRequested){await cancel();throw new DOMException('Processing cancelled','AbortError');}}
+  async function checkCancellation(){if(cancelRequested){const stopped=await cancel();if(stopped.state==='completed')throw new RemoteProcessingError('completed_before_cancellation','The server finished before cancellation. Retrieve its PDF before expiry.');throw new DOMException('Processing cancelled','AbortError');}}
   const result=(async():Promise<OperationResult>=>{
     try{
       if(!consent)throw new Error('Explicit upload consent is required for server processing.');
@@ -119,7 +119,7 @@ export function startRemoteProcessing(file:File,settings:RemoteSettings,consent:
       const output=await download(current.id);await checkCancellation();return output;
     }catch(error){
       settleKnown(current?.id??null);
-      if(cancelRequested){if(cancellationFailure)throw cancellationFailure;await cancel();throw new DOMException('Processing cancelled','AbortError');}
+      if(cancelRequested){if(cancellationFailure)throw cancellationFailure;await checkCancellation();}
       if(current&&!terminal.has(current.state)){
         try{await cancel();}catch{throw new RemoteProcessingError('cleanup_pending',(error instanceof Error?error.message:'Processing failed.')+' Server cancellation is not confirmed. Check this job before retrying.');}
       }

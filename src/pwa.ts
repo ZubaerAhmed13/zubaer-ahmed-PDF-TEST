@@ -1,6 +1,8 @@
 import { allowWorkerUpdate, approveReload, prepareApprovedReload } from './app/workProtection';
 
 function showUpdate(registration: ServiceWorkerRegistration): void {
+  const available=registration.waiting;
+  if(!available||available.state!=='installed'||!navigator.serviceWorker.controller||available===navigator.serviceWorker.controller)return;
   if (document.querySelector('[data-app-update]')) return;
   const banner = document.createElement('section');
   banner.className = 'update-banner';
