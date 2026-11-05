@@ -17,7 +17,7 @@ Continue draft PR #36 from source 1a865b2. Keep the production release unchanged
 - Shared auth regressions: tab session, offline sign-out, refresh, and refresh-after-sign-out pass.
 - Session regressions: uncertain attempts cannot restart; retry/late-result disposal; retrieve-only; terminal-release requirement; no concurrent retrieval; no pre-settlement recovery checks. The two timing guards had failing regressions before their fixes.
 - Fresh read-only review found no remaining critical/important defects in the combined UI/auth/session diff. A premature check could leave stale `none` status after later uncertain creation; recovery checks now require settled initial work. Concurrent retrieval also waits for that work to settle.
-- 281 local unit tests, typecheck, lint, build and provenance checks pass. Browser CI is pending. Do not claim hosted browser-to-backend acceptance.
+- 281 local unit tests, typecheck, lint, build and provenance checks pass. All three v2 browser CI jobs pass at 67fca54: Chromium 95, Firefox/WebKit 94 each. Quality and processing CI pass too. Do not claim hosted browser-to-backend acceptance.
 
 Ruling: keep normal uploads disabled and expose server mode only via explicit build configuration. The staging snapshot had seven-day retention from 29 October, so its current validity must be reverified before spending a real processing start. No image rebuild or production capacity expansion is implied by UI work.
 
@@ -26,3 +26,5 @@ Deferred minor: switching server → device → server resets automatic deskew/r
 Managed interactive preview returned a Vite allowed-host error for its exact terminal.local URL. No local interactive smoke is claimed; do not weaken runtime security to make the preview pass.
 
 CI investigation: all five new journeys initially failed at sign-in because the fake .invalid origin was correctly blocked by the production CSP before interception. Trace console evidence confirms the boundary. Use the existing CSP-permitted origin with a fake publishable key and route every service request to synthetic responses; keep production CSP unchanged. Existing Chromium 89 and Firefox 88 journeys passed. A separate failing-then-passing unit regression covers definite first-response staging rejection; a lost first response followed by rejection remains uncertain. Added a browser journey for the definite-rejection exit.
+
+Checkpoint complete: account/consent/recovery UI implemented and published, with actual PDF review and six synthetic browser journeys in each engine. Protected preview dpl_88T1KMcoCaUeEuLGbWkxukGHR9XX serves exact 67fca54 and verified assets. Hosted interactive acceptance remains blocked at Vercel sign-in. Continue next with server compression/Office controls, mode-switch/mobile refinement and remaining release acceptance; do not merge/promote.

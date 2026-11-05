@@ -1,0 +1,78 @@
+{
+  "schema": 1,
+  "source": "67fca54cabf3f64829607041b98c4718b56719fa",
+  "verifiedOn": "2026-11-05",
+  "scope": "Gated OCR browser UI, shared Auth, consent and same-job recovery; synthetic intercepted service responses",
+  "local": {
+    "unitTests": 281,
+    "typecheck": "passed",
+    "lint": "passed",
+    "build": "passed",
+    "provenance": "passed"
+  },
+  "ci": {
+    "v2Run": 42019574500,
+    "chromium": {
+      "job": 127218648406,
+      "passed": 95
+    },
+    "firefox": {
+      "job": 127218648760,
+      "passed": 94
+    },
+    "webkit": {
+      "job": 127218648846,
+      "passed": 94
+    },
+    "serverJourneysPerBrowser": 6,
+    "quality": {
+      "run": 42019574519,
+      "job": 127219374026,
+      "status": "success"
+    },
+    "processing": {
+      "run": 42019574595,
+      "job": 127218649058,
+      "status": "success"
+    },
+    "fullLegacyParity": "not verified"
+  },
+  "preview": {
+    "deployment": "dpl_88T1KMcoCaUeEuLGbWkxukGHR9XX",
+    "state": "READY",
+    "target": "staging",
+    "url": "https://docflow-v2-preview-rb98mduj2-bhuyainria-7304.vercel.app/zubaer-ahmed-PDF-TEST/",
+    "releaseBuild": "67fca54cabf3f64829607041b98c4718b56719fa",
+    "httpChecks": {
+      "release.json": 200,
+      "index": 200,
+      "mainJavaScript": 200,
+      "mainCss": 200,
+      "manifest": 200,
+      "serviceWorker": 200
+    },
+    "mainJavaScript": "assets/index-C7tSDwWA.js",
+    "interactiveSmoke": "blocked at Vercel sign-in"
+  },
+  "stagingReadOnlyRecheck": {
+    "normalProcessingEnabled": false,
+    "allowedSyntheticOwners": 2,
+    "activeJobs": 0,
+    "storageObjects": 0,
+    "startsLast24Hours": 0,
+    "lastCleanupOk": "2026-11-05T11:30:00.734597Z",
+    "cleanupFailed": false,
+    "snapshot": "snap_xmLQxHteb7AzQ5OrU68cBXYpkmiJ",
+    "snapshotStatus": "created",
+    "snapshotExpiresAt": "2026-11-06T18:37:26.847Z",
+    "vmStartedDuringUiWork": false,
+    "snapshotRebuilt": false
+  },
+  "limitations": [
+    "Browser services were fully intercepted with a fake publishable key; actual hosted transport evidence is separate.",
+    "Hosted interactive and browser-to-real-backend acceptance remain open.",
+    "Server Office/compression controls, broader legacy/device/manual accessibility/fidelity acceptance and durable production image/cost acceptance remain open.",
+    "Switching server to device to server resets automatic deskew/rotation toggles; tracked minor.",
+    "PR remains draft; production is unchanged."
+  ]
+}
