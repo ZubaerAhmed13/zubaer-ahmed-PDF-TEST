@@ -163,7 +163,6 @@ class DocFlowV2 {
   private processingGeneration=0;
   private handoffCheck:AbortController|null=null;
   private readonly revisions=new WorkspaceHistory<WorkspaceRevision>();
-  private revisionSwitching=false;
   private renderId=0;
   private currentPage=1;
   private zoom=1;
@@ -182,7 +181,7 @@ class DocFlowV2 {
   private stage:Stage='upload';
 
   constructor(private readonly root:HTMLDivElement){
-    configureWorkProtection(()=>({busy:this.busy||this.nativePreviewBusy||this.editor?.nativeBusy===true||this.serverProcessing?.held===true||this.handoffCheck!==null||this.revisionSwitching,hasWork:this.hasWork()}),()=>{++this.processingGeneration;this.cancel();this.serverProcessing?.dispose();this.serverProcessing=null;this.files=[];this.revisions.clear();this.resetDraft();void this.freePreview();});
+    configureWorkProtection(()=>({busy:this.busy||this.nativePreviewBusy||this.editor?.nativeBusy===true||this.serverProcessing?.held===true||this.handoffCheck!==null,hasWork:this.hasWork()}),()=>{++this.processingGeneration;this.cancel();this.serverProcessing?.dispose();this.serverProcessing=null;this.files=[];this.revisions.clear();this.resetDraft();void this.freePreview();});
     window.addEventListener('hashchange',()=>void this.navigate());
     this.root.addEventListener('click',event=>void this.click(event));
     this.root.addEventListener('input',event=>{this.onInput(event);this.invalidateOcrPreview(event);});
@@ -302,7 +301,10 @@ class DocFlowV2 {
     this.organizer?.dispose();this.organizer=null;this.imagePreview?.dispose();this.imagePreview=null;
     this.thumbnailRail?.dispose();this.thumbnailRail=null;this.editor?.dispose();this.editor=null;
     this.pipelineEditor?.dispose();this.pipelineEditor=null;
-    await this.freePreview();
+    // Validated handoffs and revision switches commit together with their route.
+    // The old viewer stops synchronously, and its worker can finish closing afterward.
+    const release=this.freePreview();
+    if(!transition)await release;
     if(navigation!==this.navigationGeneration||location.hash!==requestedHash)return;
     this.disposeReview?.();this.disposeReview=null;
     if(restoring){
@@ -348,7 +350,8 @@ class DocFlowV2 {
       payloads.add(comparison.report);payloads.add(comparison.htmlReport);
       for(const item of comparison.previews)if(item){payloads.add(item.left);payloads.add(item.right);payloads.add(item.overlay);}
     }
-    const size=[...payloads].reduce((sum,part)=>sum+(part instanceof ArrayBuffer?part.byteLength:part.size),0)+signatureInk.length*2;
+    const size=[...payloads].reduce((sum,part)=>sum+(part instanceof ArrayBuffer?part.byteLength:part.size),0)
+      +signatureInk.length*2+editorDraft.history.retainedImageBytes;
     return {id:this.tool!.id,stage:this.stage==='result'?'result':'work',size,state:{files,result,review,
       optionValues,editorDraft,organizerDraft,redactionDraft,formDraft,signatureInk,pipelineDraft,pipelineKind,pipelineReport,
       selected:new Set(selected),currentPage,activeFile,zoom,fitMode}};
@@ -364,16 +367,12 @@ class DocFlowV2 {
   }
   private async openRevision(direction:RevisionDirection):Promise<void> {
     const revision=this.revisions.peek(direction);
-    if(!revision||this.revisionSwitching||location.hash!==this.lastRouteHash)return;
+    if(!revision||location.hash!==this.lastRouteHash)return;
     if(this.busy||this.handoffCheck||this.nativePreviewBusy||this.editor?.nativeBusy||this.serverProcessing?.held){
       this.message('Finish or cancel the current operation before switching revisions.');return;
     }
-    const main=this.root.querySelector('main')!;
-    this.revisionSwitching=true;main.inert=true;
-    try{
-      history.pushState(null,'',base+revision.id+'/'+revision.stage);
-      await this.navigate({kind:'revision',direction,revision});
-    }finally{this.revisionSwitching=false;main.inert=false;}
+    history.pushState(null,'',base+revision.id+'/'+revision.stage);
+    await this.navigate({kind:'revision',direction,revision});
   }
   private resetDraft():void{
     this.handoffCheck?.abort();
@@ -443,7 +442,7 @@ class DocFlowV2 {
     const tool=this.tool;if(!tool)return;
     const good=files.filter(file=>tool.id==='office-to-pdf'?/\.(docx|pptx|xlsx)$/i.test(file.name):tool.accepts.includes('.png')?(/image\/(png|jpeg)/.test(file.type)||/\.(png|jpe?g)$/i.test(file.name)):(file.type==='application/pdf'||/\.pdf$/i.test(file.name)));
     if(good.length!==files.length||!good.length){const el=this.root.querySelector<HTMLElement>('.df2-upload-note'),message='Choose supported '+(tool.id==='office-to-pdf'?'DOCX/PPTX/XLSX':tool.accepts.includes('.png')?'JPG/PNG':'PDF')+' files only.';if(el)el.textContent=message;else this.message(message);return;}
-    if(this.revisionSwitching||this.busy||this.serverProcessing?.held){this.message('Cancel or finish this processing attempt before changing files.');return;}
+    if(this.busy||this.serverProcessing?.held){this.message('Cancel or finish this processing attempt before changing files.');return;}
     const candidate=tool.multiple?[...this.files,...good]:good.slice(0,1);
     try{validateToolFiles(tool,candidate);}
     catch(error){
@@ -699,12 +698,13 @@ class DocFlowV2 {
   private async openResultInTool(form:HTMLFormElement,handoff:ResultHandoff,destination:V2Tool):Promise<void>{
     const current=()=>form.isConnected&&this.stage==='result'&&this.result===handoff.result
       &&location.hash===this.lastRouteHash;
-    if(this.handoffCheck||this.revisionSwitching||!current())return;
+    if(this.handoffCheck||!current())return;
 
     const controller=new AbortController();
     this.handoffCheck=controller;
     const signal=AbortSignal.any([controller.signal,AbortSignal.timeout(15_000)]);
-    const controls=form.querySelectorAll<HTMLSelectElement|HTMLButtonElement>('select,button');
+    const controls=[...form.querySelectorAll<HTMLSelectElement|HTMLButtonElement>('select,button'),
+      ...this.root.querySelectorAll<HTMLButtonElement>('[data-revision]:enabled')];
     const status=form.querySelector<HTMLElement>('[data-handoff-status]')!;
     controls.forEach(control=>{control.disabled=true;});
     status.textContent='Checking the PDF…';
@@ -727,7 +727,6 @@ class DocFlowV2 {
     await this.navigate({kind:'handoff',handoff});
   }
   private async execute():Promise<void>{
-    if(this.revisionSwitching)return;
     const tool=this.tool;
     if(tool&&['workflow','batch'].includes(tool.id)){await this.executePipeline('run');return;}
     if(this.busy||!tool||(!tool.operation&&!['office-to-pdf','ocr','redact-secure','preview','pdf-to-images','extract-images','text-search','compare','protect-pdf','unlock-pdf','repair-pdf'].includes(tool.id))||!this.files.length)return;
@@ -878,7 +877,7 @@ class DocFlowV2 {
   }
   private paintPipelineReport():void{const host=this.root.querySelector<HTMLElement>('[data-pipeline-live]');if(host){host.replaceChildren();if(this.pipelineReport)mountPipelineReport(host,this.pipelineReport);}}
   private async executePipeline(mode:'run'|'retry'|'check'):Promise<void>{
-    if(this.revisionSwitching||this.busy||!this.pipelineEditor||!this.files.length||!this.tool)return;
+    if(this.busy||!this.pipelineEditor||!this.files.length||!this.tool)return;
     const generation=++this.processingGeneration,tool=this.tool;let report:PipelineReport;
     try{
       this.pipelineEditor.cancelPendingImport();
@@ -1012,7 +1011,6 @@ class DocFlowV2 {
     if(category){this.filter=category.dataset.category??'all';this.home();return;}
     if(target.closest('[data-open-offline]')){openOfflineDialog(target.closest<HTMLElement>('[data-open-offline]'));return;}
     if(target.closest('[data-open-search]')){this.openSearch();return;}
-    if(this.revisionSwitching)return;
     const revision=target.closest<HTMLElement>('[data-revision]')?.dataset.revision;
     if(revision==='previous'||revision==='next'){await this.openRevision(revision);return;}
     if(target.closest('[data-ocr-preview]')){await this.previewOcr();return;}

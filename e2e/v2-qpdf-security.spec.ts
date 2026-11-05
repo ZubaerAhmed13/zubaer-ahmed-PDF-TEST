@@ -54,3 +54,28 @@ test('qpdf repair rewrites valid PDF structure without losing pages',async({page
   expect(output.getPage(0).getWidth()).toBe(421);
   expect(output.getPage(0).getHeight()).toBe(612);
 });
+test('sending a protected PDF to Unlock does not retain the cleartext workspace',async({page})=>{
+  await page.goto(prefix+'#/tools/rotate');
+  await page.locator('[data-file-input]').setInputFiles(await source());
+  await page.locator('[data-run]').click();
+  const handoff=async(tool:string)=>{
+    await page.getByText('Use PDF in another tool',{exact:true}).click();
+    await page.getByRole('combobox',{name:'Next tool'}).selectOption(tool);
+    await page.getByRole('button',{name:'Open selected PDF'}).click();
+  };
+  await handoff('protect-pdf');
+  await expect(page.getByRole('button',{name:/Previous revision/})).toBeEnabled();
+  await page.locator('[name=securityPassword]').fill(password);
+  await page.locator('[name=confirmPassword]').fill(password);
+  await page.locator('[data-run]').click();
+  await expect(page.locator('.df2-output')).toBeVisible();
+  const history=page.getByRole('navigation',{name:'Revision history'});
+  await expect(history).toHaveCount(0);
+  await handoff('unlock-pdf');
+  await expect(page.locator('[name=securityPassword]')).toHaveValue('');
+  await expect(history).toHaveCount(0);
+  await page.locator('[name=securityPassword]').fill(password);
+  await page.locator('[data-run]').click();
+  const unlocked=await PDFDocument.load(await resultBytes(page));
+  expect(unlocked.getPage(0).getRotation().angle).toBe(90);
+});

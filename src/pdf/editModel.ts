@@ -117,6 +117,14 @@ export class EditHistory {
   get canRedo(): boolean {
     return this.index < this.states.length - 1;
   }
+  get retainedImageBytes(): number {
+    const images = new Set<string>();
+    for (const state of this.states) {
+      for (const object of state.objects) if (object.data) images.add(object.data);
+      for (const edit of state.source?.edits ?? []) if (edit.kind === 'image') images.add(edit.data);
+    }
+    return [...images].reduce((bytes, data) => bytes + data.length * 2, 0);
+  }
   commit(plan: EditPlan): boolean {
     const serialized = JSON.stringify(plan);
     if (serialized.length > 16 * 1024 * 1024)

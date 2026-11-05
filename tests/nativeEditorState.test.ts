@@ -4,6 +4,17 @@ import {V2PageEditor} from '../src/v2/pageEditor';
 import type {NativeEditPlan} from '../src/pdf/nativeModel';
 
 describe('atomic source edit history',()=>{
+  it('accounts for distinct placed and replacement images in undo and redo states',()=>{
+    const plan=emptyPlan();
+    plan.objects.push({id:'image',page:1,kind:'image',x:0,y:0,width:10,height:10,size:14,color:'#000000',data:'placed'});
+    const history=new EditHistory(plan);
+    plan.source={fingerprint:'0'.repeat(64),edits:[{id:'1:0',kind:'image',data:'replacement'}]};
+    history.commit(plan);
+    history.undo();
+    expect(history.retainedImageBytes).toBe(('placed'.length+'replacement'.length)*2);
+    history.commit(emptyPlan());
+    expect(history.retainedImageBytes).toBe('placed'.length*2);
+  });
   it('keeps exported plan equal to accepted history after a combined-plan budget rejection',()=>{
     const plan=emptyPlan();plan.objects.push({id:'image',page:1,kind:'image',x:0,y:0,width:10,height:10,size:14,color:'#000000',data:'x'.repeat(9*1024*1024)});
     const history=new EditHistory(plan);

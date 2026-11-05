@@ -76,6 +76,10 @@ test('completing permanent redaction removes unredacted workspaces from revision
   await expect(page.locator('[data-redact-layer]')).toBeVisible();
   await mark(page);
   await page.locator('[name=confirmRasterization]').check();
+  await page.getByRole('button',{name:/Previous revision/}).click();
+  await page.getByRole('button',{name:/Next revision/}).click();
+  await expect(page.locator('[data-redact-count]')).toContainText('1 area');
+  await expect(page.locator('[name=confirmRasterization]')).toBeChecked();
   await page.locator('[data-run]').click();
   await expect(page.locator('[data-pdf-review-status]')).toContainText('Page 1 / 1');
   const history=page.getByRole('navigation',{name:'Revision history'});
