@@ -7,7 +7,7 @@ async function fixture(pages:number){const pdf=await PDFDocument.create(),font=a
 test('240-page workspace reaches late pages and exports only the requested rotation',async({page})=>{
   test.setTimeout(90000);await page.goto(base+'#/tools/rotate');await page.locator('[data-file-input]').setInputFiles({name:'240-pages.pdf',mimeType:'application/pdf',buffer:await fixture(240)});
   await expect(page.locator('.df2-thumb[data-page]')).toHaveCount(240);await page.getByRole('button',{name:'Select page 221',exact:true}).click();await expect(page.locator('[data-page-label]')).toContainText('Page 221 / 240');
-  await page.getByLabel('Rotate',{exact:true}).selectOption('selected');await page.getByLabel('Rotation',{exact:true}).selectOption('270');await expect(page.getByLabel('Selected pages (when needed)')).toHaveValue('221');
+  await page.getByRole('combobox',{name:'Rotate',exact:true}).selectOption('selected');await page.getByRole('combobox',{name:'Rotation',exact:true}).selectOption('270');await expect(page.getByLabel('Selected pages (when needed)')).toHaveValue('221');
   await page.locator('[data-run]').click();await expect(page.locator('.df2-result')).toBeVisible();const pending=page.waitForEvent('download');await page.locator('.df2-output').first().click();const path=await(await pending).path();if(!path)throw Error('Missing long-document output');
   const pdf=await PDFDocument.load(await readFile(path));expect(pdf.getPageCount()).toBe(240);expect(pdf.getPages().filter(p=>p.getRotation().angle!==0)).toHaveLength(1);expect(pdf.getPage(220).getRotation().angle).toBe(270);expect(pdf.getPage(239).getWidth()).toBe(402);
 });
