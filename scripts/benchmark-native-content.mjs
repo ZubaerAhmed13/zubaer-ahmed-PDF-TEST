@@ -1,0 +1,10 @@
+import {execFileSync} from 'node:child_process';
+import {mkdir,readFile,writeFile} from 'node:fs/promises';
+await mkdir('artifacts/native-corpus',{recursive:true});
+execFileSync(process.execPath,['node_modules/vitest/vitest.mjs','run','tests/nativeContentCorpus.test.ts','--maxWorkers=1','--testTimeout=20000','--reporter=json','--outputFile=artifacts/native-corpus/test-results.json'],{stdio:'inherit',timeout:60000});
+const report=JSON.parse(await readFile('artifacts/native-corpus/test-results.json','utf8'));
+const cases=report.testResults.flatMap(result=>result.assertionResults),timings=cases.map(c=>c.duration).sort((a,b)=>a-b);
+const summary={suite:'30 deterministic PDFs; engine plus independent extraction and structure checks',environment:{node:process.version,platform:process.platform,arch:process.arch},passed:cases.filter(c=>c.status==='passed').length,total:cases.length,allowed:26,guarded:4,milliseconds:{median:timings[Math.floor(timings.length/2)],p95:timings[Math.ceil(timings.length*.95)-1],maximum:timings.at(-1)}};
+await writeFile('artifacts/native-corpus/benchmark.json',JSON.stringify(summary,null,2)+'\n');
+console.log(JSON.stringify(summary,null,2));
+if(report.numFailedTests||summary.passed!==30)process.exitCode=1;

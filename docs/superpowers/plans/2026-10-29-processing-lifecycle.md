@@ -1,0 +1,15 @@
+# Processing lifecycle continuation
+
+Continue after the hosted v2 preview; upload remains disabled until lifecycle acceptance. Existing private jobs/storage, portable contracts and verified isolated engines are retained.
+
+**Research:** Checked current Supabase changelog and official function/auth/key guidance on 29 October. New publishable/secret keys belong in the `apikey` header; a platform JWT check alone is not user authorization. A Supabase Edge broker can read provider-managed server keys internally and verify user sessions, while Vercel workers need only short-lived job capabilities and their own Sandbox OIDC context. No administrative key should be copied into frontend code or user-visible diagnostics. Official references: https://supabase.com/docs/guides/functions/auth and https://supabase.com/docs/guides/getting-started/migrating-to-new-api-keys .
+
+1. Add transactional synthetic probes for owner/concurrency/daily quotas, expired claims/leases, malformed outputs and stale-owner recovery. Preserve a positive valid-output control and prove rollback.
+2. Fix measured lifecycle defects with a CLI-generated migration. Expiry must clear completion metadata consistently with the database constraint, preserve rolling-24-hour quota history and unblock owners after dead worker leases. Rerun existing RLS/CAS/cancellation probes and advisors.
+3. Implement the authenticated broker and capability-scoped worker transport. Claims are consumed before creating a VM. Download/upload paths remain server-derived, byte/hash/resource checks precede execution/publication, the VM denies all network access, and cancellation wins races. No user-supplied URL or VM name is trusted.
+4. Implement Storage API purge and token-replay tombstones, preserving daily-start accounting after expiry. Signed upload tokens remain valid for two hours; repeat purge through that window and verify owner deletion/cancellation/expiry behavior. Scheduling must use platform-native cron.
+5. Verify real authenticated browser → broker → VM → independently reviewed output, including cancellation, duplicate requests, expiry, wrong owners and failure recovery. Connect OCR/remote-quality tools only after comparative quality and lifecycle gates pass.
+
+Vercel has a separate protected frontend preview at source adfdda5. A hosted interactive browser smoke remains distinct from its completed HTTP/asset checks. Full release, physical-device and assistive-technology acceptance remains open. Continue independent improvements if a real-account or provider prerequisite blocks a dependent gate; do not claim backend completion from a health response or mock-only tests.
+
+Steps 1–2 completed: six suites pass against the applied expiry migration, including the original RLS/CAS/cancellation suite. Three regressions failed before fixes; a fresh reviewer found/rechecked the two backlog variants. No synthetic records, Storage objects or VMs remain. Quota rows/started_at are retained. Provider migration versions and function body hashes were verified. Continue with transport and physical purge; control-plane expiry does not establish object deletion.

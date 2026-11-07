@@ -5,17 +5,8 @@
  */
 import '../styles/forms-u7.css';
 
-export interface InspectedFormField {
-  name: string;
-  type: string;
-  value: string;
-  choices?: string[];
-  selected?: string[];
-  multiline?: boolean;
-  required?: boolean;
-  readOnly?: boolean;
-  widgets?: { page: number; rect: { x: number; y: number; width: number; height: number }; choice?: string }[];
-}
+import {normalizeInspectedFields,type InspectedFormField} from '../pdf/formFields';
+export {normalizeInspectedFields,type InspectedFormField} from '../pdf/formFields';
 
 interface VisualFormEditor {
   dispose: () => void;
@@ -33,31 +24,6 @@ function initialValue(field: InspectedFormField): FormValue | undefined {
   if (field.type === 'radio' || field.type === 'dropdown') return field.value || undefined;
   if (field.type === 'text') return field.value;
   return undefined;
-}
-
-export function normalizeInspectedFields(source: unknown): InspectedFormField[] {
-  if (!Array.isArray(source)) throw new Error('Form field inspection returned an invalid list.');
-  if (source.length > 5000) throw new Error('The PDF has too many form fields to inspect safely.');
-  const seen = new Set<string>();
-  return source.map((value) => {
-    if (!value || typeof value !== 'object') throw new Error('Invalid form field.');
-    const item = value as Record<string, unknown>;
-    if (typeof item.name !== 'string' || !item.name || seen.has(item.name)) throw new Error('Invalid or duplicate form field name.');
-    seen.add(item.name);
-    const type = typeof item.type === 'string' ? item.type : 'unknown';
-    const choices = Array.isArray(item.choices)
-      ? item.choices.filter((v): v is string => typeof v === 'string').slice(0, MAX_VISUAL_CHOICES + 1)
-      : [];
-    const selected = Array.isArray(item.selected) ? item.selected.filter((v): v is string => typeof v === 'string') : undefined;
-    return {
-      name: item.name, type,
-      value: typeof item.value === 'string' ? item.value : '',
-      choices, selected, multiline: item.multiline === true,
-      ...(typeof item.required === 'boolean' ? { required: item.required } : {}),
-      ...(typeof item.readOnly === 'boolean' ? { readOnly: item.readOnly } : {}),
-      ...(Array.isArray(item.widgets) ? { widgets: item.widgets.slice(0,1000) as InspectedFormField['widgets'] } : {})
-    };
-  });
 }
 
 export function mountVisualFormEditor(
