@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import AxeBuilder from '@axe-core/playwright';
 
 // Playwright cannot reliably intercept fetches handled by a service worker.
 // Mocked Auth/API tests isolate the network from the PWA; offline caching is
@@ -7,12 +8,13 @@ test.use({ serviceWorkers: 'block' });
 
 const backend = 'https://ruefkvkavvycposzahit.supabase.co';
 const userId = '11111111-1111-4111-8111-111111111111';
+const home = '/zubaer-ahmed-PDF-TEST/';
 
-test('manual account sync restores only favourites and recent tools without PDF transfer', async ({ page }) => {
+test('manual account sync restores only favourites and recent tools without PDF transfer', async ({ page, context }) => {
   const requests: { method: string; url: string; body: string | null }[] = [];
   let stored: { favorite_tools: string[]; recent_tools: string[] } | null = null;
 
-  await page.route(backend + '/**', async (route) => {
+  await context.route(backend + '/**', async (route) => {
     const request = route.request();
     const url = new URL(request.url());
     const method = request.method();
@@ -41,7 +43,8 @@ test('manual account sync restores only favourites and recent tools without PDF 
       stored = { favorite_tools: body.favorite_tools as string[], recent_tools: body.recent_tools as string[] };
       await route.fulfill({ status: 204, headers });
     } else if (url.pathname === '/rest/v1/docflow_preferences' && method === 'GET') {
-      await route.fulfill({ status: 200, headers, body: JSON.stringify(stored ? [stored] : []) });
+      const row = stored && { ...stored, recent_tools: [...stored.recent_tools, 'unknown-tool', 'rotate'] };
+      await route.fulfill({ status: 200, headers, body: JSON.stringify(row ? [row] : []) });
     } else if (url.pathname === '/auth/v1/logout') {
       await route.fulfill({ status: 204, headers });
     } else {
@@ -49,13 +52,21 @@ test('manual account sync restores only favourites and recent tools without PDF 
     }
   });
 
-  await page.goto('/zubaer-ahmed-PDF-TEST/');
-  await page.locator('[data-favorite="merge"]').click();
-  await expect(page.locator('[data-favorite="merge"]')).toHaveAttribute('aria-pressed', 'true');
+  await page.goto(home);
+  const favorite = page.getByRole('button', { name: 'Favorite Merge PDFs' });
+  await favorite.click();
+  await expect(favorite).toHaveAttribute('aria-pressed', 'true');
+  await expect(favorite).toBeFocused();
+  await page.locator('[data-card-tool="rotate"]').click();
+  await expect(page.getByRole('heading', { name: 'Rotate PDF' })).toBeVisible();
+  await page.goto(home);
+  await expect(favorite).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByRole('navigation', { name: 'Recent tools' }).getByRole('link', { name: 'Rotate PDF' })).toBeVisible();
+  expect(requests).toHaveLength(0);
 
-  await page.locator('.topbar-actions .settings-menu > summary').click();
-  await page.locator('.topbar-actions [data-action="cloud"]').click();
-  const dialog = page.locator('#info-dialog');
+  const openSync = page.getByRole('button', { name: 'Cloud sync' });
+  await openSync.click();
+  const dialog = page.getByRole('dialog', { name: 'Cloud preferences' });
   await expect(dialog).toBeVisible();
   await expect(dialog.getByText('Not signed in')).toBeVisible();
   await dialog.getByLabel('Cloud account email').fill('test@example.com');
@@ -65,21 +76,25 @@ test('manual account sync restores only favourites and recent tools without PDF 
 
   await dialog.getByRole('button', { name: 'Save preferences to cloud' }).click();
   await expect(dialog.getByText('Preferences saved to your private DocFlow project.')).toBeVisible();
-  expect(stored).toEqual(expect.objectContaining({ favorite_tools: expect.arrayContaining(['merge']) }));
+  expect(stored).toEqual({ favorite_tools: ['merge'], recent_tools: ['rotate'] });
 
   await dialog.getByRole('button', { name: 'Close' }).click();
-  await page.locator('[data-favorite="merge"]').click();
-  await expect(page.locator('[data-favorite="merge"]')).toHaveAttribute('aria-pressed', 'false');
+  await expect(openSync).toBeFocused();
+  await page.evaluate(() => localStorage.removeItem('docflow.recent-tools.v1'));
+  await page.reload();
+  await favorite.click();
+  await expect(favorite).toHaveAttribute('aria-pressed', 'false');
+  await expect(page.getByRole('navigation', { name: 'Recent tools' })).toHaveCount(0);
 
-  await page.locator('.topbar-actions .settings-menu > summary').click();
-  await page.locator('.topbar-actions [data-action="cloud"]').click();
+  await openSync.click();
   await dialog.getByRole('button', { name: 'Restore cloud preferences' }).click();
   await expect(dialog.getByText('Cloud favorites and recent tools restored on this device.')).toBeVisible();
   await dialog.getByRole('button', { name: 'Close' }).click();
-  await expect(page.locator('[data-favorite="merge"]')).toHaveAttribute('aria-pressed', 'true');
+  await expect(favorite).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByRole('navigation', { name: 'Favorites' }).getByRole('link', { name: 'Merge PDFs' })).toBeVisible();
+  await expect(page.getByRole('navigation', { name: 'Recent tools' }).getByRole('link')).toHaveText(['Rotate PDF']);
 
-  await page.locator('.topbar-actions .settings-menu > summary').click();
-  await page.locator('.topbar-actions [data-action="cloud"]').click();
+  await openSync.click();
   await dialog.getByRole('button', { name: 'Sign out' }).click();
   await expect(dialog.getByText('Not signed in')).toBeVisible();
 
@@ -92,15 +107,18 @@ test('manual account sync restores only favourites and recent tools without PDF 
 });
 
 test('cloud preferences remain discoverable on mobile without requiring sign-in', async ({ page }) => {
-  await page.setViewportSize({ width: 360, height: 820 });
-  await page.goto('/zubaer-ahmed-PDF-TEST/');
-  await page.locator('.topbar-actions .settings-menu > summary').click();
-  await page.locator('.topbar-actions [data-action="cloud"]').click();
-  await expect(page.locator('#info-dialog')).toBeVisible();
-  await expect(page.locator('#info-dialog').getByText('Keep working locally without signing in.')).toBeVisible();
-  await page.locator('#info-dialog').getByRole('button', { name: 'Close' }).click();
-  await page.locator('[data-open-tool="rotate"]').first().click();
-  await expect(page.getByRole('region', { name: 'Workspace' })).toBeVisible();
+  await page.setViewportSize({ width: 320, height: 820 });
+  await page.goto(home);
+  await page.getByRole('button', { name: 'Cloud sync' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Cloud preferences' });
+  await expect(dialog.getByText(/Keep working locally without signing in/)).toBeVisible();
+  const audit = await new AxeBuilder({ page }).include('dialog[open]').withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'best-practice']).analyze();
+  expect(audit.violations.map(({ id, nodes }) => ({ id, targets: nodes.map(node => node.target) }))).toEqual([]);
+  expect(await dialog.evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('button', { name: 'Cloud sync' })).toBeFocused();
+  await page.locator('[data-card-tool="rotate"]').click();
+  await expect(page.getByRole('heading', { name: 'Rotate PDF' })).toBeVisible();
 });
 
 test('email-confirmation callback validates identity and removes URL tokens', async ({ page }) => {
@@ -122,11 +140,10 @@ test('email-confirmation callback validates identity and removes URL tokens', as
       });
     }
   });
-  await page.goto('/zubaer-ahmed-PDF-TEST/#access_token=temporary-test-token&refresh_token=temporary-refresh&expires_in=3600&type=signup');
+  await page.goto(home + '#access_token=temporary-test-token&refresh_token=temporary-refresh&expires_in=3600&type=signup');
   await expect.poll(() => page.evaluate(() => location.hash)).toBe('');
   await expect.poll(() => page.evaluate(() => sessionStorage.getItem('docflow.cloud-session.v1'))).toContain('confirmed@example.com');
   expect(requested.some((url) => url.includes('/auth/v1/user'))).toBe(true);
-  await page.locator('.topbar-actions .settings-menu > summary').click();
-  await page.locator('.topbar-actions [data-action="cloud"]').click();
-  await expect(page.locator('#info-dialog').getByText('Signed in as confirmed@example.com')).toBeVisible();
+  await page.getByRole('button', { name: 'Cloud sync' }).click();
+  await expect(page.getByRole('dialog', { name: 'Cloud preferences' }).getByText('Signed in as confirmed@example.com')).toBeVisible();
 });
