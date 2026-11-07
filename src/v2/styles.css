@@ -131,6 +131,7 @@ a{color:inherit;text-decoration:none}
 .df2-dropbox strong{font-size:18px;font-weight:820;letter-spacing:-.03em}
 .df2-dropbox>span:not(.df2-upload-symbol){color:#8490a5;font-size:12px}
 .df2-dropbox .df2-btn{margin-top:7px;position:relative;overflow:hidden}
+.df2-dropbox label:focus-within{outline:3px solid #776dec;outline-offset:3px}
 .df2-dropbox input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
 .df2-dropbox small{font-size:11px;color:#9099a9;margin-top:6px}
 .df2-upload-note{font-size:12px;color:#79849a;margin:17px 0}
@@ -568,6 +569,18 @@ a{color:inherit;text-decoration:none}
 [data-watermark-settings] { grid-column:1/-1; display:grid; gap:12px; border:0; margin:0; padding:0; min-width:0; }
 [data-watermark-settings] legend { font-weight:650; margin-bottom:8px; }
 #df2-watermark-image-status { margin:0; overflow-wrap:anywhere; }
+.df2-scan-review { grid-column:1/-1; min-width:0; font-size:13px; color:#526078; }
+.df2-scan-review details { padding:10px; border:1px solid #dfe4ef; border-radius:10px; }
+.df2-scan-review summary { cursor:pointer; padding:8px 0; color:var(--df2-ink); font-weight:700; }
+.df2-scan-review label { display:grid; gap:5px; margin:8px 0; }
+.df2-scan-review input,.df2-scan-review select,.df2-scan-review button { max-width:100%; min-height:44px; padding:7px; border:1px solid #c3ccdd; border-radius:8px; background:#fff; color:var(--df2-ink); }
+.df2-scan-review label input,.df2-scan-review select { min-width:0; width:100%; }
+.df2-scan-review button { margin-top:8px; }
+.df2-scan-review [data-review] { background:var(--df2-accent); border-color:var(--df2-accent); color:white; }
+.df2-scan-review fieldset { min-width:0; margin:0 0 8px; padding:4px 8px; border:1px solid #dfe4ef; border-radius:8px; }
+.df2-scan-review .scan-review-pair { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; }
+.df2-scan-review figure { margin:0; }
+.df2-scan-review img { display:block; width:100%; height:auto; border:1px solid #dfe4ef; }
 
 .df2-offline-dialog,.session-confirm { width:min(620px,calc(100vw - 28px)); max-height:85dvh; border:1px solid #d7deea; border-radius:18px; padding:24px; overflow:auto; color:var(--df2-ink); background:white; box-shadow:0 20px 70px #17255433; font:inherit; line-height:1.6; }
 .df2-offline-dialog::backdrop,.session-confirm::backdrop { background:#14213d66; }

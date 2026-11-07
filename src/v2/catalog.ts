@@ -32,7 +32,7 @@ const descriptions:Record<string,string>={
   organize:'Arrange page thumbnails, duplicate or remove pages and undo changes before exporting a new PDF.',
   watermark:'Add text or a PNG or JPEG logo to PDF pages with size, position and opacity controls.',
   'images-to-pdf':'Combine JPG or PNG images into a PDF with page size, orientation and margin controls.',
-  'pdf-to-images':'Render PDF pages to PNG or JPEG images and download them in a ZIP archive.',
+  'pdf-to-images':'Convert all or selected PDF pages to PNG or JPEG images and download them in a ZIP archive.',
   'extract-images':'Extract supported embedded raster images, review them visually and download PNGs individually or in a ZIP.',
   preview:'Read PDF pages, select text, navigate with thumbnails or a page number, and download your unchanged original.',
   ocr:'Recognise English or German scans on this device, preserve the visible scan, and review a searchable PDF and extracted text.'
