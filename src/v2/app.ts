@@ -1,5 +1,5 @@
 import { runWorkerOperation } from '../pdf/workerClient';
-import type { OperationResult, WorkerOperation } from '../pdf/types';
+import type { OperationResult, OutputFile, WorkerOperation } from '../pdf/types';
 import { createPreview, pdfToImages, type PreviewController } from '../pdf/render';
 import { activeTools, getTool, groups, v2Tools, type V2Tool } from './catalog';
 import { mountPageOrganizer, type PageOrganizer } from './pageOrganizer';
@@ -37,6 +37,7 @@ import {sanitizeCloudTools} from '../app/cloudSync';
 import {openPreferencesDialog} from './preferencesDialog';
 import {mountScanReview,type PhotoCorrections} from '../tools/scanReview';
 import {parseRequiredPageSelection,parseSplitRanges} from '../pdf/pageRanges';
+import {outputFilename} from '../app/outputFilename';
 
 const esc=(value:string):string=>value.replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]!));
 const bytes=(value:number):string=>value<1024?value+' B':value<1048576?(value/1024).toFixed(1)+' KB':(value/1048576).toFixed(1)+' MB';
@@ -183,6 +184,7 @@ class DocFlowV2 {
   private pipelineKind:string|null=null;
   private pipelineEditor:V2PipelineEditor|null=null;
   private pipelineReport:PipelineReport|null=null;
+  private pipelineZipGeneration=0;
   private formFiller:V2FormFiller|null=null;
   private formDraft=createFormDraft();
   private nativePreviewSource:ArrayBuffer|null=null;
@@ -753,12 +755,20 @@ class DocFlowV2 {
     if(!value){this.workspace();return;}
     this.disposeReview?.();this.disposeReview=null;
     this.freeLinks();
-    const files=value.outputs.map(output=>new File([output.buffer],output.name,{type:output.type}));
-    const downloads=files.map(file=>{
-      const url=URL.createObjectURL(file);this.links.push(url);
-      return `<a class="df2-output" href="${url}" download="${esc(file.name)}"><span class="df2-output-icon">↓</span><span><b>${esc(file.name)}</b><small>${bytes(file.size)} · Ready to download</small></span><strong>Download →</strong></a>`;
+    const downloads=value.outputs.map((output,index)=>{
+      const url=URL.createObjectURL(new Blob([output.buffer],{type:output.type}));this.links.push(url);
+      return `<a class="df2-output" data-result-output="${index}" href="${url}" download="${esc(output.name)}"><span class="df2-output-icon">↓</span><span><b>${esc(output.name)}</b><small>${bytes(output.buffer.byteLength)} · Ready to download</small></span><strong>Download →</strong></a>`;
     }).join('');
-    const pdfs=files.filter(file=>file.type==='application/pdf'&&file.size>0);
+    const pdfs=value.outputs.filter(output=>output.type==='application/pdf'&&output.buffer.byteLength>0);
+    const rename=value.outputs.length?`<details class="df2-result-handoff">
+      <summary>Rename downloads</summary>
+      <form data-result-rename>
+        ${value.outputs.length>1?select('output','File to rename',value.outputs.map((output,index)=>[String(index),esc(output.name)])):''}
+        <label class="df2-control">Output filename<input name="filename" maxlength="110" required autocomplete="off" value="${esc(value.outputs[0]!.name)}"></label>
+        <button type="submit" class="df2-btn df2-btn-outline">Save filename</button>
+        <p role="status"></p>
+      </form>
+    </details>`:'';
     const destinations=activeTools.filter(candidate=>candidate.id!==tool.id
       &&candidate.accepts.split(',').includes('application/pdf')
       &&(tool.id!=='protect-pdf'||candidate.id==='unlock-pdf'));
@@ -783,6 +793,7 @@ class DocFlowV2 {
         ${this.review?.kind==='pipeline'&&value.outputs.length?'<button type="button" class="df2-btn df2-btn-outline" data-pipeline-zip>Prepare ZIP of completed PDFs</button><p data-pipeline-zip-status role="status"></p>':''}
         <div class="df2-result-actions"><button class="df2-btn df2-btn-outline" data-return-edit>Return to editing</button><button class="df2-btn df2-btn-outline" data-again>Start another file</button><a class="df2-btn df2-btn-subtle" href="#/">See all tools →</a></div>
         ${this.revisionControls()}
+        ${rename}
         ${handoff}
         ${this.review?'<div data-v2-review-container></div>':''}
         ${value.info&&this.review?.kind!=='pipeline'?`<details class="df2-result-info"><summary>Processing details</summary><pre>${esc(JSON.stringify(value.info,null,2))}</pre></details>`:''}
@@ -794,9 +805,13 @@ class DocFlowV2 {
       const destination=destinations.find(candidate=>candidate.id===selection.get('tool'));
       const index=selection.get('pdf');
       const fileIndex=typeof index==='string'&&/^\d+$/.test(index)?Number(index):-1;
-      const file=pdfs[pdfs.length===1?0:fileIndex];
-      if(destination&&file)void this.openResultInTool(handoffForm,{result:value,toolId:destination.id,file},destination);
+      const output=pdfs[pdfs.length===1?0:fileIndex];
+      if(destination&&output){
+        const file=new File([output.buffer],output.name,{type:output.type});
+        void this.openResultInTool(handoffForm,{result:value,toolId:destination.id,file},destination);
+      }
     });
+    this.mountResultRename(value,pdfs);
     if(compression&&!compression.savedBytes&&this.files[0]){
       const source=document.createElement('a');const url=URL.createObjectURL(this.files[0]);this.links.push(url);
       source.href=url;source.download=this.files[0].name;source.className='df2-btn df2-btn-outline';source.textContent='Download original';
@@ -807,6 +822,47 @@ class DocFlowV2 {
       if(host)this.disposeReview=mountReview(host,this.review);
     }
   }
+  private mountResultRename(result:OperationResult,pdfs:OutputFile[]):void{
+    const form=this.root.querySelector<HTMLFormElement>('[data-result-rename]');
+    if(!form)return;
+    const picker=form.querySelector<HTMLSelectElement>('[name=output]');
+    const input=form.querySelector<HTMLInputElement>('[name=filename]')!;
+    const status=form.querySelector<HTMLElement>('[role=status]')!;
+    picker?.addEventListener('change',()=>{
+      input.value=result.outputs[picker.selectedIndex]!.name;
+      status.textContent='';
+    });
+    form.addEventListener('submit',event=>{
+      event.preventDefault();
+      if(this.handoffCheck||this.result!==result)return;
+      const index=picker?.selectedIndex??0;
+      const output=result.outputs[index];
+      if(!output)return;
+      const name=outputFilename(input.value,output.name);
+      if(result.outputs.some(other=>other!==output&&other.name.toLowerCase()===name.toLowerCase())){
+        status.textContent='Another download already uses that filename.';
+        return;
+      }
+      if(name!==output.name){
+        output.name=name;
+        const link=this.root.querySelector<HTMLAnchorElement>(`[data-result-output="${index}"]`)!;
+        link.download=name;
+        link.querySelector('b')!.textContent=name;
+        if(picker)picker.options[index]!.text=name;
+        const handoff=this.root.querySelector<HTMLOptionElement>(`[data-result-handoff] [name=pdf] option[value="${pdfs.indexOf(output)}"]`);
+        if(handoff)handoff.text=name;
+        const preview=this.root.querySelector<HTMLSelectElement>('[data-pipeline-preview-select]');
+        if(preview){
+          preview.options[index]!.text=name;
+          const title=this.root.querySelector<HTMLElement>('[data-pipeline-preview] h2');
+          if(title&&preview.selectedIndex===index)title.textContent='Review '+name;
+          this.clearPipelineZip();
+        }
+      }
+      input.value=name;
+      status.textContent='Saved as '+name+'.';
+    });
+  }
   private async openResultInTool(form:HTMLFormElement,handoff:ResultHandoff,destination:V2Tool):Promise<void>{
     const current=()=>form.isConnected&&this.stage==='result'&&this.result===handoff.result
       &&location.hash===this.lastRouteHash;
@@ -816,7 +872,7 @@ class DocFlowV2 {
     this.handoffCheck=controller;
     const signal=AbortSignal.any([controller.signal,AbortSignal.timeout(15_000)]);
     const controls=[...form.querySelectorAll<HTMLSelectElement|HTMLButtonElement>('select,button'),
-      ...this.root.querySelectorAll<HTMLButtonElement>('[data-revision]:enabled')];
+      ...this.root.querySelectorAll<HTMLButtonElement>('[data-revision]:enabled,[data-result-rename] button')];
     const status=form.querySelector<HTMLElement>('[data-handoff-status]')!;
     controls.forEach(control=>{control.disabled=true;});
     status.textContent='Checking the PDF…';
@@ -1037,16 +1093,35 @@ class DocFlowV2 {
   }
   private async preparePipelineZip():Promise<void>{
     if(this.busy||this.stage!=='result'||this.review?.kind!=='pipeline'||!this.result)return;
-    const outputs=this.result.outputs.filter(out=>out.type==='application/pdf'),button=this.root.querySelector<HTMLButtonElement>('[data-pipeline-zip]'),status=this.root.querySelector<HTMLElement>('[data-pipeline-zip-status]');if(!button||!status||!outputs.length)return;
+    const outputs=this.result.outputs.filter(out=>out.type==='application/pdf'),button=this.root.querySelector<HTMLButtonElement>('[data-pipeline-zip]'),status=this.root.querySelector<HTMLElement>('[data-pipeline-zip-status]');if(!button||button.disabled||!status||!outputs.length)return;
     if(outputs.reduce((sum,out)=>sum+out.buffer.byteLength,0)>75*1024*1024){status.textContent='ZIP preparation supports up to 75 MB of completed PDFs. Download these PDFs individually.';return;}
     const generation=this.processingGeneration,navigation=this.navigationGeneration;button.disabled=true;button.setAttribute('aria-busy','true');status.textContent='Preparing ZIP…';
+    const zipGeneration=++this.pipelineZipGeneration;
+    const current=()=>generation===this.processingGeneration&&navigation===this.navigationGeneration&&zipGeneration===this.pipelineZipGeneration;
     try{
-      const {default:JSZip}=await import('jszip'),zip=new JSZip();outputs.forEach(out=>zip.file(out.name,out.buffer));
-      const blob=await zip.generateAsync({type:'blob',compression:'STORE'},()=>{if(generation!==this.processingGeneration||navigation!==this.navigationGeneration)throw new DOMException('Cancelled','AbortError');});
-      if(generation!==this.processingGeneration||navigation!==this.navigationGeneration)return;
-      const url=URL.createObjectURL(blob);this.links.push(url);const link=document.createElement('a');link.className='df2-output';link.href=url;link.download='docflow-results.zip';link.textContent='Download all completed PDFs · '+bytes(blob.size);this.root.querySelector('.df2-downloads')?.append(link);button.hidden=true;status.textContent='ZIP ready · '+outputs.length+' completed PDFs. ZIP preparation limit: 75 MB.';
-    }catch(error){if(generation===this.processingGeneration&&navigation===this.navigationGeneration){status.textContent=error instanceof Error?error.message:'ZIP could not be prepared.';button.disabled=false;}}
-    finally{button.setAttribute('aria-busy','false');}
+      const {default:JSZip}=await import('jszip');
+      if(!current())return;
+      const zip=new JSZip();outputs.forEach(out=>zip.file(out.name,out.buffer));
+      const blob=await zip.generateAsync({type:'blob',compression:'STORE'},()=>{if(!current())throw new DOMException('Cancelled','AbortError');});
+      if(!current())return;
+      const url=URL.createObjectURL(blob);this.links.push(url);const link=document.createElement('a');link.className='df2-output';link.dataset.pipelineZipOutput='';link.href=url;link.download='docflow-results.zip';link.textContent='Download all completed PDFs · '+bytes(blob.size);this.root.querySelector('.df2-downloads')?.append(link);button.hidden=true;status.textContent='ZIP ready · '+outputs.length+' completed PDFs. ZIP preparation limit: 75 MB.';
+    }catch(error){if(current()){status.textContent=error instanceof Error?error.message:'ZIP could not be prepared.';button.disabled=false;}}
+    finally{if(current())button.setAttribute('aria-busy','false');}
+  }
+  private clearPipelineZip():void{
+    const link=this.root.querySelector<HTMLAnchorElement>('[data-pipeline-zip-output]');
+    const button=this.root.querySelector<HTMLButtonElement>('[data-pipeline-zip]');
+    const status=this.root.querySelector<HTMLElement>('[data-pipeline-zip-status]');
+    if(!button||!status||(!link&&!button.disabled))return;
+    ++this.pipelineZipGeneration;
+    if(link){
+      URL.revokeObjectURL(link.href);
+      this.links=this.links.filter(url=>url!==link.href);
+      link.remove();
+    }
+    button.disabled=button.hidden=false;
+    button.setAttribute('aria-busy','false');
+    status.textContent='Filenames changed. Prepare a new ZIP.';
   }
   private setServerProcessing(value:boolean):void{
     this.busy=value;
