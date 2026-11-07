@@ -54,7 +54,8 @@ test('manual account sync restores only favourites and recent tools without PDF 
 
   await page.goto(home);
   const favorite = page.getByRole('button', { name: 'Favorite Merge PDFs' });
-  await favorite.click();
+  await favorite.focus();
+  await favorite.press('Space');
   await expect(favorite).toHaveAttribute('aria-pressed', 'true');
   await expect(favorite).toBeFocused();
   await page.locator('[data-card-tool="rotate"]').click();

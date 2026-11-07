@@ -71,7 +71,7 @@ a{color:inherit;text-decoration:none}
 .df2-browse{max-width:1350px;margin:0 auto;padding:22px 35px 95px;scroll-margin-top:100px}
 .df2-section-intro{display:flex;align-items:end;justify-content:space-between;gap:20px;margin-bottom:30px}
 .df2-section-intro h2{font-size:clamp(30px,3vw,42px);letter-spacing:-.055em;margin:7px 0 0;line-height:1.2}
-.df2-section-intro>span{font-size:13px;color:#56637b}
+.df2-section-intro>[data-open-cloud]{min-height:44px;padding:8px 13px;white-space:nowrap}
 .df2-searchbox{display:flex;align-items:center;gap:14px;padding:0 17px;min-height:66px;background:white;border:1px solid #dfe4ed;border-radius:14px;box-shadow:0 8px 22px rgba(28,42,71,.036);margin-bottom:22px}
 .df2-searchbox>span:first-child{font-size:27px;color:#7b7aa9}
 .df2-searchbox input{border:0;outline:0;min-width:0;width:100%;height:55px;flex:1;color:#293651;background:transparent;font-size:14px}
@@ -84,7 +84,13 @@ a{color:inherit;text-decoration:none}
 .df2-filters button[aria-pressed="true"]{background:#5148bd;border-color:#5148bd;color:white}
 .df2-catalog-status{text-align:right;color:#8b94a6;font-size:11px;min-height:27px}
 .df2-toolgrid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:15px}
-.df2-toolcard{min-width:0}
+.df2-toolcard{min-width:0;position:relative}
+.df2-favorite{position:absolute;top:12px;right:12px;display:grid;place-items:center;width:44px;height:44px;border:1px solid #e0e4ed;border-radius:10px;background:#fff;color:#5245b6;font-size:22px;line-height:1}
+.df2-favorite:hover,.df2-favorite[aria-pressed="true"]{background:#f0edff;border-color:#d4cef4}
+.df2-quick-access:empty{display:none}
+.df2-quick-access{display:grid;gap:14px;margin:0 0 20px}
+.df2-quick-access h3{margin:0;font-size:13px;color:#47536e}
+.df2-quick-access .df2-quick-tools{margin-top:5px}
 .df2-toolcard>a{display:flex;flex-direction:column;align-items:flex-start;gap:0;padding:24px 22px 20px;background:#fff;border-radius:18px;border:1px solid #e8ebf1;min-height:220px;height:100%;box-shadow:0 5px 16px rgba(25,35,75,.025);transition:border-color .18s,transform .18s,box-shadow .18s}
 .df2-toolcard>a:hover{border-color:#a9a3e6;transform:translateY(-3px);box-shadow:0 13px 30px rgba(36,41,91,.072)}
 .df2-toolicon{display:inline-grid;place-items:center;flex:0 0 auto;width:43px;height:43px;border-radius:13px;background:#f0edff;color:#5b4fc8;font-size:24px;line-height:1;font-weight:770}
@@ -248,7 +254,6 @@ a{color:inherit;text-decoration:none}
   .df2-facts{gap:12px}
   .df2-browse{padding:20px 18px 55px}
   .df2-section-intro{align-items:start}
-  .df2-section-intro>span{display:none}
   .df2-toolgrid{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
   .df2-toolcard>a{padding:17px;min-height:206px}
   .df2-toolicon{width:40px;height:40px}
@@ -560,6 +565,9 @@ a{color:inherit;text-decoration:none}
 [data-server-recovery] { display: flex; flex-direction: column; gap: 10px; }
 [data-server-recovery][hidden], [data-processing-server][hidden], [data-processing-local][hidden] { display: none; }
 .df2-ocr-local, [data-processing-server] { grid-column: 1 / -1; }
+[data-watermark-settings] { grid-column:1/-1; display:grid; gap:12px; border:0; margin:0; padding:0; min-width:0; }
+[data-watermark-settings] legend { font-weight:650; margin-bottom:8px; }
+#df2-watermark-image-status { margin:0; overflow-wrap:anywhere; }
 
 .df2-offline-dialog,.session-confirm { width:min(620px,calc(100vw - 28px)); max-height:85dvh; border:1px solid #d7deea; border-radius:18px; padding:24px; overflow:auto; color:var(--df2-ink); background:white; box-shadow:0 20px 70px #17255433; font:inherit; line-height:1.6; }
 .df2-offline-dialog::backdrop,.session-confirm::backdrop { background:#14213d66; }
@@ -570,6 +578,11 @@ a{color:inherit;text-decoration:none}
 .df2-offline-close { float:right; }
 .df2-offline-dialog .offline-group { border-top:1px solid #e1e6ef; padding:10px 0; }
 .df2-offline-dialog .offline-actions,.session-confirm>div { display:flex; flex-wrap:wrap; gap:8px; }
+.df2-preferences-dialog .docflow-cloud-form{display:grid;gap:8px}
+.df2-preferences-dialog .docflow-cloud-form input{min-width:0;width:100%;min-height:44px;padding:8px 12px;border:1px solid #c3ccdd;border-radius:9px;background:#fff;color:var(--df2-ink)}
+.df2-preferences-dialog .docflow-cloud-form input::placeholder{color:#56637b}
+.df2-preferences-dialog .docflow-cloud-actions{display:flex;flex-wrap:wrap;gap:4px}
+.df2-preferences-dialog button.primary{background:var(--df2-accent);border-color:var(--df2-accent);color:white}
 .update-banner { position:relative; z-index:95; margin:12px auto; width:min(760px,calc(100% - 24px)); padding:16px; border:1px solid #c3ccdd; border-radius:14px; color:#243451; background:white; box-shadow:0 10px 40px #17255433; font:inherit; font-size:13px; line-height:1.6; }
 .update-banner strong,.update-banner span { display:block; }
 

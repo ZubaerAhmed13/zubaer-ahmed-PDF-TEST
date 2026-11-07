@@ -32,10 +32,21 @@ import {prepareServerInput,serverSettings} from './serverTools';
 import {configureWorkProtection} from '../app/workProtection';
 import {openOfflineDialog} from './offlineDialog';
 import {WorkspaceHistory,type RevisionDirection} from './workspaceHistory';
+import {getFavorites,isFavorite,replaceFavorites,subscribeFavorites,toggleFavorite} from '../app/favoriteStore';
+import {sanitizeCloudTools} from '../app/cloudSync';
+import {openPreferencesDialog} from './preferencesDialog';
 
 const esc=(value:string):string=>value.replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]!));
 const bytes=(value:number):string=>value<1024?value+' B':value<1048576?(value/1024).toFixed(1)+' KB':(value/1048576).toFixed(1)+' MB';
 const base='#/tools/';
+const recentToolsKey='docflow.recent-tools.v1';
+const preferenceToolIds=new Set(activeTools.map(tool=>tool.id));
+function readRecentTools():string[] {
+  try {
+    const recentTools:unknown=JSON.parse(localStorage.getItem(recentToolsKey)??'[]');
+    return sanitizeCloudTools({recent_tools:recentTools},preferenceToolIds).recent_tools;
+  } catch { return []; }
+}
 type Stage='upload'|'work'|'result';
 type Route={id:string|null;stage:Stage};
 type ResultHandoff={result:OperationResult;toolId:string;file:File};
@@ -44,7 +55,7 @@ type WorkspaceRevision={id:string;stage:'work'|'result';size:number;state:{
   optionValues:Record<string,string|boolean>;
   editorDraft:ReturnType<typeof createEditorDraft>;organizerDraft:ReturnType<typeof createOrganizerDraft>;
   redactionDraft:ReturnType<typeof createRedactionDraft>;formDraft:ReturnType<typeof createFormDraft>;
-  signatureInk:string;pipelineDraft:ReturnType<typeof createPipelineDraft>;pipelineKind:string|null;pipelineReport:PipelineReport|null;
+  signatureInk:string;watermarkImage:File|null;pipelineDraft:ReturnType<typeof createPipelineDraft>;pipelineKind:string|null;pipelineReport:PipelineReport|null;
   selected:Set<number>;currentPage:number;activeFile:number;zoom:number;fitMode:'width'|'page';
 }};
 type WorkspaceTransition={kind:'handoff';handoff:ResultHandoff}|{kind:'revision';direction:RevisionDirection;revision:WorkspaceRevision};
@@ -79,7 +90,16 @@ function toolOptions(id:string):string{
     case 'extract-pages':return field('pages','Pages to extract','');
     case 'rotate':return select('target','Rotate',[['all','All pages'],['odd','Odd pages'],['even','Even pages'],['selected','Selected pages']])+select('degrees','Rotation',[['90','90° clockwise'],['180','180°'],['270','270° clockwise']])+field('pages','Selected pages (when needed)','');
     case 'page-numbers':return field('pages','Pages (blank means all)','')+field('start','Start at','1','number')+select('format','Format',[['page-total','Page 1 of N'],['page','Page 1'],['number','1']])+field('fontSize','Size (points)','11','number')+field('margin','Bottom margin','24','number');
-    case 'watermark':return field('text','Watermark text','CONFIDENTIAL')+field('opacity','Opacity 0.05 – 1','0.18','number')+field('rotation','Angle','-35','number')+field('fontSize','Font size','42','number');
+    case 'watermark':return select('watermarkMode','Watermark type',[['text','Text watermark'],['image','Image watermark']])
+      +`<label class="df2-control">Opacity (0.05–1)<input name="opacity" type="number" min="0.05" max="1" step="any" value="0.18"></label>
+      <fieldset data-watermark-settings="text"><legend>Text settings</legend>${field('text','Watermark text','CONFIDENTIAL')}${field('rotation','Angle','-35','number')}${field('fontSize','Font size','42','number')}</fieldset>
+      <fieldset data-watermark-settings="image" hidden><legend>Image settings</legend>
+      <label class="df2-control">Watermark image<input type="file" data-watermark-image accept=".png,.jpg,.jpeg,image/png,image/jpeg" aria-describedby="df2-watermark-image-status"></label>
+      <p id="df2-watermark-image-status" class="df2-organize-warning" role="status"></p>
+      <label class="df2-control">Image width (% of page)<input name="imageWidthPercent" type="number" min="5" max="90" value="25"></label>
+      ${select('imagePosition','Image position',[['center','Center'],['top-left','Top left'],['top','Top center'],['top-right','Top right'],['left','Middle left'],['right','Middle right'],['bottom-left','Bottom left'],['bottom','Bottom center'],['bottom-right','Bottom right']])}
+      <label class="df2-control">Edge margin (pt)<input name="imageMargin" type="number" min="0" max="240" value="24"></label>
+      <label class="df2-control">Image angle<input name="imageRotation" type="number" min="-180" max="180" value="0"></label></fieldset>`;
     case 'crop':return field('pages','Pages (blank means all)','')+field('left','Left margin','24','number')+field('right','Right margin','24','number')+field('top','Top margin','24','number')+field('bottom','Bottom margin','24','number');
     case 'annotate':return select('kind','Annotation',[['note','Text note'],['highlight','Highlight rectangle'],['rectangle','Outline rectangle']])+field('text','Note text','Review note','textarea')+field('pages','Pages (blank means all)','')+field('posX','Left position (%)','12','number')+field('posY','Top position (%)','12','number')+field('markWidth','Width (%)','30','number')+field('markHeight','Height (%)','12','number');
     case 'metadata-edit':return select('action','Change',[['edit','Update specified properties'],['clear','Clear standard properties']])+field('title','Title','')+field('author','Author','')+field('subject','Subject','')+field('keywords','Keywords','');
@@ -142,6 +162,7 @@ class DocFlowV2 {
   private redactionDraft=createRedactionDraft();
   private signaturePad:ReturnType<typeof mountSignaturePad>|null=null;
   private signatureInk='';
+  private watermarkImage:File|null=null;
   private signatureGeneration=0;
   private ocrPreviewGeneration=0;
   private serverProcessing:V2ServerProcessing|null=null;
@@ -177,6 +198,7 @@ class DocFlowV2 {
   private cancel:()=>void=()=>{};
   private filter='all';
   private search='';
+  private recentTools=readRecentTools();
   private tool:V2Tool|null=null;
   private stage:Stage='upload';
 
@@ -187,6 +209,12 @@ class DocFlowV2 {
     this.root.addEventListener('input',event=>{this.onInput(event);this.invalidateOcrPreview(event);});
     this.root.addEventListener('change',event=>{this.invalidateResult();this.invalidateOcrPreview(event);});
     this.root.addEventListener('df2-draft-change',event=>{this.invalidateResult();if(this.tool?.id==='edit-pdf'&&this.stage==='work')void this.syncNativePreview((event as CustomEvent<{preview?:ArrayBuffer}>).detail?.preview);});
+    subscribeFavorites(()=>this.updateQuickAccess());
+    window.addEventListener('storage',event=>{
+      if(event.key!==recentToolsKey)return;
+      this.recentTools=readRecentTools();
+      this.updateQuickAccess();
+    });
     window.addEventListener('beforeunload',event=>{if(this.hasWork()){event.preventDefault();event.returnValue='';}});
     window.addEventListener('keydown',event=>{
       if((event.metaKey||event.ctrlKey)&&event.key.toLowerCase()==='k'){
@@ -216,14 +244,36 @@ class DocFlowV2 {
   }
   private card(tool:V2Tool):string {
     const active=tool.readiness==='active';
+    const favorite=isFavorite(tool.id);
     return `<article class="df2-toolcard ${active?'':'df2-coming'}" data-tool-category="${esc(tool.category)}">
       <a href="${active?base+tool.id:'#/'}" data-card-tool="${tool.id}" aria-label="${esc(tool.name)}${active?'':', rebuilding'}">
         <span class="df2-toolicon" aria-hidden="true">${esc(tool.icon)}</span>
         <span class="df2-toolname">${esc(tool.name)}</span>
         <span class="df2-tooldesc">${esc(tool.description)}</span>
         <span class="df2-cardfoot">${active?'<span>Start tool <span aria-hidden="true">↗</span></span>':'<span>Being rebuilt</span>'}</span>
-      </a>
+      </a>${active?`<button type="button" class="df2-favorite" data-favorite="${tool.id}" aria-label="Favorite ${esc(tool.name)}" aria-pressed="${favorite}"><span aria-hidden="true">${favorite?'★':'☆'}</span></button>`:''}
     </article>`;
+  }
+  private quickAccess():string {
+    const groups=[['Favorites',[...getFavorites()]],['Recent tools',this.recentTools]] as const;
+    return groups.map(([label,ids])=>{
+      const links=ids.filter(id=>preferenceToolIds.has(id)).map(id=>`<a href="${base+id}">${esc(getTool(id)!.name)}</a>`);
+      return links.length?`<nav aria-label="${label}"><h3>${label}</h3><div class="df2-quick-tools">${links.join('')}</div></nav>`:'';
+    }).join('');
+  }
+  private updateQuickAccess():void {
+    const quickAccess=this.root.querySelector<HTMLElement>('[data-quick-access]');
+    if(!quickAccess)return;
+    quickAccess.innerHTML=this.quickAccess();
+    this.root.querySelectorAll<HTMLButtonElement>('[data-favorite]').forEach(button=>{
+      const favorite=isFavorite(button.dataset.favorite!);
+      button.setAttribute('aria-pressed',String(favorite));
+      button.firstElementChild!.textContent=favorite?'★':'☆';
+    });
+  }
+  private setRecentTools(recentTools:string[]):void {
+    this.recentTools=recentTools;
+    try { localStorage.setItem(recentToolsKey,JSON.stringify(recentTools)); } catch { /* Keep preferences in memory when storage is denied. */ }
   }
   private home():void {
     const matches=v2Tools.filter(tool=>{
@@ -250,8 +300,9 @@ class DocFlowV2 {
         <div class="df2-floating df2-floating-two"><b>⇄</b> &nbsp;Merge documents</div>
       </div></section>
       <section class="df2-browse" id="df2-catalog" aria-labelledby="df2-browse-title">
-        <div class="df2-section-intro"><div><p class="df2-overline">YOUR TOOLKIT</p><h2 id="df2-browse-title">What do you need to do?</h2></div><span>Find your tool and get started</span></div>
+        <div class="df2-section-intro"><div><p class="df2-overline">YOUR TOOLKIT</p><h2 id="df2-browse-title">What do you need to do?</h2></div><button type="button" class="df2-btn df2-btn-outline" data-open-cloud>Cloud sync</button></div>
         <div class="df2-searchbox"><span aria-hidden="true">⌕</span><input type="search" data-tool-search value="${esc(this.search)}" placeholder="Search tools — merge, sign, compress, convert…" aria-label="Search PDF tools"><span class="df2-search-hint">⌘ K</span></div>
+        <div class="df2-quick-access" data-quick-access>${this.quickAccess()}</div>
         <div class="df2-filters" role="group" aria-label="Tool categories">${groups.map(group=>`<button type="button" data-category="${group.id}" aria-pressed="${String(this.filter===group.id)}">${esc(group.label)}</button>`).join('')}</div>
         <div class="df2-catalog-status" aria-live="polite">${matches.length} tools shown · ${activeTools.length} connected to the new workspace</div>
         <div class="df2-toolgrid">${matches.map(t=>this.card(t)).join('')}</div>
@@ -321,6 +372,7 @@ class DocFlowV2 {
     this.stage=next.stage;
     if(!this.tool){this.lastRouteHash=location.hash||'#/';this.home();return;}
     if(this.tool.readiness!=='active'){this.lastRouteHash=location.hash||'#/';this.unavailable();return;}
+    if(changedTool)this.setRecentTools([this.tool.id,...this.recentTools.filter(id=>id!==this.tool!.id)].slice(0,6));
     if(this.stage==='result'&&!this.result)this.stage=this.files.length?'work':'upload';
     if(this.stage==='work'&&!this.files.length)this.stage='upload';
     const canonical=base+this.tool.id+(this.stage==='upload'?'':'/'+this.stage);
@@ -339,8 +391,9 @@ class DocFlowV2 {
   }
   private snapshotWorkspace():WorkspaceRevision {
     const {files,result,review,optionValues,editorDraft,organizerDraft,redactionDraft,formDraft,signatureInk,
-      pipelineDraft,pipelineKind,pipelineReport,selected,currentPage,activeFile,zoom,fitMode}=this;
+      watermarkImage,pipelineDraft,pipelineKind,pipelineReport,selected,currentPage,activeFile,zoom,fitMode}=this;
     const payloads=new Set<Blob|ArrayBuffer>(files);
+    if(watermarkImage)payloads.add(watermarkImage);
     result?.outputs.forEach(output=>payloads.add(output.buffer));
     pipelineReport?.items.forEach(item=>{if(item.output)payloads.add(item.output.buffer);});
     if(review?.kind==='pdf')payloads.add(review.buffer);
@@ -353,7 +406,7 @@ class DocFlowV2 {
     const size=[...payloads].reduce((sum,part)=>sum+(part instanceof ArrayBuffer?part.byteLength:part.size),0)
       +signatureInk.length*2+editorDraft.history.retainedImageBytes;
     return {id:this.tool!.id,stage:this.stage==='result'?'result':'work',size,state:{files,result,review,
-      optionValues,editorDraft,organizerDraft,redactionDraft,formDraft,signatureInk,pipelineDraft,pipelineKind,pipelineReport,
+      optionValues,editorDraft,organizerDraft,redactionDraft,formDraft,signatureInk,watermarkImage,pipelineDraft,pipelineKind,pipelineReport,
       selected:new Set(selected),currentPage,activeFile,zoom,fitMode}};
   }
   private revisionControls():string {
@@ -383,6 +436,7 @@ class DocFlowV2 {
     this.editorDraft=createEditorDraft();this.organizerDraft=createOrganizerDraft();this.optionValues={};
     this.redactionDraft=createRedactionDraft();
     this.formDraft=createFormDraft();
+    this.watermarkImage=null;
     this.pipelineDraft=createPipelineDraft(false);this.pipelineKind=null;this.pipelineReport=null;
     ++this.signatureGeneration;this.signaturePad?.dispose();this.signaturePad=null;this.signatureInk='';
     ++this.nativeGeneration;this.nativeOperation?.cancel();this.nativeOperation=null;this.nativePreviewSource=null;this.nativePreviewKey='null';this.nativePreviewBusy=false;
@@ -502,6 +556,7 @@ class DocFlowV2 {
     </main>`;
     const form=this.root.querySelector<HTMLFormElement>('[data-options]');if(form)restoreOptions(form,this.optionValues);
     if(['ocr','compress','office-to-pdf'].includes(tool.id))this.updateProcessingMode();
+    if(tool.id==='watermark'&&form)this.mountWatermarkSettings(form);
     form?.addEventListener('submit',event=>{event.preventDefault();void this.execute();});
     const pipelineHost=this.root.querySelector<HTMLElement>('[data-pipeline-editor]');
     if(pipelineHost){if(this.pipelineKind!==tool.id){this.pipelineDraft=createPipelineDraft(tool.id==='batch');this.pipelineKind=tool.id;}this.pipelineEditor=new V2PipelineEditor(pipelineHost,this.pipelineDraft,tool.id==='batch',()=>this.invalidateResult());const report=document.createElement('section');report.dataset.pipelineLive='';report.setAttribute('aria-label','File queue status');this.root.querySelector('.df2-page-stage')?.append(report);this.paintPipelineReport();}
@@ -510,6 +565,33 @@ class DocFlowV2 {
     add?.addEventListener('change',()=>{if(add.files){void this.receive([...add.files]);}});
     this.root.querySelector<HTMLInputElement>('[name=readerPage]')?.addEventListener('keydown',event=>{if(event.key==='Enter'){event.preventDefault();void this.jumpReaderPage();}});
     void this.loadPreview();
+  }
+  private mountWatermarkSettings(form:HTMLFormElement):void {
+    const mode=form.querySelector<HTMLSelectElement>('[name=watermarkMode]')!;
+    const image=form.querySelector<HTMLInputElement>('[data-watermark-image]')!;
+    const status=form.querySelector<HTMLElement>('#df2-watermark-image-status')!;
+    const showMode=()=>{
+      for(const settings of form.querySelectorAll<HTMLFieldSetElement>('[data-watermark-settings]')){
+        settings.hidden=settings.disabled=settings.dataset.watermarkSettings!==mode.value;
+      }
+    };
+    const showImage=()=>{status.textContent=this.watermarkImage?'Selected: '+this.watermarkImage.name:'Choose a PNG or JPEG image.';};
+    mode.addEventListener('change',showMode);
+    image.addEventListener('change',()=>{
+      const file=image.files?.[0];
+      image.value='';
+      if(!file)return;
+      try{
+        if(!['image/png','image/jpeg'].includes(file.type)&&!/\.(png|jpe?g)$/i.test(file.name))throw Error('Choose a PNG or JPEG watermark image.');
+        validateInputBudget([this.files[0]!.size,file.size]);
+        this.watermarkImage=file;
+        showImage();
+      }catch(error){
+        status.textContent=(error instanceof Error?error.message:'Invalid image.')+(this.watermarkImage?' Still selected: '+this.watermarkImage.name:'');
+      }
+    });
+    showMode();
+    showImage();
   }
   private async loadPreview():Promise<void> {
     const generation=++this.renderId;
@@ -735,6 +817,11 @@ class DocFlowV2 {
     const form=this.root.querySelector<HTMLFormElement>('[data-options]');
     if(!form)return;
     const options=readOptions(form);
+    const imageWatermark=tool.id==='watermark'&&options.watermarkMode==='image';
+    const watermarkImage=imageWatermark?this.watermarkImage:null;
+    if(imageWatermark&&!form.reportValidity())return;
+    if(imageWatermark&&!watermarkImage){this.message('Choose a PNG or JPEG watermark image.');return;}
+    if(imageWatermark)options.rotation=options.imageRotation;
     if(tool.id==='office-to-pdf'||['ocr','compress'].includes(tool.id)&&form.querySelector<HTMLSelectElement>('[name=processingMode]')?.value==='server'){this.serverProcessing?.start(this.files[0]!);return;}
     if(tool.id==='ocr'){if(!form.reportValidity())return;try{scanOptions(options);}catch(error){this.message(error instanceof Error?error.message:'Invalid recognition settings.');return;}}
     if(tool.id==='forms'){try{if(!this.formFiller)throw Error('Wait for the form preview to finish loading.');options.values=this.formFiller.exportValues();}catch(error){this.message(error instanceof Error?error.message:'Form fields could not be read.');return;}}
@@ -784,7 +871,8 @@ class DocFlowV2 {
     this.setProcessing(true);this.message('Preparing files…');
     const progressMessage=(message:string)=>{if(generation===this.processingGeneration)this.message(message);};
     try{
-      const input=await Promise.all(this.files.map(async f=>({name:f.name,type:f.type,buffer:await f.arrayBuffer()})));
+      const sourceFiles=watermarkImage?[...this.files,watermarkImage]:this.files;
+      const input=await Promise.all(sourceFiles.map(async f=>({name:f.name,type:f.type,buffer:await f.arrayBuffer()})));
       if(tool.id==='edit-pdf' && this.editor?.containsText){
         const response=await fetch(`${import.meta.env.BASE_URL}fonts/DocFlowSans.woff`);
         if(!response.ok)throw Error('Editor font unavailable. Reconnect and retry.');
@@ -858,7 +946,7 @@ class DocFlowV2 {
         result={outputs:[{name:'pdf-pages.zip',type:'application/zip',buffer:await blob.arrayBuffer()}],
           info:{format,pageCount:this.preview?.pageCount??0}};
       }else{
-        const operation=tool.operation as WorkerOperation;
+        const operation:WorkerOperation=imageWatermark?'watermark-image':tool.operation!;
         const running=runWorkerOperation(operation,input,options,p=>progressMessage(p.message+' · '+p.percent+'%'));
         this.cancel=running.cancel;
         result=await running.result;
@@ -866,6 +954,7 @@ class DocFlowV2 {
       if(tool.id==='sign-visual'&&generation===this.processingGeneration){result.outputs[0]!.name='visually-signed.pdf';this.review={kind:'pdf',title:'Review visually signed PDF',buffer:result.outputs[0]!.buffer};}
       if(tool.id==='forms'&&generation===this.processingGeneration)this.review={kind:'pdf',title:'Review '+(options.flatten?'flattened':'filled')+' PDF form',buffer:result.outputs[0]!.buffer};
       if(generation!==this.processingGeneration)return;
+      if(tool.id==='watermark')this.review={kind:'pdf',title:'Review watermarked PDF',buffer:result.outputs[0]!.buffer};
       if(clearsHistory(tool.id))this.revisions.clear();
       this.result=result;
       this.busy=false;
@@ -1009,6 +1098,20 @@ class DocFlowV2 {
     if(target.closest('a[href="#df2-catalog"]')){event.preventDefault();this.root.querySelector('#df2-catalog')?.scrollIntoView({behavior:'smooth'});return;}
     const category=target.closest<HTMLElement>('[data-category]');
     if(category){this.filter=category.dataset.category??'all';this.home();return;}
+    const favorite=target.closest<HTMLButtonElement>('[data-favorite]')?.dataset.favorite;
+    if(favorite&&preferenceToolIds.has(favorite)){toggleFavorite(favorite);return;}
+    const cloud=target.closest<HTMLButtonElement>('[data-open-cloud]');
+    if(cloud){
+      openPreferencesDialog(cloud,{
+        allowedToolIds:preferenceToolIds,
+        capture:()=>({favorite_tools:[...getFavorites()],recent_tools:this.recentTools}),
+        apply:state=>{
+          this.setRecentTools(state.recent_tools);
+          replaceFavorites(state.favorite_tools);
+        }
+      });
+      return;
+    }
     if(target.closest('[data-open-offline]')){openOfflineDialog(target.closest<HTMLElement>('[data-open-offline]'));return;}
     if(target.closest('[data-open-search]')){this.openSearch();return;}
     const revision=target.closest<HTMLElement>('[data-revision]')?.dataset.revision;

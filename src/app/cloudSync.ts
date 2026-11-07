@@ -304,8 +304,10 @@ export function mountCloudPanel(host: HTMLElement, options: CloudPanelOptions): 
 
   download.addEventListener('click', () => {
     void working('Loading cloud preferences…', async () => {
+      const generation = authenticationGeneration;
       const session = await activeSession();
       const data = await api('/rest/v1/docflow_preferences?select=favorite_tools,recent_tools&user_id=eq.' + encodeURIComponent(session.user.id), 'GET', undefined, session.access_token);
+      if (generation !== authenticationGeneration) throw new Error('Your account changed. Restore your preferences again.');
       if (!Array.isArray(data) || !data.length) return 'No saved cloud preferences yet. Select Save on your first device.';
       options.apply(sanitizeCloudTools(data[0], options.allowedToolIds));
       return 'Cloud favorites and recent tools restored on this device.';
