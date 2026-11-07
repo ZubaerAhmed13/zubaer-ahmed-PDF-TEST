@@ -15,7 +15,7 @@ import {
 } from 'pdf-lib';
 import { PdfOperationError } from './errors';
 import { MAX_FILE_BYTES, MAX_TOTAL_BYTES } from './resourceBudget';
-import { parsePageOrder, parsePageSelection, parseSplitRanges } from './pageRanges';
+import { parsePageOrder, parsePageSelection, parseRequiredPageSelection, parseSplitRanges } from './pageRanges';
 import {pdfChoiceOptions,setPdfChoiceValues,updatePdfChoiceAppearance} from './formChoices';
 import type { InputFile, OperationProgress, OperationResult, OutputFile } from './types';
 
@@ -95,7 +95,7 @@ export async function splitPdf(files: InputFile[], options: Record<string, unkno
   else if (mode === 'every') {
     const every = Math.max(1, Math.floor(asNumber(options.every, 5)));
     for (let start = 0; start < total; start += every) groups.push(source.getPageIndices().slice(start, start + every));
-  } else if (mode === 'selected') groups = [parsePageSelection(asString(options.pages), total)];
+  } else if (mode === 'selected') groups = [parseRequiredPageSelection(asString(options.pages), total)];
   else groups = parseSplitRanges(asString(options.ranges, `1-${total}`), total);
 
   const separate = options.individualPdfResults === true;
@@ -127,9 +127,7 @@ export async function removePages(files: InputFile[], options: Record<string, un
   const file = files[0];
   if (!file) throw new PdfOperationError('INPUT_REQUIRED', 'Choose a PDF to remove pages from.');
   const source = await loadPdf(file);
-  const pagesValue = asString(options.pages).trim();
-  if (!pagesValue) throw new PdfOperationError('INVALID_PAGE_RANGE', 'Enter at least one page to remove.');
-  const removed = new Set(parsePageSelection(pagesValue, source.getPageCount()));
+  const removed = new Set(parseRequiredPageSelection(asString(options.pages), source.getPageCount(), 'Enter at least one page to remove.'));
   const keep = source.getPageIndices().filter((page) => !removed.has(page));
   if (!keep.length) throw new PdfOperationError('EMPTY_DOCUMENT', 'At least one page must remain in the PDF.');
   const output = await PDFDocument.create();
@@ -146,9 +144,7 @@ export async function extractPages(files: InputFile[], options: Record<string, u
   const file = files[0];
   if (!file) throw new PdfOperationError('INPUT_REQUIRED', 'Choose a PDF to extract pages from.');
   const source = await loadPdf(file);
-  const pagesValue = asString(options.pages).trim();
-  if (!pagesValue) throw new PdfOperationError('INVALID_PAGE_RANGE', 'Enter at least one page to extract.');
-  const selected = parsePageSelection(pagesValue, source.getPageCount());
+  const selected = parseRequiredPageSelection(asString(options.pages), source.getPageCount(), 'Enter at least one page to extract.');
   const output = await PDFDocument.create();
   const pages = await output.copyPages(source, selected);
   pages.forEach((page, index) => {

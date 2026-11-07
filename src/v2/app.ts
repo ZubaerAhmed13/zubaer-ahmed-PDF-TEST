@@ -36,7 +36,7 @@ import {getFavorites,isFavorite,replaceFavorites,subscribeFavorites,toggleFavori
 import {sanitizeCloudTools} from '../app/cloudSync';
 import {openPreferencesDialog} from './preferencesDialog';
 import {mountScanReview,type PhotoCorrections} from '../tools/scanReview';
-import {parsePageSelection} from '../pdf/pageRanges';
+import {parseRequiredPageSelection,parseSplitRanges} from '../pdf/pageRanges';
 
 const esc=(value:string):string=>value.replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]!));
 const bytes=(value:number):string=>value<1024?value+' B':value<1048576?(value/1024).toFixed(1)+' KB':(value/1048576).toFixed(1)+' MB';
@@ -63,6 +63,7 @@ type WorkspaceRevision={id:string;stage:'work'|'result';size:number;state:{
 }};
 type WorkspaceTransition={kind:'handoff';handoff:ResultHandoff}|{kind:'revision';direction:RevisionDirection;revision:WorkspaceRevision};
 const clearsHistory=(id:string):boolean=>id==='redact-secure'||id==='protect-pdf';
+const visualPageTools=new Set(['split','remove-pages','extract-pages']);
 const route=():Route=>{
   const match=location.hash.match(/^#\/tools\/([a-z0-9-]+)(?:\/(work|result))?$/);
   return match?{id:match[1]??null,stage:(match[2]??'upload') as Stage}:{id:null,stage:'upload'};
@@ -90,7 +91,7 @@ function toolOptions(id:string):string{
       <p id="df2-image-export-pages" class="df2-organize-warning">Select thumbnails or enter page ranges like 2, 4-6. A blank field exports every page. Selecting a thumbnail starts a page list.</p>`;
     case 'organize': return `<p class="df2-organize-warning">Arrange page cards in the document area. Reordering preserves page contents. Duplicated pages may increase file size.</p>`;
     case 'compress': return (serverProcessingAvailable()?select('processingMode','Processing location',[['device','On this device'],['server','Temporary server processing']]):'')+'<fieldset data-processing-local class="df2-ocr-local"><legend>On-device compression</legend>'+select('compressionPreset','Image compression',[['balanced','Balanced quality'],['quality','Higher image quality'],['small','Smaller images'],['custom','Custom settings']])+`<details class="df2-compression-details"><summary>Advanced compression</summary><label class="df2-control">JPEG image quality (%)<input name="jpegQuality" type="number" min="50" max="95" step="1" value="79"></label><label class="df2-control">Maximum image dimension (px)<input name="maxImagePixels" type="number" min="900" max="5000" step="1" value="2200"></label><p>Images above this pixel size are downsampled. This is a pixel limit, not DPI. Smaller images and lower quality can reduce detail.</p></details><p class="df2-organize-warning">Recompresses eligible RGB JPEG images while preserving text and vectors. Other encodings are left unchanged. Results depend on the document.</p></fieldset><div data-processing-server hidden></div>`;
-    case 'split':return select('mode','Split method',[['selected','Selected pages'],['ranges','Page ranges'],['individual','Individual pages'],['every','Every N pages']])+field('pages','Pages to extract','1')+field('ranges','Separate ranges (semicolon)','1-2;3-4')+field('every','Pages in each part','5','number')+select('splitOutput','Output format',[['zip','ZIP archive'],['pdfs','Separate PDFs']]);
+    case 'split':return select('mode','Split method',[['selected','Selected pages'],['ranges','Page ranges'],['individual','Individual pages'],['every','Every N pages']])+field('pages','Pages to extract','')+field('ranges','Separate ranges (semicolon)','1-2;3-4')+field('every','Pages in each part','5','number')+select('splitOutput','Output format',[['zip','ZIP archive'],['pdfs','Separate PDFs']]);
     case 'remove-pages':return field('pages','Pages to remove','');
     case 'extract-pages':return field('pages','Pages to extract','');
     case 'rotate':return select('target','Rotate',[['all','All pages'],['odd','Odd pages'],['even','Even pages'],['selected','Selected pages']])+select('degrees','Rotation',[['90','90° clockwise'],['180','180°'],['270','270° clockwise']])+field('pages','Selected pages (when needed)','');
@@ -159,6 +160,7 @@ class DocFlowV2 {
   private result:OperationResult|null=null;
   private links:string[]=[];
   private selected=new Set<number>();
+  private selectionAnchor:number|null=null;
   private preview:PreviewController|null=null;
   private organizer:PageOrganizer|null=null;
   private imagePreview:V2ImagePreview|null=null;
@@ -527,7 +529,7 @@ class DocFlowV2 {
     }
     this.files=candidate;
     this.pipelineReport=null;
-    this.selected.clear();this.currentPage=1;this.result=null;this.review=null;this.disposeReview?.();this.disposeReview=null;
+    this.selected.clear();if(!tool.multiple)this.currentPage=1;this.result=null;this.review=null;this.disposeReview?.();this.disposeReview=null;
     // One hash-route transition owns the mount; never mount the viewer twice.
     const next=base+tool.id+'/work';
     if(location.hash!==next)location.hash=next;
@@ -546,8 +548,12 @@ class DocFlowV2 {
       ${this.revisionControls()}
       <div class="df2-workflow">
         <aside class="df2-rail" aria-label="Document pages and files"><div class="df2-pane-title"><strong>${tool.multiple?'Documents':'Pages'}</strong><span>${this.files.length} ${this.files.length===1?'file':'files'}</span></div>
+          ${visualPageTools.has(tool.id)?`<div class="df2-page-selection" role="group" aria-label="Page selection" hidden>
+            <button type="button" class="df2-subtle" data-select-all-pages aria-label="Select all pages">Select all</button>
+            <button type="button" class="df2-subtle" data-clear-pages aria-label="Clear page selection">Clear</button>
+            <span data-page-selection-count role="status"></span></div>`:''}
           <div class="df2-rail-list">${this.files.map((file,i)=>`<article class="df2-file" data-file-index="${i}"><span class="df2-file-badge">${tool.id==='office-to-pdf'?esc(file.name.split('.').pop()!.toUpperCase()):'PDF'}</span><div><b title="${esc(file.name)}">${esc(file.name)}</b><small>${bytes(file.size)}</small></div>
-          ${['workflow','batch'].includes(tool.id)?`<button type="button" data-preview-file="${i}" aria-label="Preview ${esc(file.name)}" aria-pressed="${this.activeFile===i}">Preview</button>`:''}
+          ${['merge','workflow','batch'].includes(tool.id)?`<button type="button" class="df2-subtle df2-file-preview" data-preview-file="${i}" aria-label="Preview ${esc(file.name)}${tool.id==='merge'?', document '+(i+1):''}" aria-pressed="${this.activeFile===i}">Preview</button>`:''}
           ${tool.multiple?`<div class="df2-file-actions"><button data-move-up="${i}" aria-label="Move ${esc(file.name)} up" ${i===0?'disabled':''}>↑</button><button data-move-down="${i}" aria-label="Move ${esc(file.name)} down" ${i===this.files.length-1?'disabled':''}>↓</button><button data-remove-file="${i}" aria-label="Remove ${esc(file.name)}">×</button></div>`:''}</article>`).join('')}
           <div class="df2-page-thumbs" role="group" aria-label="Page thumbnails"></div></div>
         </aside>
@@ -615,6 +621,7 @@ class DocFlowV2 {
   private async loadPreview():Promise<void> {
     const generation=++this.renderId;
     await this.freePreview(false);
+    if(generation!==this.renderId)return;
     const file=this.files[this.activeFile]??this.files[0],canvas=this.root.querySelector<HTMLCanvasElement>('[data-page-canvas]'),
       status=this.root.querySelector<HTMLElement>('[data-render-status]');
     if(!file||!canvas||!status)return;
@@ -637,7 +644,9 @@ class DocFlowV2 {
         if(generation!==this.renderId)return;
         this.nativePreviewSource=result;this.nativePreviewKey=JSON.stringify(source??null);
       }
-      const controller=await createPreview(this.tool?.id==='edit-pdf'&&this.nativePreviewSource?this.nativePreviewSource.slice(0):await file.arrayBuffer(),canvas,status);
+      const source=this.tool?.id==='edit-pdf'&&this.nativePreviewSource?this.nativePreviewSource.slice(0):await file.arrayBuffer();
+      if(generation!==this.renderId)return;
+      const controller=await createPreview(source,canvas,status);
       if(generation!==this.renderId){await controller.destroy();return;}
       if(this.tool?.id==='redact-secure'&&controller.pageCount>REDACTION_MAX_PAGES){await controller.destroy();const message='Permanent redaction supports at most 15 pages. Split this document first.';this.message(message);const run=this.root.querySelector<HTMLButtonElement>('[data-run]');if(run)run.disabled=true;throw Error(message);}
       this.preview=controller;
@@ -677,8 +686,9 @@ class DocFlowV2 {
       const host=this.root.querySelector<HTMLElement>('.df2-page-thumbs');
       if(host && generation===this.renderId){
         this.thumbnailRail=mountPdfThumbnailRail(host,controller);
-        if(this.tool?.id==='pdf-to-images')this.syncPdfImageSelection();
+        if(this.tool?.id==='pdf-to-images'||visualPageTools.has(this.tool?.id??''))this.syncPageSelection();
         else this.paintSelectedThumbnails();
+        const selection=this.root.querySelector<HTMLElement>('.df2-page-selection');if(selection)selection.hidden=false;
       }
     }catch(error){if(generation===this.renderId&&status){const message=error instanceof Error?error.message:'Preview unavailable';status.textContent=message;if(this.tool?.id==='sign-visual'){this.message(message);this.root.querySelectorAll<HTMLButtonElement>('[data-signature-place],[data-signature-type],[data-run]').forEach(button=>{button.disabled=true;});}}}
   }
@@ -883,8 +893,15 @@ class DocFlowV2 {
     if(tool.id==='compress'){
       Object.assign(options,compressionSettings(options));
     }
-    if(['remove-pages','extract-pages'].includes(tool.id)&&!String(options.pages??'').trim()){
-      this.message('Select at least one page before continuing.');return;
+    const previewPageCount=this.preview?.pageCount;
+    if(previewPageCount&&visualPageTools.has(tool.id)&&(tool.id!=='split'||options.mode==='selected'||options.mode==='ranges')){
+      try{
+        if(tool.id==='split'&&options.mode==='ranges')parseSplitRanges(String(options.ranges??''),previewPageCount);
+        else {
+          const pages=parseRequiredPageSelection(String(options.pages??''),previewPageCount);
+          if(tool.id==='remove-pages'&&pages.length===previewPageCount)throw Error('Keep at least one page in the PDF.');
+        }
+      }catch(error){this.message(error instanceof Error?error.message:'Enter a valid page range.');return;}
     }
     const button=this.root.querySelector<HTMLButtonElement>('[data-run]');
     const generation=++this.processingGeneration;
@@ -1093,7 +1110,7 @@ class DocFlowV2 {
       return;
     }
     if(target instanceof HTMLSelectElement&&target.name==='processingMode'){this.captureOptions();this.updateProcessingMode();}
-    if(this.tool?.id==='pdf-to-images'&&target instanceof HTMLInputElement&&target.name==='pages')this.syncPdfImageSelection();
+    if((this.tool?.id==='pdf-to-images'||visualPageTools.has(this.tool?.id??''))&&target instanceof HTMLInputElement&&target.name==='pages')this.syncPageSelection();
     if(target instanceof HTMLSelectElement&&target.name==='compressionPreset'){
       const preset=compressionPresets[target.value];
       const form=target.form;if(preset&&form){form.querySelector<HTMLInputElement>('[name=jpegQuality]')!.value=String(Math.round(preset.imageQuality*100));form.querySelector<HTMLInputElement>('[name=maxImagePixels]')!.value=String(preset.maxImageDimension);}
@@ -1103,25 +1120,31 @@ class DocFlowV2 {
     }
     this.invalidateResult();
   }
-  private syncPdfImageSelection():void {
+  private syncPageSelection():void {
     const input=this.root.querySelector<HTMLInputElement>('[data-options] [name=pages]');
     if(!input||!this.preview)return;
     this.selected.clear();
-    const selection=input.value.trim();
+    this.selectionAnchor=null;
     try{
-      if(selection){
-        const pages=parsePageSelection(selection,this.preview.pageCount);
-        if(!pages.length)throw Error('Enter a page number.');
-        pages.forEach(page=>this.selected.add(page+1));
-      }
+      if(input.value.trim())parseRequiredPageSelection(input.value,this.preview.pageCount).forEach(page=>this.selected.add(page+1));
       input.removeAttribute('aria-invalid');
     }catch{input.setAttribute('aria-invalid','true');}
+    this.paintSelectedThumbnails();
+  }
+  private commitPageSelection(input:HTMLInputElement):void{
+    const mode=input.form?.querySelector<HTMLSelectElement>('[name=mode]');
+    if(this.tool?.id==='split'&&mode)mode.value='selected';
+    input.value=range(this.selected);
+    input.removeAttribute('aria-invalid');
+    this.invalidateResult();
     this.paintSelectedThumbnails();
   }
   private paintSelectedThumbnails():void {
     this.root.querySelectorAll<HTMLButtonElement>('.df2-thumb[data-page]').forEach(button=>{
       button.setAttribute('aria-pressed',String(this.selected.has(Number(button.dataset.page))));
     });
+    const count=this.root.querySelector<HTMLElement>('[data-page-selection-count]');
+    if(count&&this.preview)count.textContent=this.selected.size+' of '+this.preview.pageCount+' selected';
   }
   private async jumpReaderPage():Promise<void>{
     const input=this.root.querySelector<HTMLInputElement>('[name=readerPage]'),status=this.root.querySelector<HTMLElement>('[data-reader-status]');if(!input||!status)return;
@@ -1179,7 +1202,14 @@ class DocFlowV2 {
     if(target.closest('[data-pipeline-check]')){await this.executePipeline('check');return;}
     if(target.closest('[data-pipeline-retry]')){await this.executePipeline('retry');return;}
     if(target.closest('[data-pipeline-zip]')){await this.preparePipelineZip();return;}
-    const previewFile=target.closest<HTMLElement>('[data-preview-file]');if(previewFile){const index=Number(previewFile.dataset.previewFile);if(!Number.isInteger(index)||!this.files[index])return;this.captureOptions();this.activeFile=index;this.currentPage=1;this.workspace();return;}
+    const previewFile=target.closest<HTMLButtonElement>('[data-preview-file]');
+    if(previewFile){
+      const index=Number(previewFile.dataset.previewFile);
+      if(!Number.isInteger(index)||!this.files[index]||index===this.activeFile)return;
+      this.captureOptions();this.activeFile=index;this.currentPage=1;this.workspace();
+      this.root.querySelector<HTMLButtonElement>(`[data-preview-file="${index}"]`)?.focus();
+      return;
+    }
     const up=target.closest<HTMLElement>('[data-move-up]'),down=target.closest<HTMLElement>('[data-move-down]'),remove=target.closest<HTMLElement>('[data-remove-file]');
     if(up||down||remove){const index=Number((up??down??remove)?.dataset.moveUp??(down??remove)?.dataset.moveDown??remove?.dataset.removeFile);
       if(!Number.isInteger(index)||index<0||index>=this.files.length)return;
@@ -1188,26 +1218,55 @@ class DocFlowV2 {
       if(remove){
         const [removed]=this.files.splice(index,1);
         if(removed&&!this.files.includes(removed))this.photoCorrections.delete(removed);
+        if(index===this.activeFile){
+          this.activeFile=Math.max(0,Math.min(index,this.files.length-1));
+          this.currentPage=1;
+        }else if(index<this.activeFile)this.activeFile--;
+      }else {
+        const next=index+(up?-1:1);
+        if(next<0||next>=this.files.length)return;
+        [this.files[index],this.files[next]]=[this.files[next]!,this.files[index]!];
+        if(this.activeFile===index)this.activeFile=next;
+        else if(this.activeFile===next)this.activeFile=index;
       }
-      else {const next=index+(up?-1:1);if(next<0||next>=this.files.length)return;[this.files[index],this.files[next]]=[this.files[next]!,this.files[index]!];}
       if(!this.files.length){this.revisions.clear();location.hash=base+this.tool!.id;return;}
       this.workspace();return;
     }
+    const pagesField=this.root.querySelector<HTMLInputElement>('[data-options] input[name="pages"]');
+    const selectionAction=target.closest<HTMLButtonElement>('[data-select-all-pages],[data-clear-pages]');
+    if(selectionAction&&pagesField&&this.preview){
+      this.selected.clear();
+      if(selectionAction.hasAttribute('data-select-all-pages')){
+        for(let page=1;page<=this.preview.pageCount;page++)this.selected.add(page);
+      }
+      this.selectionAnchor=null;
+      this.commitPageSelection(pagesField);
+      return;
+    }
     const thumb=target.closest<HTMLElement>('[data-page]');
     if(thumb&&thumb.classList.contains('df2-thumb')){
-      const p=Number(thumb.dataset.page);const pagesField=this.root.querySelector<HTMLInputElement>('input[name="pages"]');
-      if(this.tool?.id==='pdf-to-images'&&pagesField){
+      const p=Number(thumb.dataset.page);
+      const imageExport=this.tool?.id==='pdf-to-images',visual=visualPageTools.has(this.tool?.id??'');
+      if((imageExport||visual)&&pagesField){
         if(pagesField.getAttribute('aria-invalid')==='true'){
           this.message('Fix the page range or clear it before selecting thumbnails.');
           await this.showPage(p);return;
         }
-        if(this.selected.size===1&&this.selected.has(p)){
+        if(imageExport&&this.selected.size===1&&this.selected.has(p)){
           this.message('Keep at least one selected page. Clear the page field to export every page.');
           await this.showPage(p);return;
         }
       }
-      if(pagesField){if(this.selected.has(p))this.selected.delete(p);else this.selected.add(p);pagesField.value=range(this.selected);this.invalidateResult();}
-      this.paintSelectedThumbnails();
+      if(pagesField){
+        if(visual&&event.shiftKey&&this.selectionAnchor!==null){
+          const start=Math.min(p,this.selectionAnchor),end=Math.max(p,this.selectionAnchor);
+          for(let page=start;page<=end;page++)this.selected.add(page);
+        }else {
+          if(this.selected.has(p))this.selected.delete(p);else this.selected.add(p);
+          if(visual)this.selectionAnchor=p;
+        }
+        this.commitPageSelection(pagesField);
+      }
       await this.showPage(p);return;
     }
     const imgThumb=target.closest<HTMLElement>('[data-image-index]');

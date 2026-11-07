@@ -148,6 +148,10 @@ a{color:inherit;text-decoration:none}
 .df2-pane-title strong{font-size:14px;line-height:1.3;font-weight:830;letter-spacing:-.02em}
 .df2-pane-title span{font-size:10px;color:#929eb1;font-weight:800}
 .df2-rail-list{padding:12px}
+.df2-page-selection{display:flex;align-items:center;flex-wrap:wrap;gap:6px;padding:6px 12px 0}
+.df2-page-selection[hidden]{display:none}
+.df2-page-selection button{min-height:32px}
+.df2-page-selection [data-page-selection-count]{color:#56637b;font-size:11px}
 .df2-file{display:flex;align-items:center;gap:9px;border:1px solid #e6e9f1;border-radius:11px;padding:10px 9px;margin-bottom:7px;background:#fff;min-width:0}
 .df2-file-badge{display:grid;place-items:center;background:#eae8ff;color:#6652c3;font-size:9px;font-weight:900;border-radius:7px;width:29px;height:36px;flex:0 0 29px}
 .df2-file>div:nth-child(2){min-width:0;flex:1}
@@ -157,6 +161,7 @@ a{color:inherit;text-decoration:none}
 .df2-file-actions{display:flex;flex-direction:column;gap:3px}
 .df2-file-actions button{width:30px;height:26px;padding:1px;border-radius:6px;border:1px solid #e1e5ef;background:#fff;color:#5c6281}
 .df2-file-actions button:disabled{opacity:.28}
+.df2-file-preview{min-height:32px;padding:4px 7px}
 .df2-page-thumbs{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:15px}
 .df2-thumb{display:grid;place-items:center;gap:6px;border:1px solid #e4e8f0;border-radius:10px;padding:10px 5px;background:#f8f9fc;min-height:110px;color:#56637b;font-size:10px}
 .df2-thumb[aria-pressed="true"]{border-color:#6254d5;background:#eeecff;box-shadow:inset 0 0 0 1px #6254d5}
@@ -274,8 +279,10 @@ a{color:inherit;text-decoration:none}
   .df2-workflow{display:flex;flex-direction:column;overflow:auto}
   .df2-rail{border-right:0;border-bottom:1px solid #e2e6ef;flex:0 0 auto;max-height:161px;overflow:auto}
   .df2-rail .df2-pane-title{padding:9px 13px}
+  .df2-rail:has(.df2-page-selection){max-height:190px}
   .df2-rail-list{padding:7px 11px;display:flex;gap:10px;overflow:auto}
   .df2-file{flex:0 0 180px;margin:0;min-height:60px}
+  .df2-file:has([data-preview-file]){flex-basis:194px}
   .df2-page-thumbs{display:flex;margin:0;gap:7px}
   .df2-thumb{flex:0 0 80px;min-height:95px}
   .df2-canvas-pane{min-height:0;flex:1}

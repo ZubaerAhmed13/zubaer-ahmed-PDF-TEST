@@ -68,6 +68,22 @@ describe('structural PDF operations', () => {
     }
   });
 
+  it.each(['', ', ,'])('rejects a split selected-pages operation with no pages (%j)', async (pages) => {
+    await expect(splitPdf([await fixture('split.pdf', 3)], { mode: 'selected', pages }, ignoreProgress))
+      .rejects.toMatchObject({ code: 'INVALID_PAGE_RANGE' });
+  });
+
+  it.each(['1; ;3', '1;,;3', '1;'])('rejects an empty part in split ranges (%j)', async (ranges) => {
+    await expect(splitPdf([await fixture('split.pdf', 3)], { mode: 'ranges', ranges }, ignoreProgress))
+      .rejects.toMatchObject({ code: 'INVALID_PAGE_RANGE' });
+  });
+
+  it('rejects separator-only selections for removal and extraction', async () => {
+    const input = await fixture('pages.pdf', 3);
+    await expect(removePages([input], { pages: ',,' }, ignoreProgress)).rejects.toMatchObject({ code: 'INVALID_PAGE_RANGE' });
+    await expect(extractPages([input], { pages: ',,' }, ignoreProgress)).rejects.toMatchObject({ code: 'INVALID_PAGE_RANGE' });
+  });
+
   it('removes selected pages while preserving the remaining page geometry', async () => {
     const result = await removePages([await fixture('remove.pdf', 4)], { pages: '2,4' }, ignoreProgress);
     const output = await PDFDocument.load(result.outputs[0]!.buffer);

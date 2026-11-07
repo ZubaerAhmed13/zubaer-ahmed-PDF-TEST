@@ -1,4 +1,4 @@
-import {test as baseTest,expect,type Page,type BrowserContext} from '@playwright/test';
+import {test as baseTest,expect,type Page} from '@playwright/test';
 import {createServer} from 'node:http';
 import {resolve,sep} from 'node:path';
 import {PDFDocument} from 'pdf-lib';
@@ -10,11 +10,10 @@ interface LocalOrigin {
   close: () => Promise<void>;
 }
 
-const test=baseTest.extend<{offlineOrigin:LocalOrigin|undefined}>({
+const test=baseTest.extend<{offlineOrigin:LocalOrigin}>({
   offlineOrigin:async({browserName},use)=>{
-    if(browserName!=='webkit'){await use(undefined);return;}
-    // Disconnect the origin itself. WebKit's Playwright offline switch can
-    // reject the navigation before a service worker gets a chance to respond.
+    // Closing the origin also blocks service-worker network requests, which
+    // can bypass page-level offline emulation in Chromium.
     const dist=resolve('dist');
     const types:Record<string,string>={
       html:'text/html',js:'text/javascript',mjs:'text/javascript',css:'text/css',
@@ -43,7 +42,7 @@ const test=baseTest.extend<{offlineOrigin:LocalOrigin|undefined}>({
         server.listen(0,'127.0.0.1',done);
       });
       const address=server.address();
-      if(!address||typeof address==='string')throw Error('Missing offline test origin');
+      if(!address||typeof address==='string')throw Error('Missing offline test origin for '+browserName);
       await use({url:`http://127.0.0.1:${address.port}${base}`,close});
     }finally{await close();}
   },
@@ -56,8 +55,8 @@ async function ready(page:Page,url=base){
   await expect(page.locator('[data-offline-state=core]')).toContainText('Ready in this browser',{timeout:30000});
 }
 async function closePanel(page:Page){await page.getByRole('button',{name:'Close offline and storage'}).click();await expect(page.getByRole('dialog',{name:'Offline and storage'})).toHaveCount(0);}
-async function disconnect(page:Page,context:BrowserContext,origin?:LocalOrigin){
-  if(origin)await origin.close();else await context.setOffline(true);
+async function disconnect(page:Page,origin:LocalOrigin){
+  await origin.close();
   await page.addInitScript(()=>Object.defineProperty(navigator,'onLine',{configurable:true,get:()=>false}));
   await page.reload();
   await expect(page.locator('.df2-home')).toBeVisible();
@@ -67,17 +66,17 @@ async function disconnect(page:Page,context:BrowserContext,origin?:LocalOrigin){
   })).toBe(true);
 }
 async function output(page:Page,name:string){const pending=page.waitForEvent('download');await page.locator('.df2-output').filter({hasText:name}).click();const path=await(await pending).path();if(!path)throw Error('Missing offline output');return readFile(path);}
-test('prepared v2 core survives offline reload and exports real rotated bytes',async({page,context,offlineOrigin})=>{
-  test.setTimeout(120000);await page.setViewportSize({width:390,height:844});await ready(page,offlineOrigin?.url);await closePanel(page);
-  await disconnect(page,context,offlineOrigin);
+test('prepared v2 core survives offline reload and exports real rotated bytes',async({page,offlineOrigin})=>{
+  test.setTimeout(120000);await page.setViewportSize({width:390,height:844});await ready(page,offlineOrigin.url);await closePanel(page);
+  await disconnect(page,offlineOrigin);
   await page.locator('[data-card-tool=rotate]').click();const pdf=await PDFDocument.create();pdf.addPage([401,580]);await page.locator('[data-file-input]').setInputFiles({name:'offline.pdf',mimeType:'application/pdf',buffer:Buffer.from(await pdf.save())});
   await page.getByRole('button',{name:'Options',exact:true}).click();await page.getByRole('combobox',{name:'Rotation',exact:true}).selectOption('180');await page.locator('[data-run]').click();await expect(page.locator('.df2-result')).toBeVisible();const actual=await PDFDocument.load(await output(page,'rotated.pdf'));expect(actual.getPage(0).getRotation().angle).toBe(180);expect(actual.getPage(0).getWidth()).toBe(401);
 });
-test('prepared English OCR recognises a scan offline and missing assets fail visibly',async({page,context,offlineOrigin})=>{
-  test.setTimeout(180000);await ready(page,offlineOrigin?.url);await page.getByRole('button',{name:'Prepare English OCR',exact:true}).click();await expect(page.locator('[data-offline-state=eng]')).toContainText('Ready in this browser',{timeout:90000});await closePanel(page);
+test('prepared English OCR recognises a scan offline and missing assets fail visibly',async({page,offlineOrigin})=>{
+  test.setTimeout(180000);await ready(page,offlineOrigin.url);await page.getByRole('button',{name:'Prepare English OCR',exact:true}).click();await expect(page.locator('[data-offline-state=eng]')).toContainText('Ready in this browser',{timeout:90000});await closePanel(page);
   const png=await page.evaluate(()=>{const canvas=document.createElement('canvas');canvas.width=1000;canvas.height=320;const ctx=canvas.getContext('2d')!;ctx.fillStyle='white';ctx.fillRect(0,0,1000,320);ctx.fillStyle='black';ctx.font='bold 90px Arial';ctx.fillText('DOCFLOW OFFLINE OCR',30,180);return canvas.toDataURL('image/png').split(',')[1]!;});
   const pdf=await PDFDocument.create(),picture=await pdf.embedPng(Buffer.from(png,'base64'));pdf.addPage([500,160]).drawImage(picture,{x:0,y:0,width:500,height:160});const source={name:'scan.pdf',mimeType:'application/pdf',buffer:Buffer.from(await pdf.save())};
-  await disconnect(page,context,offlineOrigin);
+  await disconnect(page,offlineOrigin);
   await page.locator('[data-card-tool=ocr]').click();await page.locator('[data-file-input]').setInputFiles(source);const options=page.getByRole('button',{name:'Options',exact:true});if(await options.isVisible())await options.click();await page.locator('[data-run]').click();await expect(page.locator('.df2-result')).toBeVisible({timeout:110000});
   const task=getDocument({data:new Uint8Array(await output(page,'searchable-ocr.pdf'))}),actual=await task.promise;try{const content=await(await actual.getPage(1)).getTextContent();expect(content.items.map(i=>'str'in i?i.str:'').join(' ').toUpperCase()).toContain('OFFLINE');}finally{await actual.destroy();}
   await page.getByRole('button',{name:'Return to editing'}).click();

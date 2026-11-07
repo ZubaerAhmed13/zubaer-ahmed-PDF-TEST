@@ -24,6 +24,14 @@ export function parsePageSelection(value: string, totalPages: number): number[] 
   return [...selected].sort((a, b) => a - b);
 }
 
+export function parseRequiredPageSelection(
+  value: string, totalPages: number, emptyMessage = 'Select at least one page before continuing.'
+): number[] {
+  const pages = value.trim() ? parsePageSelection(value, totalPages) : [];
+  if (!pages.length) throw new PdfOperationError('INVALID_PAGE_RANGE', emptyMessage);
+  return pages;
+}
+
 export function parsePageOrder(value: string, totalPages: number): number[] {
   const source = value.trim();
   if (!source) return Array.from({ length: totalPages }, (_, index) => index);
@@ -42,5 +50,6 @@ export function parsePageOrder(value: string, totalPages: number): number[] {
 export function parseSplitRanges(value: string, totalPages: number): number[][] {
   const source = value.trim();
   if (!source) throw new PdfOperationError('INVALID_PAGE_RANGE', 'Enter at least one page range.');
-  return source.split(/[;\n]+/).map((group) => parsePageSelection(group, totalPages));
+  return source.split(/[;\n]+/).map((group) =>
+    parseRequiredPageSelection(group, totalPages, 'Each split range needs at least one page.'));
 }
