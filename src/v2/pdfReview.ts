@@ -1,4 +1,5 @@
 import {createPreview,type PreviewController} from '../pdf/render';
+import type {OutputFile} from '../pdf/types';
 export type PdfReviewData={kind:'pdf';title:string;buffer:ArrayBuffer};
 
 /** Review renders a copy of the exact downloadable bytes, never a regeneration. */
@@ -26,4 +27,24 @@ export function mountPdfReview(host:HTMLElement,data:PdfReviewData):()=>void{
   previous.addEventListener('click',prior);next.addEventListener('click',following);
   void createPreview(data.buffer.slice(0),canvas,status,abort.signal).then(async preview=>{if(disposed){await preview.destroy();return;}controller=preview;await show(1);}).catch(error=>{if(!disposed)status.textContent=error instanceof Error?error.message:'Output preview unavailable.';});
   return ()=>{disposed=true;abort.abort();previous.removeEventListener('click',prior);next.removeEventListener('click',following);void controller?.destroy();controller=null;canvas.width=canvas.height=1;host.replaceChildren();};
+}
+
+export function mountExportPdfReview(panel:HTMLDetailsElement,outputs:readonly OutputFile[]):()=>void{
+  const host=panel.querySelector<HTMLElement>('[data-export-pdf-canvas]')!;
+  const picker=panel.querySelector<HTMLSelectElement>('select');
+  let dispose=()=>{};
+  const render=()=>{
+    dispose();
+    dispose=()=>{};
+    const output=outputs[picker?.selectedIndex??0];
+    host.classList.toggle('df2-review',panel.open);
+    if(panel.open&&output)dispose=mountPdfReview(host,{kind:'pdf',title:output.name,buffer:output.buffer});
+  };
+  panel.addEventListener('toggle',render);
+  picker?.addEventListener('change',render);
+  return ()=>{
+    panel.removeEventListener('toggle',render);
+    picker?.removeEventListener('change',render);
+    dispose();
+  };
 }

@@ -38,6 +38,7 @@ import {openPreferencesDialog} from './preferencesDialog';
 import {mountScanReview,type PhotoCorrections} from '../tools/scanReview';
 import {parseRequiredPageSelection,parseSplitRanges} from '../pdf/pageRanges';
 import {outputFilename} from '../app/outputFilename';
+import {mountExportPdfReview} from './pdfReview';
 
 const esc=(value:string):string=>value.replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]!));
 const bytes=(value:number):string=>value<1024?value+' B':value<1048576?(value/1024).toFixed(1)+' KB':(value/1048576).toFixed(1)+' MB';
@@ -556,7 +557,7 @@ class DocFlowV2 {
             <span data-page-selection-count role="status"></span></div>`:''}
           <div class="df2-rail-list">${this.files.map((file,i)=>`<article class="df2-file" data-file-index="${i}"><span class="df2-file-badge">${tool.id==='office-to-pdf'?esc(file.name.split('.').pop()!.toUpperCase()):'PDF'}</span><div><b title="${esc(file.name)}">${esc(file.name)}</b><small>${bytes(file.size)}</small></div>
           ${['merge','workflow','batch'].includes(tool.id)?`<button type="button" class="df2-subtle df2-file-preview" data-preview-file="${i}" aria-label="Preview ${esc(file.name)}${tool.id==='merge'?', document '+(i+1):''}" aria-pressed="${this.activeFile===i}">Preview</button>`:''}
-          ${tool.multiple?`<div class="df2-file-actions"><button data-move-up="${i}" aria-label="Move ${esc(file.name)} up" ${i===0?'disabled':''}>↑</button><button data-move-down="${i}" aria-label="Move ${esc(file.name)} down" ${i===this.files.length-1?'disabled':''}>↓</button><button data-remove-file="${i}" aria-label="Remove ${esc(file.name)}">×</button></div>`:''}</article>`).join('')}
+          ${tool.multiple?`<div class="df2-file-actions">${tool.id==='merge'&&this.files.length>1?'<span data-merge-drag-handle draggable="true" aria-hidden="true" title="Drag to reorder">⠿</span>':''}<button data-move-up="${i}" aria-label="Move ${esc(file.name)} up" ${i===0?'disabled':''}>↑</button><button data-move-down="${i}" aria-label="Move ${esc(file.name)} down" ${i===this.files.length-1?'disabled':''}>↓</button><button data-remove-file="${i}" aria-label="Remove ${esc(file.name)}">×</button></div>`:''}</article>`).join('')}
           <div class="df2-page-thumbs" role="group" aria-label="Page thumbnails"></div></div>
         </aside>
         <section class="df2-canvas-pane" aria-label="Document preview">
@@ -591,7 +592,62 @@ class DocFlowV2 {
     const add=this.root.querySelector<HTMLInputElement>('[data-add-file]');
     add?.addEventListener('change',()=>{if(add.files){void this.receive([...add.files]);}});
     this.root.querySelector<HTMLInputElement>('[name=readerPage]')?.addEventListener('keydown',event=>{if(event.key==='Enter'){event.preventDefault();void this.jumpReaderPage();}});
+    if(tool.id==='merge'&&this.files.length>1)this.mountMergeDrag();
     void this.loadPreview();
+  }
+  private mountMergeDrag():void{
+    const list=this.root.querySelector<HTMLElement>('.df2-rail-list')!;
+    let source:HTMLElement|null=null;
+    let destination:HTMLElement|null=null;
+    const card=(target:EventTarget|null)=>target instanceof Element?target.closest<HTMLElement>('[data-file-index]'):null;
+    const mark=(row:HTMLElement|null)=>{
+      destination?.removeAttribute('data-merge-drop-target');
+      destination=row===source?null:row;
+      destination?.setAttribute('data-merge-drop-target','');
+    };
+    const clear=()=>{
+      mark(null);
+      source?.removeAttribute('data-merge-dragging');
+      source=null;
+    };
+    list.addEventListener('dragstart',event=>{
+      if(this.busy||!(event.target instanceof Element)||!event.target.closest('[data-merge-drag-handle]')||!event.dataTransfer)return;
+      source=card(event.target);
+      if(!source)return;
+      source.setAttribute('data-merge-dragging','');
+      event.dataTransfer.effectAllowed='move';
+      event.dataTransfer.setData('text/plain',source.dataset.fileIndex!);
+    });
+    list.addEventListener('dragover',event=>{
+      const row=card(event.target);
+      if(!source||!row||!event.dataTransfer||this.busy)return;
+      event.preventDefault();
+      event.dataTransfer.dropEffect=row===source?'none':'move';
+      if(row!==destination)mark(row);
+    });
+    list.addEventListener('dragleave',event=>{
+      if(!(event.relatedTarget instanceof Node)||!list.contains(event.relatedTarget))mark(null);
+    });
+    list.addEventListener('dragend',clear);
+    list.addEventListener('drop',event=>{
+      const row=card(event.target);
+      if(!source||!row||this.busy)return;
+      event.preventDefault();
+      const from=Number(source.dataset.fileIndex),to=Number(row.dataset.fileIndex);
+      clear();
+      this.moveFile(from,to);
+    });
+  }
+  private moveFile(from:number,to:number):void{
+    if(!this.files[from]||!this.files[to]||from===to)return;
+    this.captureOptions();this.invalidateResult();
+    this.pipelineReport=null;
+    const [file]=this.files.splice(from,1);
+    this.files.splice(to,0,file!);
+    if(this.activeFile===from)this.activeFile=to;
+    else if(from<this.activeFile&&to>=this.activeFile)this.activeFile--;
+    else if(from>this.activeFile&&to<=this.activeFile)this.activeFile++;
+    this.workspace();
   }
   private mountWatermarkSettings(form:HTMLFormElement):void {
     const mode=form.querySelector<HTMLSelectElement>('[name=watermarkMode]')!;
@@ -760,6 +816,11 @@ class DocFlowV2 {
       return `<a class="df2-output" data-result-output="${index}" href="${url}" download="${esc(output.name)}"><span class="df2-output-icon">↓</span><span><b>${esc(output.name)}</b><small>${bytes(output.buffer.byteLength)} · Ready to download</small></span><strong>Download →</strong></a>`;
     }).join('');
     const pdfs=value.outputs.filter(output=>output.type==='application/pdf'&&output.buffer.byteLength>0);
+    const exportPreview=!this.review&&tool.id!=='protect-pdf'&&pdfs.length?`<details class="df2-result-handoff df2-export-preview" data-export-pdf-review>
+      <summary>Preview exported PDF</summary>
+      ${pdfs.length>1?select('previewPdf','PDF to preview',pdfs.map((pdf,index)=>[String(index),esc(pdf.name)])):''}
+      <section data-export-pdf-canvas></section>
+    </details>`:'';
     const rename=value.outputs.length?`<details class="df2-result-handoff">
       <summary>Rename downloads</summary>
       <form data-result-rename>
@@ -795,6 +856,7 @@ class DocFlowV2 {
         ${this.revisionControls()}
         ${rename}
         ${handoff}
+        ${exportPreview}
         ${this.review?'<div data-v2-review-container></div>':''}
         ${value.info&&this.review?.kind!=='pipeline'?`<details class="df2-result-info"><summary>Processing details</summary><pre>${esc(JSON.stringify(value.info,null,2))}</pre></details>`:''}
       </div></main>`;
@@ -820,6 +882,9 @@ class DocFlowV2 {
     if(this.review){
       const host=this.root.querySelector<HTMLElement>('[data-v2-review-container]');
       if(host)this.disposeReview=mountReview(host,this.review);
+    }else {
+      const panel=this.root.querySelector<HTMLDetailsElement>('[data-export-pdf-review]');
+      if(panel)this.disposeReview=mountExportPdfReview(panel,pdfs);
     }
   }
   private mountResultRename(result:OperationResult,pdfs:OutputFile[]):void{
@@ -849,8 +914,16 @@ class DocFlowV2 {
         link.download=name;
         link.querySelector('b')!.textContent=name;
         if(picker)picker.options[index]!.text=name;
-        const handoff=this.root.querySelector<HTMLOptionElement>(`[data-result-handoff] [name=pdf] option[value="${pdfs.indexOf(output)}"]`);
+        const pdfIndex=pdfs.indexOf(output);
+        const handoff=this.root.querySelector<HTMLOptionElement>(`[data-result-handoff] [name=pdf] option[value="${pdfIndex}"]`);
         if(handoff)handoff.text=name;
+        const exportPanel=this.root.querySelector<HTMLElement>('[data-export-pdf-review]');
+        if(exportPanel&&pdfIndex>=0){
+          const exportPicker=exportPanel.querySelector<HTMLSelectElement>('select');
+          if(exportPicker)exportPicker.options[pdfIndex]!.text=name;
+          const title=exportPanel.querySelector('h2');
+          if(title&&(exportPicker?.selectedIndex??0)===pdfIndex)title.textContent=name;
+        }
         const preview=this.root.querySelector<HTMLSelectElement>('[data-pipeline-preview-select]');
         if(preview){
           preview.options[index]!.text=name;
@@ -1288,22 +1361,23 @@ class DocFlowV2 {
     const up=target.closest<HTMLElement>('[data-move-up]'),down=target.closest<HTMLElement>('[data-move-down]'),remove=target.closest<HTMLElement>('[data-remove-file]');
     if(up||down||remove){const index=Number((up??down??remove)?.dataset.moveUp??(down??remove)?.dataset.moveDown??remove?.dataset.removeFile);
       if(!Number.isInteger(index)||index<0||index>=this.files.length)return;
+      if(!remove){
+        const next=index+(up?-1:1);
+        if(!this.files[next])return;
+        this.moveFile(index,next);
+        const actions=this.root.querySelector<HTMLElement>(`[data-file-index="${next}"] .df2-file-actions`);
+        const sameDirection=up?'data-move-up':'data-move-down';
+        (actions?.querySelector<HTMLButtonElement>(`[${sameDirection}]:enabled`)??actions?.querySelector<HTMLButtonElement>('button:enabled'))?.focus();
+        return;
+      }
       this.captureOptions();this.invalidateResult();
       this.pipelineReport=null;
-      if(remove){
-        const [removed]=this.files.splice(index,1);
-        if(removed&&!this.files.includes(removed))this.photoCorrections.delete(removed);
-        if(index===this.activeFile){
-          this.activeFile=Math.max(0,Math.min(index,this.files.length-1));
-          this.currentPage=1;
-        }else if(index<this.activeFile)this.activeFile--;
-      }else {
-        const next=index+(up?-1:1);
-        if(next<0||next>=this.files.length)return;
-        [this.files[index],this.files[next]]=[this.files[next]!,this.files[index]!];
-        if(this.activeFile===index)this.activeFile=next;
-        else if(this.activeFile===next)this.activeFile=index;
-      }
+      const [removed]=this.files.splice(index,1);
+      if(removed&&!this.files.includes(removed))this.photoCorrections.delete(removed);
+      if(index===this.activeFile){
+        this.activeFile=Math.max(0,Math.min(index,this.files.length-1));
+        this.currentPage=1;
+      }else if(index<this.activeFile)this.activeFile--;
       if(!this.files.length){this.revisions.clear();location.hash=base+this.tool!.id;return;}
       this.workspace();return;
     }

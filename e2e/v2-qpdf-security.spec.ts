@@ -27,6 +27,7 @@ test('AES-256 PDF protection validates passwords and round-trips through the rea
   await page.locator('input[name=confirmPassword]').fill(password);
   await page.locator('[data-run]').click();
   const protectedBytes=await resultBytes(page);
+  await expect(page.getByText('Preview exported PDF',{exact:true})).toHaveCount(0);
   expect(protectedBytes.subarray(0,5).toString('latin1')).toBe('%PDF-');
   await expect(PDFDocument.load(protectedBytes)).rejects.toThrow();
   await page.getByRole('button',{name:'Return to editing'}).click();
