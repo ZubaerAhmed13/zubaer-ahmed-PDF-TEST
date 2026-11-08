@@ -9,6 +9,7 @@ import { V2PageEditor } from './pageEditor';
 import { extractAndSearchText } from '../pdf/textExtraction';
 import { comparePdfs } from '../pdf/pdfComparison';
 import { runQpdfOperation } from '../pdf/qpdfWorkerClient';
+import { verifyRepairedPdf } from '../pdf/repairVerification';
 import { mountReview, type ReviewData } from './reviewResults';
 import {createEditorDraft,createOrganizerDraft,safeOptionValues,restoreOptions} from './draft';
 import {mountToolSearch} from './toolSearch';
@@ -1108,6 +1109,14 @@ class DocFlowV2 {
         const running=runQpdfOperation(operation,input[0]!,password,p=>progressMessage(p.message+' · '+p.percent+'%'));
         this.cancel=running.cancel;
         result=await running.result;
+        if(operation==='repair'){
+          if(generation!==this.processingGeneration)return;
+          const bytes=result.outputs[0]?.buffer;
+          if(!bytes)throw Error('qpdf returned no output.');
+          const validation=new AbortController();
+          this.cancel=()=>validation.abort();
+          await verifyRepairedPdf(bytes,validation.signal,(page,total)=>progressMessage('Validating repaired page '+page+' of '+total));
+        }
       }else if(tool.id==='pdf-to-images'){
         let cancelled=false;
         this.cancel=()=>{cancelled=true;};

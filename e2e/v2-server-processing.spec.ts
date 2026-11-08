@@ -1,4 +1,5 @@
 import {test,expect,type Page} from '@playwright/test';
+import AxeBuilder from '@axe-core/playwright';
 import {PDFDocument,StandardFonts} from 'pdf-lib';
 import {createHash} from 'node:crypto';
 import {readFile} from 'node:fs/promises';
@@ -99,6 +100,16 @@ test('phone Office workspace keeps account, consent and conversion action reacha
   const panel=(await page.locator('[data-options]').boundingBox())!,controls=(await page.locator('[data-processing-server]').boundingBox())!;expect(controls.width).toBeGreaterThan(panel.width*.8);await page.screenshot({path:info.outputPath('server-office-phone.png')});
   await consentAndRun(page);
   await expect(page.getByRole('heading',{name:'Review converted Office PDF'})).toBeVisible();expect(s.calls.filter(c=>c.path.endsWith('/start'))).toHaveLength(1);expect(await page.evaluate(()=>document.documentElement.scrollWidth-innerWidth)).toBeLessThanOrEqual(1);
+});
+test('phone Office upload-consent workspace has labelled readable controls', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  const staging = await setup(page, { tool: 'office-to-pdf', extension: 'docx' });
+  await page.getByRole('button', { name: 'Options', exact: true }).click();
+  await expect(page.getByLabel('DocFlow account email')).toBeVisible();
+  const audit = await new AxeBuilder({ page })
+    .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'best-practice']).analyze();
+  expect(audit.violations.map(({ id, nodes }) => ({ id, targets: nodes.map(node => node.target) }))).toEqual([]);
+  expect(staging.calls).toEqual([]);
 });
 test('result actions stay clickable while the exported PDF preview finishes sizing',async({page,context})=>{
   await setup(page);await expect(page.locator('[data-page-label]')).toContainText('/ 1');await signIn(page);
