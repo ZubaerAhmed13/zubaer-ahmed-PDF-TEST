@@ -1,6 +1,6 @@
 import {PDFDocument} from 'pdf-lib';
 import wasmUrl from '@embedpdf/pdfium/pdfium.wasm?url';
-import {applyDirectEdit,frameFor} from './directEdit';
+import {applyDirectEdit,frameFor,inspectDirectEdit} from './directEdit';
 import {inspectDocument} from './documentInspection';
 import type {EditPlan} from './editModel';
 import type {InputFile,OperationResult} from './types';
@@ -65,7 +65,9 @@ export async function previewNativeContent(files:InputFile[],options:Record<stri
     font=new Uint8Array(await response.arrayBuffer());
   }
   const output=await(await engine()).apply(bytes,resolved,frames,font);
-  return {outputs:[{name:'edited.pdf',type:'application/pdf',buffer:output.slice().buffer}],info:{nativeChanges:plan.edits.length}};
+  const edited={name:'edited.pdf',type:'application/pdf',buffer:output.slice().buffer};
+  const canvas=options.hideEditableHighlights===true?await inspectDirectEdit([edited],{limitHighlights:true}):null;
+  return {outputs:[canvas?.outputs[0]??edited],info:{nativeChanges:plan.edits.length}};
 }
 export async function applyEditorChanges(files:InputFile[],options:Record<string,unknown>):Promise<OperationResult>{
   const plan=options.plan as EditPlan;

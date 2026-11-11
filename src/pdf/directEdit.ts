@@ -12,6 +12,7 @@ import {
 import fontkit from "@pdf-lib/fontkit";
 import {
   displaySize,
+  MAX_EDIT_OBJECTS,
   pdfBounds,
   toPdf,
   toDisplay,
@@ -109,17 +110,21 @@ function inspectDocument(doc: PDFDocument): {
 }
 export async function inspectDirectEdit(
   files: InputFile[],
+  options: Record<string, unknown> = {},
 ): Promise<OperationResult> {
   if (!files[0]) throw new Error("Choose a PDF first.");
   const doc = await PDFDocument.load(files[0].buffer, { updateMetadata: false });
   const { frames, objects, preservedHighlights } = inspectDocument(doc);
-  const overlayIds = new Set(objects.filter(o => o.kind === 'native-highlight').map(o => o.originalId!));
+  const highlights = objects.filter(o => o.kind === 'native-highlight');
+  const editableHighlights = options.limitHighlights === true ? highlights.slice(0, MAX_EDIT_OBJECTS) : highlights;
+  const overlayIds = new Set(editableHighlights.map(o => o.originalId!));
+  const annotations = objects.filter(o => o.kind !== 'native-highlight' || overlayIds.has(o.originalId!));
   // The source file is retained separately. Its editable highlight appearances are
   // omitted from this disposable canvas copy so moved/deleted marks do not linger.
   removeAnnotationReferences(doc, overlayIds);
   return {
     outputs: overlayIds.size ? [{ name: 'editor-preview.pdf', type: 'application/pdf', buffer: (await doc.save()).slice().buffer }] : [],
-    info: { frames: JSON.stringify(frames), comments: JSON.stringify(objects), preservedHighlights,hasSignatures:hasSignatures(doc) },
+    info: { frames: JSON.stringify(frames), comments: JSON.stringify(annotations), preservedHighlights:preservedHighlights+highlights.length-editableHighlights.length,hasSignatures:hasSignatures(doc) },
   };
 }
 export function checkText(text: string, supported?: Set<number>): void {
@@ -148,7 +153,7 @@ async function applyEdits(
   });
   if(options.requireUnsigned===true&&hasSignatures(doc))throw new PdfOperationError('SIGNED_PDF','This PDF contains an existing certificate signature. Use a certificate-aware editor; a visual mark cannot preserve its validity.');
   const plan = options.plan as EditPlan;
-  if (!plan || !Array.isArray(plan.objects) || plan.objects.length > 1000)
+  if (!plan || !Array.isArray(plan.objects) || plan.objects.length > MAX_EDIT_OBJECTS)
     throw new Error("The edit plan exceeds the 1,000 object limit.");
   let font;
   if (plan.objects.some((o) => o.kind === "text")) {

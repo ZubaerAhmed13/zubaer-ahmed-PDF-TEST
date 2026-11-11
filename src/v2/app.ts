@@ -189,6 +189,8 @@ class DocFlowV2 {
   private pipelineZipGeneration=0;
   private formFiller:V2FormFiller|null=null;
   private formDraft=createFormDraft();
+  private editorInspection:RunningOperation|null=null;
+  private editorCanvasSource:ArrayBuffer|null=null;
   private nativePreviewSource:ArrayBuffer|null=null;
   private nativePreviewKey='null';
   private nativeGeneration=0;
@@ -576,7 +578,7 @@ class DocFlowV2 {
       <div class="df2-work-bottom"><div class="df2-run-status" role="status" data-run-status>Ready to process · ${this.files.length} ${this.files.length===1?'file':'files'}</div>
         <button class="df2-btn df2-btn-outline" data-cancel-processing aria-label="Cancel processing" hidden>Cancel</button>
         <button class="df2-btn df2-btn-outline df2-mobile-options" aria-controls="df2-options" aria-expanded="false" data-mobile-options>Options</button>
-        <button class="df2-btn df2-btn-main" data-run>${tool.id==='workflow'?'Run workflow':tool.id==='batch'?'Run batch':tool.id==='preview'?'Download original':tool.id==='redact-secure'?'Apply permanent redactions':tool.id==='sign-visual'?'Create signed copy':'Run '+esc(tool.name)} <span aria-hidden="true">↗</span></button></div>
+        <button class="df2-btn df2-btn-main" data-run ${tool.id==='edit-pdf'||tool.id==='sign-visual'?'disabled':''}>${tool.id==='workflow'?'Run workflow':tool.id==='batch'?'Run batch':tool.id==='preview'?'Download original':tool.id==='redact-secure'?'Apply permanent redactions':tool.id==='sign-visual'?'Create signed copy':'Run '+esc(tool.name)} <span aria-hidden="true">↗</span></button></div>
     <input hidden type="file" data-add-file accept="${tool.accepts}" ${tool.multiple?'multiple':''}>
     </main>`;
     const form=this.root.querySelector<HTMLFormElement>('[data-options]');if(form)restoreOptions(form,this.optionValues);
@@ -697,14 +699,29 @@ class DocFlowV2 {
       return;
     }
     try {
-      if(this.tool?.id==='edit-pdf'&&JSON.stringify(this.editorDraft.history.current.source??null)!==this.nativePreviewKey){
-        const source=this.editorDraft.history.current.source;
-        const result=source?.edits.length?await this.nativeBytes(source):null;
-        if(generation!==this.renderId)return;
-        this.nativePreviewSource=result;this.nativePreviewKey=JSON.stringify(source??null);
-      }
-      const source=this.tool?.id==='edit-pdf'&&this.nativePreviewSource?this.nativePreviewSource.slice(0):await file.arrayBuffer();
+      const toolId=this.tool?.id;
+      const original=await file.arrayBuffer();
       if(generation!==this.renderId)return;
+      let inspection:OperationResult|undefined;
+      if(toolId==='edit-pdf'||toolId==='sign-visual'){
+        this.message('Inspecting editable PDF page geometry…');
+        const operation=runWorkerOperation('direct-edit-inspect',
+          [{name:file.name,type:file.type||'application/pdf',buffer:original.slice(0)}],{limitHighlights:true},()=>{});
+        this.editorInspection=operation;
+        try{inspection=await operation.result;}
+        finally{if(this.editorInspection===operation)this.editorInspection=null;}
+        if(generation!==this.renderId)return;
+        if(toolId==='sign-visual'&&inspection.info?.hasSignatures)throw Error('This PDF contains an existing certificate signature. Use a certificate-aware editor to preserve its validity.');
+        this.editorCanvasSource=toolId==='edit-pdf'?inspection.outputs[0]?.buffer??null:null;
+        const source=this.editorDraft.history.current.source,key=JSON.stringify(source??null);
+        if(toolId==='edit-pdf'&&key!==this.nativePreviewKey){
+          const result=source?.edits.length?await this.nativeBytes(source):null;
+          if(generation!==this.renderId)return;
+          this.nativePreviewSource=result;this.nativePreviewKey=key;
+        }
+      }
+      const cached=toolId==='edit-pdf'?(this.nativePreviewSource??this.editorCanvasSource):null;
+      const source=cached?.slice(0)??original;
       const controller=await createPreview(source,canvas,status);
       if(generation!==this.renderId){await controller.destroy();return;}
       if(this.tool?.id==='redact-secure'&&controller.pageCount>REDACTION_MAX_PAGES){await controller.destroy();const message='Permanent redaction supports at most 15 pages. Split this document first.';this.message(message);const run=this.root.querySelector<HTMLButtonElement>('[data-run]');if(run)run.disabled=true;throw Error(message);}
@@ -724,17 +741,17 @@ class DocFlowV2 {
         const host=this.root.querySelector<HTMLElement>('[data-form-host]'),paper=this.root.querySelector<HTMLElement>('.df2-canvas-paper');
         if(host&&paper){this.formFiller=new V2FormFiller(host,canvas,paper,this.formDraft,()=>this.invalidateResult(),page=>this.showPage(page),()=>{const button=this.root.querySelector<HTMLElement>('[data-mobile-options]');if(button?.getClientRects().length){this.root.querySelector('[data-options-pane]')?.classList.add('opened');button.setAttribute('aria-expanded','true');}});await this.formFiller.load(file);if(generation!==this.renderId)return;}
       }
-      if(this.tool?.id==='edit-pdf'||this.tool?.id==='sign-visual'){
+      if(inspection&&(toolId==='edit-pdf'||toolId==='sign-visual')){
         const paper=this.root.querySelector<HTMLElement>('.df2-canvas-paper');
         const panel=this.root.querySelector<HTMLElement>('.df2-inspector');
         if(paper&&panel){
-          this.message('Inspecting editable PDF page geometry…');
-          const editor=await V2PageEditor.mount(paper,canvas,panel,controller,file,this.editorDraft,this.tool.id==='sign-visual'?'signature':'edit');
+          const editor=await V2PageEditor.mount(paper,canvas,panel,file,this.editorDraft,toolId==='sign-visual'?'signature':'edit',inspection);
           if(generation!==this.renderId){editor.dispose();return;}
           this.editor=editor;
           this.editor.show(this.currentPage);
-          this.message(this.tool.id==='sign-visual'?'Draw or type a mark, place it on the page, and review the signed copy.':'Ready to edit supported source content or add text, images and PDF annotations');
-          if(this.tool.id==='sign-visual'){const host=this.root.querySelector<HTMLElement>('[data-signature-pad-host]');if(host)this.signaturePad=mountSignaturePad(host,this.signatureInk);}
+          this.message(toolId==='sign-visual'?'Draw or type a mark, place it on the page, and review the signed copy.':'Ready to edit supported source content or add text, images and PDF annotations');
+          const run=this.root.querySelector<HTMLButtonElement>('[data-run]');if(run)run.disabled=false;
+          if(toolId==='sign-visual'){const host=this.root.querySelector<HTMLElement>('[data-signature-pad-host]');if(host)this.signaturePad=mountSignaturePad(host,this.signatureInk);}
           const nativeStatus=this.root.querySelector<HTMLElement>('[data-native-preview-status]');if(nativeStatus&&this.editorDraft.history.current.source?.edits.length)nativeStatus.textContent='Source changes previewed';
         }
       }
@@ -749,11 +766,11 @@ class DocFlowV2 {
         else this.paintSelectedThumbnails();
         const selection=this.root.querySelector<HTMLElement>('.df2-page-selection');if(selection)selection.hidden=false;
       }
-    }catch(error){if(generation===this.renderId&&status){const message=error instanceof Error?error.message:'Preview unavailable';status.textContent=message;if(this.tool?.id==='sign-visual'){this.message(message);this.root.querySelectorAll<HTMLButtonElement>('[data-signature-place],[data-signature-type],[data-run]').forEach(button=>{button.disabled=true;});}}}
+    }catch(error){if(generation===this.renderId){const message=error instanceof Error?error.message:'Preview unavailable';status.textContent=message;if(this.tool?.id==='edit-pdf'||this.tool?.id==='sign-visual'){this.message(message);this.root.querySelectorAll<HTMLButtonElement>('[data-signature-place],[data-signature-type],[data-run]').forEach(button=>{button.disabled=true;});}}}
   }
   private async nativeBytes(source:NativeEditPlan):Promise<ArrayBuffer>{
     const file=this.files[0];if(!file)throw Error('Choose a PDF first.');
-    this.nativeOperation=runWorkerOperation('native-edit-preview',[{name:file.name,type:'application/pdf',buffer:await file.arrayBuffer()}],{source},()=>{});
+    this.nativeOperation=runWorkerOperation('native-edit-preview',[{name:file.name,type:'application/pdf',buffer:await file.arrayBuffer()}],{source,hideEditableHighlights:this.editorCanvasSource!==null},()=>{});
     return (await this.nativeOperation.result).outputs[0]!.buffer;
   }
   private async syncNativePreview(provided?:ArrayBuffer):Promise<void>{
@@ -763,7 +780,7 @@ class DocFlowV2 {
     this.nativeOperation?.cancel();this.nativeOperation=null;this.nativePreviewBusy=true;
     const state=this.root.querySelector<HTMLElement>('[data-native-preview-status]');if(state)state.textContent='Preparing source preview…';
     try{
-      const bytes=provided??(source?.edits.length?await this.nativeBytes(source):await file!.arrayBuffer());
+      const bytes=provided??(source?.edits.length?await this.nativeBytes(source):this.editorCanvasSource??await file!.arrayBuffer());
       if(generation!==this.nativeGeneration||render!==this.renderId||key!==JSON.stringify(this.editorDraft.history.current.source??null))return;
       this.nativePreviewSource=source?.edits.length?bytes.slice(0):null;this.nativePreviewKey=key;
       const canvas=this.root.querySelector<HTMLCanvasElement>('[data-page-canvas]'),status=this.root.querySelector<HTMLElement>('[data-render-status]');if(!canvas||!status)return;
@@ -799,7 +816,8 @@ class DocFlowV2 {
   private async freePreview(invalidate=true):Promise<void> {
     ++this.ocrPreviewGeneration;
     this.formFiller?.dispose();this.formFiller=null;
-    if(invalidate)++this.renderId;
+    this.editorInspection?.cancel();this.editorInspection=null;
+    if(invalidate){++this.renderId;this.editorCanvasSource=null;}
     this.reader?.dispose();this.reader=null;
     this.redaction?.dispose();this.redaction=null;
     ++this.signatureGeneration;this.signaturePad?.dispose();this.signaturePad=null;

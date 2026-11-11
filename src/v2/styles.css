@@ -428,7 +428,7 @@ a{color:inherit;text-decoration:none}
 .df2-edit-text svg{display:block;position:absolute;inset:0;width:100%;height:100%;overflow:visible;pointer-events:none}
 .df2-edit-text[data-text-overflow=true]{outline:2px dashed #a43d36}
 .df2-edit-object.df2-edit-highlight{background:color-mix(in srgb,var(--obj-ink) 28%,transparent);border:0}
-.df2-edit-object.df2-edit-native-highlight{background:rgba(255,217,64,.35);font-size:10px}
+.df2-edit-object.df2-edit-native-highlight{background:color-mix(in srgb,var(--obj-ink) var(--obj-tint,28%),transparent);border:0;mix-blend-mode:multiply}
 .df2-edit-object.df2-edit-rectangle{background:var(--obj-ink);border:1px solid var(--obj-ink)}
 .df2-edit-object.df2-edit-comment{display:grid;place-items:center;background:#ffecbe;font-size:20px;color:#976321}
 .df2-edit-object.df2-edit-image{border-style:solid;background:#f8f8ff}

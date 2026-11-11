@@ -1,7 +1,6 @@
-import type { PreviewController } from '../pdf/render';
-import { runWorkerOperation } from '../pdf/workerClient';
-import { constrain, displaySize, type EditObject, type EditPlan, type PageFrame } from '../pdf/editModel';
-import {createEditorDraft,type EditorDraft} from './draft';
+import { constrain, displaySize, EditHistory, emptyPlan, MAX_EDIT_OBJECTS, type EditObject, type EditPlan, type PageFrame } from '../pdf/editModel';
+import type { OperationResult } from '../pdf/types';
+import type { EditorDraft } from './draft';
 import {loadEditorFont,paintEditorText} from './editorText';
 import type {Font} from '@pdf-lib/fontkit';
 import {V2NativeEditor} from './nativeEditor';
@@ -31,7 +30,7 @@ export class V2PageEditor {
   private font:Font|null=null;
   private native:V2NativeEditor|null=null;
   private constructor(private readonly paper:HTMLElement,private readonly canvas:HTMLCanvasElement,
-    private readonly host:HTMLElement,private readonly preview:PreviewController,private readonly draft:EditorDraft,private readonly mode:'edit'|'signature'='edit'){
+    private readonly host:HTMLElement,private readonly draft:EditorDraft,private readonly mode:'edit'|'signature'){
     this.history=draft.history;this.plan=this.history.current;this.selected=draft.selected;
     this.overlay=document.createElement('div');this.overlay.className='df2-editor-overlay';
     this.overlay.setAttribute('role','group');this.overlay.setAttribute('aria-label','Editable additions to this PDF page');this.paper.append(this.overlay);
@@ -50,17 +49,23 @@ export class V2PageEditor {
     this.panel.addEventListener('click',this.onClick);
     this.panel.addEventListener('change',this.onChange);
   }
-  static async mount(paper:HTMLElement,canvas:HTMLCanvasElement,host:HTMLElement,viewer:PreviewController,file:File,draft:EditorDraft=createEditorDraft(),mode:'edit'|'signature'='edit'):Promise<V2PageEditor>{
-    const editor=new V2PageEditor(paper,canvas,host,viewer,draft,mode);
+  static async mount(paper:HTMLElement,canvas:HTMLCanvasElement,host:HTMLElement,file:File,draft:EditorDraft,mode:'edit'|'signature',inspection:OperationResult):Promise<V2PageEditor>{
+    const font=await loadEditorFont();
+    if(!draft.initialized){
+      const plan=emptyPlan();
+      if(mode==='edit'){
+        const annotations=JSON.parse(String(inspection.info?.comments??'[]')) as EditObject[];
+        plan.objects=annotations.filter(object=>object.kind==='native-highlight');
+      }
+      draft.history=new EditHistory(plan);
+      draft.initialized=true;
+    }
+    const editor=new V2PageEditor(paper,canvas,host,draft,mode);
     try{
-      const [result,font]=await Promise.all([runWorkerOperation('direct-edit-inspect',
-        [{name:file.name,type:file.type||'application/pdf',buffer:await file.arrayBuffer()}],{},()=>{}).result,loadEditorFont()]);
-      if(editor.destroyed)throw Error('Editor was closed before inspection completed');
-      if(mode==='signature'&&result.info?.hasSignatures)throw Error('This PDF contains an existing certificate signature. Use a certificate-aware editor to preserve its validity.');
-      editor.frames=JSON.parse(String(result.info?.frames??'[]')) as PageFrame[];
-      editor.preserved=Number(result.info?.preservedHighlights??0);
+      editor.frames=JSON.parse(String(inspection.info?.frames??'[]')) as PageFrame[];
+      editor.preserved=mode==='edit'?Number(inspection.info?.preservedHighlights??0):0;
       editor.font=font;
-      if(mode==='edit')editor.native=new V2NativeEditor(paper,canvas,host,file,draft,(source,preview)=>editor.commitSource(source,preview));
+      if(mode==='edit')editor.native=new V2NativeEditor(paper,canvas,host,file,draft,(source,preview)=>editor.commitSource(source,preview),inspection.outputs.length>0);
       editor.paintPanel();
       editor.paint();
       return editor;
@@ -89,7 +94,7 @@ export class V2PageEditor {
   private colorDefault(kind:Kind):string{ return kind==='highlight'?'#f2d55c':kind==='native-highlight'?'#ffd352':kind==='comment'?'#db8b38':'#5c50c8';}
   private add(kind:Kind,data?:string):void{
     const frame=this.frame();if(!frame)return;
-    if(this.plan.objects.length>=1000){this.status.textContent='Maximum 1,000 objects per document.';return;}
+    if(this.plan.objects.length>=MAX_EDIT_OBJECTS){this.status.textContent='Maximum 1,000 objects per document.';return;}
     const size=displaySize(frame);
     const width=Math.min(size.width*.46,kind==='comment'?28:220),height=kind==='text'?54:kind==='comment'?28:kind==='signature'?width*210/720:kind==='image'?120:76;
     const obj:EditObject={
@@ -158,10 +163,18 @@ export class V2PageEditor {
     this.overlay.querySelector<HTMLElement>('[data-edit-id="'+obj.id+'"]')?.focus();
   };
   private remove():void{
-    if(!this.selectedObject())return;
-    // Existing source annotations are not made editable by this release.
-    this.plan.objects=this.plan.objects.filter(o=>o.id!==this.selected);
+    const object=this.selectedObject();if(!object)return;
+    if(object.originalId)this.plan.removedComments.push(object.originalId);
+    this.plan.objects=this.plan.objects.filter(o=>o.id!==object.id);
     this.selected=null;this.commit();
+  }
+  private duplicate():void{
+    const object=this.selectedObject(),frame=this.frame();if(!object||!frame)return;
+    if(this.plan.objects.length>=MAX_EDIT_OBJECTS){this.status.textContent='Maximum 1,000 objects per document.';return;}
+    const duplicate={...object,id:uid(),...constrain({...object,x:object.x+12,y:object.y+12},frame)};
+    delete duplicate.originalId;
+    this.plan.objects.push(duplicate);this.selected=duplicate.id;this.commit();
+    this.panel.querySelector<HTMLElement>('[data-editor-duplicate]')?.focus();
   }
   private paint():void{
     if(this.destroyed)return;
@@ -183,6 +196,7 @@ export class V2PageEditor {
       el.style.left=(obj.x/size.width*100)+'%';el.style.top=(obj.y/size.height*100)+'%';
       el.style.width=(obj.width/size.width*100)+'%';el.style.height=(obj.height/size.height*100)+'%';
       el.style.setProperty('--obj-ink',obj.color);
+      if(obj.kind==='native-highlight')el.style.setProperty('--obj-tint',`${(obj.opacity??.28)*100}%`);
       if(obj.kind==='image'||obj.kind==='signature'){
         const image=document.createElement('img');image.src=obj.data??'';image.alt='Added image';
         image.draggable=false;el.append(image);
@@ -205,25 +219,26 @@ export class V2PageEditor {
       <button data-editor-redo ${this.history.canRedo?'':'disabled'}>↷ Redo</button></div>
       <div class="df2-editor-objects"><strong>Page ${this.page} objects</strong>${list||'<p>Choose a tool above to add your first object.</p>'}</div>
       <div class="df2-editor-properties" data-editor-properties></div>
-      <div class="df2-editor-note">Drag additions to move, or use the X/Y fields and keyboard arrow keys for precision.</div>`;
+      <div class="df2-editor-note">Drag objects to move them, or use the X/Y fields and keyboard arrow keys for precision.</div>
+      ${this.preserved>0?`<p class="df2-editor-note">${this.preserved} existing highlight${this.preserved===1?' is':'s are'} kept unchanged. Multi-region, locked and unsupported highlights are preserved.</p>`:''}`;
     this.panel.append(this.status);
     this.fileInput=this.panel.querySelector<HTMLInputElement>('[data-editor-image]');
     this.paintProperties();
-    if(this.preserved>0)this.status.textContent=this.preserved+' pre-existing highlights are preserved.';
     if(this.overlay.querySelector('[data-text-overflow=true]'))this.status.textContent='Text exceeds its box or uses unsupported characters. Enlarge the box, reduce its size or change the text before exporting.';
   }
   private paintProperties():void{
     const host=this.panel.querySelector<HTMLElement>('[data-editor-properties]');if(!host)return;
     const obj=this.selectedObject();
     if(!obj){host.replaceChildren();return;}
-    const text= obj.kind==='text'||obj.kind==='comment';
+    const text=obj.kind==='text'||obj.kind==='comment'||obj.kind==='native-highlight';
     const input=(name:string,label:string,value:number)=>`<label>${label}<input name="${name}" type="number" step="0.5" min="0" value="${value}"></label>`;
     host.innerHTML=`<strong>Object properties</strong>
       ${text?`<label>Content<textarea name="editorText" rows="3">${escaping(obj.text??'')}</textarea></label>`:''}
       <div class="df2-editor-grid">${input('x','X (points)',obj.x)}${input('y','Y (points)',obj.y)}
       ${input('width','Width',obj.width)}${input('height','Height',obj.height)}
-      ${text?input('size','Font size',obj.size):''}
+      ${obj.kind==='text'||obj.kind==='comment'?input('size','Font size',obj.size):''}
       ${obj.kind==='signature'?'':`<label>Colour<input type="color" name="color" value="${obj.color}"></label>`}</div>
+      ${obj.kind==='native-highlight'?'<button type="button" data-editor-duplicate>Duplicate selected object</button>':''}
       <button class="df2-editor-remove" type="button" data-editor-remove>Remove selected object</button>`;
   }
   private onClick=(event:MouseEvent):void=>{
@@ -234,6 +249,7 @@ export class V2PageEditor {
     if(node.hasAttribute('data-editor-undo')){this.plan=this.history.undo();this.selected=null;this.paint();this.paintPanel();this.native?.refresh();this.paper.dispatchEvent(new CustomEvent('df2-draft-change',{bubbles:true}));return;}
     if(node.hasAttribute('data-editor-redo')){this.plan=this.history.redo();this.selected=null;this.paint();this.paintPanel();this.native?.refresh();this.paper.dispatchEvent(new CustomEvent('df2-draft-change',{bubbles:true}));return;}
     if(node.hasAttribute('data-editor-remove')){this.remove();return;}
+    if(node.hasAttribute('data-editor-duplicate')){this.duplicate();return;}
     if(node.dataset.editorSelect){this.selected=node.dataset.editorSelect;this.paint();this.paintPanel();return;}
   };
   private onChange=(event:Event):void=>{

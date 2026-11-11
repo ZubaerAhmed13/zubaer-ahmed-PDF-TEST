@@ -17,7 +17,7 @@ export class V2NativeEditor {
   private applying=false;
   private status='';
   private validationFocus:SourceFocus|null=null;
-  constructor(private paper:HTMLElement,private canvas:HTMLCanvasElement,host:HTMLElement,private file:File,private draft:EditorDraft,private commit:(plan:NativeEditPlan,preview:ArrayBuffer)=>void){
+  constructor(private paper:HTMLElement,private canvas:HTMLCanvasElement,host:HTMLElement,private file:File,private draft:EditorDraft,private commit:(plan:NativeEditPlan,preview:ArrayBuffer)=>void,private hideEditableHighlights:boolean){
     this.panel.className='df2-native-panel';this.panel.setAttribute('aria-label','Existing PDF content');this.panel.tabIndex=-1;host.append(this.panel);
     this.overlay.className='df2-native-overlay';this.overlay.setAttribute('role','group');this.overlay.setAttribute('aria-label','Existing PDF text and images');paper.append(this.overlay);
     this.panel.addEventListener('click',this.click);this.panel.addEventListener('input',this.input);this.panel.addEventListener('change',this.change);
@@ -131,7 +131,7 @@ export class V2NativeEditor {
     this.applying=true;this.status='Validating saved source changes…';this.paint();const generation=++this.generation;this.operation?.cancel();
     try{
       const buffer=await this.file.arrayBuffer();if(this.destroyed||generation!==this.generation)return;
-      this.operation=runWorkerOperation('native-edit-preview',[{name:this.file.name,type:'application/pdf',buffer}],{source:plan},()=>{});
+      this.operation=runWorkerOperation('native-edit-preview',[{name:this.file.name,type:'application/pdf',buffer}],{source:plan,hideEditableHighlights:this.hideEditableHighlights},()=>{});
       const result=await this.operation.result;if(this.destroyed||generation!==this.generation)return;
       if(snapshot!==JSON.stringify(this.draft.history.current))throw Error('The edit history changed while validating. Apply your source change again.');
       this.commit(plan,result.outputs[0]!.buffer);delete this.draft.native.pending[edit.id];this.status='Source change applied. Review the updated page.';

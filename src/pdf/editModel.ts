@@ -29,6 +29,7 @@ export interface EditPlan {
   crops: Record<string, Rect>;
   removedComments: string[];
 }
+export const MAX_EDIT_OBJECTS = 1000;
 export const emptyPlan = (): EditPlan => ({
   objects: [],
   crops: {},
