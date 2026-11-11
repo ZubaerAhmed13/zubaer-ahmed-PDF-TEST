@@ -71,7 +71,8 @@ export class V2PageEditor {
       return editor;
     }catch(e){editor.dispose();throw e;}
   }
-  get currentPlan():EditPlan{this.flushProperties();return structuredClone(this.plan);}
+  get currentPlan():EditPlan{return structuredClone(this.plan);}
+  prepareExport():EditPlan{this.flushProperties();return this.currentPlan;}
   get containsText():boolean{return this.plan.objects.some(o=>o.kind==='text');}
   get nativeBusy():boolean{return this.native?.busy??false;}
   get hasPendingSource():boolean{return this.native?.hasPending??false;}

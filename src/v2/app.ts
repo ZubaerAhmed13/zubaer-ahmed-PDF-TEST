@@ -1025,7 +1025,8 @@ class DocFlowV2 {
       if(!this.editor){this.message('Wait for the document editor to finish loading.');return;}
       if(this.editor.nativeBusy||this.nativePreviewBusy){this.message('Wait for the source change and preview to finish.');return;}
       if(this.editor.hasPendingSource){this.message('Apply or discard unapplied source text before exporting.');return;}
-      options.plan=this.editor.currentPlan;
+      try{options.plan=this.editor.prepareExport();}
+      catch(error){this.message(error instanceof Error?error.message:'The edits could not be prepared.');return;}
     }
     if(tool.id==='sign-visual'){
       if(!this.editor){this.message('Wait for signature placement to finish loading.');return;}
