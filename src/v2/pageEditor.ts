@@ -71,7 +71,7 @@ export class V2PageEditor {
       return editor;
     }catch(e){editor.dispose();throw e;}
   }
-  get currentPlan():EditPlan{return structuredClone(this.plan);}
+  get currentPlan():EditPlan{this.flushProperties();return structuredClone(this.plan);}
   get containsText():boolean{return this.plan.objects.some(o=>o.kind==='text');}
   get nativeBusy():boolean{return this.native?.busy??false;}
   get hasPendingSource():boolean{return this.native?.hasPending??false;}
@@ -103,6 +103,7 @@ export class V2PageEditor {
       size:kind==='text'?18:14,color:this.colorDefault(kind),
       ...(kind==='text'?{text:'Your text'}:{}),
       ...(kind==='comment'?{text:'Add your note'}:{}),
+      ...(kind==='native-highlight'?{text:''}:{}),
       ...(data?{data}:{})
     };
     Object.assign(obj,constrain(obj,frame,true));
@@ -282,13 +283,15 @@ export class V2PageEditor {
     }else return false;
     return true;
   }
-  dispose():void{
-    if(this.destroyed)return;
-    // Hash navigation can remove a focused control without firing change.
-    // Commit pending property values before the view releases the shared draft.
+  private flushProperties():void{
+    // Route changes and keyboard exports can happen before a focused input blurs.
     const before=JSON.stringify(this.plan);
     this.panel.querySelectorAll<HTMLInputElement|HTMLTextAreaElement>('[data-editor-properties] input,[data-editor-properties] textarea').forEach(input=>this.applyProperty(input));
     if(JSON.stringify(this.plan)!==before)this.commit();
+  }
+  dispose():void{
+    if(this.destroyed)return;
+    this.flushProperties();
     this.draft.selected=this.selected;this.destroyed=true;
     this.native?.dispose();this.native=null;
     this.canvas.removeEventListener('docflow-page-rendered',this.onPageRender);
