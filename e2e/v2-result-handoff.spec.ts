@@ -1,5 +1,6 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import { PDFDocument } from 'pdf-lib';
+import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs';
 import { readFile } from 'node:fs/promises';
 
 const base = '/zubaer-ahmed-PDF-TEST/';
@@ -11,6 +12,66 @@ async function downloadBytes(page: Page, link: Locator): Promise<Buffer> {
   if (!path) throw Error('Missing PDF download');
   return readFile(path);
 }
+
+test('one import survives organize, annotate, page numbering and exact revision navigation', async ({ page }) => {
+  const source = await PDFDocument.create();
+  source.addPage([360, 500]).drawText('First source page', { x: 45, y: 410 });
+  source.addPage([420, 560]).drawText('Second source page', { x: 45, y: 450 });
+  const writes: string[] = [];
+  page.on('request', request => { if (!['GET', 'HEAD'].includes(request.method())) writes.push(request.url()); });
+  await page.goto(base + '#/tools/organize');
+  await page.locator('[data-file-input]').setInputFiles({ name: 'source.pdf', mimeType: 'application/pdf', buffer: Buffer.from(await source.save()) });
+  await page.getByRole('button', { name: 'Move page 2 up', exact: true }).click();
+  const result = page.locator('.df2-output');
+  const run = page.locator('[data-run]');
+  const handoff = async (tool: string) => {
+    await page.getByText('Use PDF in another tool', { exact: true }).click();
+    await page.getByLabel('Next tool').selectOption(tool);
+    await page.getByRole('button', { name: 'Open selected PDF' }).click();
+    await expect(page.locator('[data-render-status]')).toHaveText('Page 1 of 2');
+  };
+
+  await run.click();
+  const organized = await downloadBytes(page, result);
+  await handoff('annotate');
+  await page.getByLabel('Note text').fill('Review checkpoint');
+  await page.getByLabel('Pages (blank means all)', { exact: true }).fill('1');
+  await run.click();
+  const annotated = await downloadBytes(page, result);
+  await handoff('page-numbers');
+  await page.getByLabel('Format').selectOption('page');
+  await run.click();
+  const numbered = await downloadBytes(page, result);
+
+  const final = await PDFDocument.load(numbered);
+  expect(final.getPages().map(sheet => sheet.getWidth())).toEqual([420, 360]);
+  const reader = await getDocument({ data: new Uint8Array(numbered), useSystemFonts: true }).promise;
+  try {
+    const pageText = async (number: number) => (await (await reader.getPage(number)).getTextContent()).items.map(item => 'str' in item ? item.str : '').join(' ');
+    const first = await pageText(1), second = await pageText(2);
+    expect(first).toContain('Second source page');
+    expect(first).toContain('Review checkpoint');
+    expect(first).toContain('Page 1');
+    expect(second).toContain('First source page');
+    expect(second).toContain('Page 2');
+    expect(second).not.toContain('Review checkpoint');
+  } finally { await reader.destroy(); }
+
+  const previous = page.getByRole('button', { name: /Previous revision/ });
+  const next = page.getByRole('button', { name: /Next revision/ });
+  await previous.click();
+  await expect(page).toHaveURL(/#\/tools\/annotate\/result$/);
+  expect(await downloadBytes(page, result)).toEqual(annotated);
+  await previous.click();
+  await expect(page).toHaveURL(/#\/tools\/organize\/result$/);
+  expect(await downloadBytes(page, result)).toEqual(organized);
+  await next.click();
+  await expect(page).toHaveURL(/#\/tools\/annotate\/result$/);
+  await next.click();
+  await expect(page).toHaveURL(/#\/tools\/page-numbers\/result$/);
+  expect(await downloadBytes(page, result)).toEqual(numbered);
+  expect(writes).toEqual([]);
+});
 
 test('opens the selected split PDF in a second tool without uploading again', async ({ page, browserName }, info) => {
   const source = await PDFDocument.create();

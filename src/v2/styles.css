@@ -218,6 +218,11 @@ a{color:inherit;text-decoration:none}
 .df2-output b{font-size:13px}
 .df2-output small{font-size:11px;color:#8893a6}
 .df2-output strong{font-size:12px;color:#5b4cc9;white-space:nowrap}
+.df2-result-file{min-width:0}
+.df2-result-file .file-share{display:block;min-height:44px;margin:4px 0 0 auto;padding:8px 13px;border:0;border-radius:8px;background:#f1efff;color:#5147b6;font:inherit;font-size:13px;font-weight:700;cursor:pointer}
+.df2-result-file .file-share:disabled{cursor:wait;opacity:.65}
+.df2-result-file .file-share-status{display:block;text-align:right;color:#56637b;font-size:13px;padding:4px 0}
+.df2-result-file .file-share-status:empty{padding:0}
 .df2-result-actions{display:flex;gap:12px;justify-content:center;margin-top:34px;flex-wrap:wrap}
 .df2-revisions{display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap;padding:8px 12px}
 .df2-work>.df2-revisions{background:#fff;border-bottom:1px solid #e0e4ef}
@@ -606,6 +611,13 @@ a{color:inherit;text-decoration:none}
 .df2-offline-close { float:right; }
 .df2-offline-dialog .offline-group { border-top:1px solid #e1e6ef; padding:10px 0; }
 .df2-offline-dialog .offline-actions,.session-confirm>div { display:flex; flex-wrap:wrap; gap:8px; }
+.df2-diagnostics{border-top:1px solid #e1e6ef;margin-top:8px}
+.df2-diagnostics summary{min-height:44px;padding:9px 0;color:#5147b6;font-weight:700;cursor:pointer}
+.df2-diagnostics fieldset{min-width:0;margin:0;padding:8px 12px;border:1px solid #c3ccdd;border-radius:9px}
+.df2-diagnostics label{display:block;margin:8px 0}
+.df2-diagnostics textarea{display:block;width:100%;min-width:0;min-height:120px;margin-top:5px;padding:8px;border:1px solid #c3ccdd;border-radius:9px;color:var(--df2-ink);background:#f7f8fc;resize:vertical}
+.df2-diagnostics code{overflow-wrap:anywhere}
+.df2-diagnostics button.primary{background:var(--df2-accent);border-color:var(--df2-accent);color:#fff}
 .df2-preferences-dialog .docflow-cloud-form{display:grid;gap:8px}
 .df2-preferences-dialog .docflow-cloud-form input{min-width:0;width:100%;min-height:44px;padding:8px 12px;border:1px solid #c3ccdd;border-radius:9px;background:#fff;color:var(--df2-ink)}
 .df2-preferences-dialog .docflow-cloud-form input::placeholder{color:#56637b}

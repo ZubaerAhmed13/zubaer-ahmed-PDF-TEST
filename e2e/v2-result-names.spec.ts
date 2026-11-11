@@ -18,6 +18,42 @@ async function download(page: Page, link: Locator) {
   return { name: output.suggestedFilename(), bytes: await readFile(path) };
 }
 
+async function mockFileSharing(page: Page) {
+  await page.addInitScript(() => {
+    const state = { calls: [] as { name: string; type: string; bytes: number[] }[], cancel: true };
+    Object.assign(window, { docflowShareTest: state });
+    Object.defineProperty(navigator, 'canShare', { configurable: true, value: (data: ShareData) => data.files?.length === 1 });
+    Object.defineProperty(navigator, 'share', { configurable: true, value: async (data: ShareData) => {
+      const file = data.files![0]!;
+      state.calls.push({ name: file.name, type: file.type, bytes: [...new Uint8Array(await file.arrayBuffer())] });
+      if (state.cancel) throw new DOMException('Cancelled by the user', 'AbortError');
+    } });
+  });
+}
+
+test('device sharing uses the renamed download bytes and cancellation leaves the download available', async ({ page }) => {
+  await mockFileSharing(page);
+  await page.goto(base + 'rotate');
+  await page.locator('[data-file-input]').setInputFiles(await fixture('share-source.pdf', 410));
+  await page.locator('[data-run]').click();
+  const link = page.locator('.df2-output');
+  const original = await download(page, link);
+  await page.getByText('Rename downloads', { exact: true }).click();
+  await page.getByLabel('Output filename').fill('Shared copy');
+  await page.getByRole('button', { name: 'Save filename' }).click();
+  const share = page.getByRole('button', { name: 'Save / share Shared copy.pdf' });
+  await share.click();
+  await expect(page.getByText('Sharing cancelled. Your download is still available.')).toBeVisible();
+  await expect(share).toBeEnabled();
+  const renamed = await download(page, link);
+  expect(renamed).toEqual({ name: 'Shared copy.pdf', bytes: original.bytes });
+  await page.evaluate(() => { (window as unknown as { docflowShareTest: { cancel: boolean } }).docflowShareTest.cancel = false; });
+  await share.click();
+  await expect(page.getByText('Sent to the selected share destination.')).toBeVisible();
+  const calls = await page.evaluate(() => (window as unknown as { docflowShareTest: { calls: unknown[] } }).docflowShareTest.calls);
+  expect(calls).toEqual(Array(2).fill({ name: renamed.name, type: 'application/pdf', bytes: [...renamed.bytes] }));
+});
+
 test('renamed PDFs keep their bytes, extension and name through tool handoff and revisions', async ({ page }) => {
   await page.goto(base + 'rotate');
   await page.locator('[data-file-input]').setInputFiles(await fixture('source.pdf', 410));
@@ -42,6 +78,7 @@ test('renamed PDFs keep their bytes, extension and name through tool handoff and
 });
 
 test('renaming a queue result rejects duplicates and rebuilds an archive with exact renamed bytes', async ({ page }) => {
+  await mockFileSharing(page);
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto(base + 'batch');
   await page.locator('[data-file-input]').setInputFiles([
@@ -55,7 +92,9 @@ test('renaming a queue result rejects duplicates and rebuilds an archive with ex
   const prepare = page.getByRole('button', { name: 'Prepare ZIP of completed PDFs' });
   await prepare.click();
   const zip = page.locator('[download="docflow-results.zip"]');
+  const shareZip = page.getByRole('button', { name: 'Save / share docflow-results.zip' });
   await expect(zip).toBeVisible();
+  await expect(shareZip).toBeVisible();
 
   await page.getByText('Rename downloads', { exact: true }).click();
   const field = page.getByLabel('Output filename');
@@ -69,10 +108,16 @@ test('renaming a queue result rejects duplicates and rebuilds an archive with ex
   await field.fill('Reviewed second');
   await save.click();
   await expect(zip).toHaveCount(0);
+  await expect(shareZip).toHaveCount(0);
   await expect(page.getByRole('combobox', { name: 'Review completed PDF' }).locator('option').nth(1)).toHaveText('Reviewed second.pdf');
   await prepare.click();
-  const archive = await JSZip.loadAsync((await download(page, zip)).bytes);
+  const zipBytes = (await download(page, zip)).bytes;
+  const archive = await JSZip.loadAsync(zipBytes);
   expect(Object.keys(archive.files).sort()).toEqual([first.name, 'Reviewed second.pdf'].sort());
   expect(Buffer.from(await archive.file('Reviewed second.pdf')!.async('uint8array')).equals(second.bytes)).toBe(true);
+  await shareZip.click();
+  await expect(page.getByText('Sharing cancelled. Your download is still available.')).toBeVisible();
+  const calls = await page.evaluate(() => (window as unknown as { docflowShareTest: { calls: unknown[] } }).docflowShareTest.calls);
+  expect(calls).toEqual([{ name: 'docflow-results.zip', type: 'application/zip', bytes: [...zipBytes] }]);
   expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(1);
 });

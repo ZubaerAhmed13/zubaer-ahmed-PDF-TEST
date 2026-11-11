@@ -39,6 +39,7 @@ import {openPreferencesDialog} from './preferencesDialog';
 import {mountScanReview,type PhotoCorrections} from '../tools/scanReview';
 import {parseRequiredPageSelection,parseSplitRanges} from '../pdf/pageRanges';
 import {outputFilename} from '../app/outputFilename';
+import {addFileSharing} from '../app/fileShare';
 import {mountExportPdfReview} from './pdfReview';
 
 const esc=(value:string):string=>value.replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]!));
@@ -830,9 +831,10 @@ class DocFlowV2 {
     if(!value){this.workspace();return;}
     this.disposeReview?.();this.disposeReview=null;
     this.freeLinks();
+    const outputBlobs=value.outputs.map(output=>new Blob([output.buffer],{type:output.type}));
     const downloads=value.outputs.map((output,index)=>{
-      const url=URL.createObjectURL(new Blob([output.buffer],{type:output.type}));this.links.push(url);
-      return `<a class="df2-output" data-result-output="${index}" href="${url}" download="${esc(output.name)}"><span class="df2-output-icon">↓</span><span><b>${esc(output.name)}</b><small>${bytes(output.buffer.byteLength)} · Ready to download</small></span><strong>Download →</strong></a>`;
+      const url=URL.createObjectURL(outputBlobs[index]!);this.links.push(url);
+      return `<div class="df2-result-file"><a class="df2-output" data-result-output="${index}" href="${url}" download="${esc(output.name)}"><span class="df2-output-icon">↓</span><span><b>${esc(output.name)}</b><small>${bytes(output.buffer.byteLength)} · Ready to download</small></span><strong>Download →</strong></a></div>`;
     }).join('');
     const pdfs=value.outputs.filter(output=>output.type==='application/pdf'&&output.buffer.byteLength>0);
     const exportPreview=!this.review&&tool.id!=='protect-pdf'&&pdfs.length?`<details class="df2-result-handoff df2-export-preview" data-export-pdf-review>
@@ -879,6 +881,7 @@ class DocFlowV2 {
         ${this.review?'<div data-v2-review-container></div>':''}
         ${value.info&&this.review?.kind!=='pipeline'?`<details class="df2-result-info"><summary>Processing details</summary><pre>${esc(JSON.stringify(value.info,null,2))}</pre></details>`:''}
       </div></main>`;
+    if(tool.id!=='protect-pdf')this.root.querySelectorAll<HTMLAnchorElement>('[data-result-output]').forEach((link,index)=>addFileSharing(link,outputBlobs[index]!));
     const handoffForm=this.root.querySelector<HTMLFormElement>('[data-result-handoff]');
     handoffForm?.addEventListener('submit',event=>{
       event.preventDefault();
@@ -932,6 +935,7 @@ class DocFlowV2 {
         const link=this.root.querySelector<HTMLAnchorElement>(`[data-result-output="${index}"]`)!;
         link.download=name;
         link.querySelector('b')!.textContent=name;
+        link.dispatchEvent(new Event('docflow-output-renamed'));
         if(picker)picker.options[index]!.text=name;
         const pdfIndex=pdfs.indexOf(output);
         const handoff=this.root.querySelector<HTMLOptionElement>(`[data-result-handoff] [name=pdf] option[value="${pdfIndex}"]`);
@@ -1205,7 +1209,9 @@ class DocFlowV2 {
       const zip=new JSZip();outputs.forEach(out=>zip.file(out.name,out.buffer));
       const blob=await zip.generateAsync({type:'blob',compression:'STORE'},()=>{if(!current())throw new DOMException('Cancelled','AbortError');});
       if(!current())return;
-      const url=URL.createObjectURL(blob);this.links.push(url);const link=document.createElement('a');link.className='df2-output';link.dataset.pipelineZipOutput='';link.href=url;link.download='docflow-results.zip';link.textContent='Download all completed PDFs · '+bytes(blob.size);this.root.querySelector('.df2-downloads')?.append(link);button.hidden=true;status.textContent='ZIP ready · '+outputs.length+' completed PDFs. ZIP preparation limit: 75 MB.';
+      const url=URL.createObjectURL(blob);this.links.push(url);const link=document.createElement('a');link.className='df2-output';link.dataset.pipelineZipOutput='';link.href=url;link.download='docflow-results.zip';link.textContent='Download all completed PDFs · '+bytes(blob.size);
+      const group=document.createElement('div');group.className='df2-result-file';group.append(link);addFileSharing(link,blob);
+      this.root.querySelector('.df2-downloads')?.append(group);button.hidden=true;status.textContent='ZIP ready · '+outputs.length+' completed PDFs. ZIP preparation limit: 75 MB.';
     }catch(error){if(current()){status.textContent=error instanceof Error?error.message:'ZIP could not be prepared.';button.disabled=false;}}
     finally{if(current())button.setAttribute('aria-busy','false');}
   }
@@ -1218,7 +1224,7 @@ class DocFlowV2 {
     if(link){
       URL.revokeObjectURL(link.href);
       this.links=this.links.filter(url=>url!==link.href);
-      link.remove();
+      link.closest('.df2-result-file')?.remove();
     }
     button.disabled=button.hidden=false;
     button.setAttribute('aria-busy','false');
