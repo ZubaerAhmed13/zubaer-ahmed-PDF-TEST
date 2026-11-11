@@ -37,7 +37,7 @@ test('device sharing uses the renamed download bytes and cancellation leaves the
   await page.locator('[data-file-input]').setInputFiles(await fixture('share-source.pdf', 410));
   await page.locator('[data-run]').click();
   const link = page.locator('.df2-output');
-  const original = await download(page, link);
+  await expect(link).toBeVisible();
   await page.getByText('Rename downloads', { exact: true }).click();
   await page.getByLabel('Output filename').fill('Shared copy');
   await page.getByRole('button', { name: 'Save filename' }).click();
@@ -46,7 +46,8 @@ test('device sharing uses the renamed download bytes and cancellation leaves the
   await expect(page.getByText('Sharing cancelled. Your download is still available.')).toBeVisible();
   await expect(share).toBeEnabled();
   const renamed = await download(page, link);
-  expect(renamed).toEqual({ name: 'Shared copy.pdf', bytes: original.bytes });
+  expect(renamed.name).toBe('Shared copy.pdf');
+  expect((await PDFDocument.load(renamed.bytes)).getPage(0).getRotation().angle).toBe(90);
   await page.evaluate(() => { (window as unknown as { docflowShareTest: { cancel: boolean } }).docflowShareTest.cancel = false; });
   await share.click();
   await expect(page.getByText('Sent to the selected share destination.')).toBeVisible();

@@ -95,7 +95,9 @@ test('cancelling repair during independent verification never publishes a downlo
   await page.addInitScript(()=>{
     const post=Worker.prototype.postMessage;
     Worker.prototype.postMessage=function(message:unknown,...options:unknown[]){
-      if ((message as {action?:string}|null)?.action==='GetOperatorList' &&
+      const request=message as {action?:string;data?:{intent?:number}}|null;
+      // PDF.js sets OPLIST for getOperatorList(), unlike the canvas preview's render().
+      if (request?.action==='GetOperatorList' && ((request.data?.intent??0)&0x100)!==0 &&
           !document.documentElement.dataset.repairValidation &&
           document.querySelector('[data-run-status]')?.textContent?.startsWith('Validating repaired page')){
         document.documentElement.dataset.repairValidation='pending';
@@ -106,6 +108,7 @@ test('cancelling repair during independent verification never publishes a downlo
   });
   await page.goto(prefix+'#/tools/repair-pdf');
   await page.locator('[data-file-input]').setInputFiles(await source());
+  await expect(page.locator('[data-render-status]')).toHaveText('Page 1 of 1');
   await page.locator('[data-run]').click();
   await expect(page.locator('html')).toHaveAttribute('data-repair-validation','pending');
   await page.locator('[data-cancel-processing]').click();
