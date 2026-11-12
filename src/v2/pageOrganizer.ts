@@ -1,5 +1,6 @@
 import type {PreviewController} from '../pdf/render';
 import {createOrganizerDraft,type OrganizerDraft} from './draft';
+import {MAX_PAGES} from '../pdf/resourceBudget';
 
 export interface PageOrganizer {
   getOrder(): number[];
@@ -24,13 +25,16 @@ export function mountPageOrganizer(
   let disposed=false,thumbnailGeneration=0;
   let observer:IntersectionObserver|null=null;
   let focusIndex=-1;
+  let dragFrom:number|null=null;
   host.classList.add('df2-page-plan');
   host.innerHTML=`<div class="df2-plan-title"><strong>Arrange your pages</strong><span data-plan-total role="status"></span></div>
     <p class="df2-plan-info">Drag page cards to reorder, or use the arrow buttons. Select a thumbnail for a full preview.</p>
     <div class="df2-plan-toolbar"><button type="button" data-plan-undo disabled>↶ Undo</button><button type="button" data-plan-redo disabled>↷ Redo</button><button type="button" data-plan-reset>Reset</button></div>
+    <p class="df2-plan-info" data-plan-limit role="status" hidden></p>
     <div class="df2-plan-list" data-plan-list aria-label="Page order"></div>`;
   const list=host.querySelector<HTMLElement>('[data-plan-list]')!;
   const total=host.querySelector<HTMLElement>('[data-plan-total]')!;
+  const limit=host.querySelector<HTMLElement>('[data-plan-limit]')!;
   const undo=host.querySelector<HTMLButtonElement>('[data-plan-undo]')!;
   const redo=host.querySelector<HTMLButtonElement>('[data-plan-redo]')!;
   const equal=(a:Snapshot,b:Snapshot):boolean=>a.length===b.length&&a.every((x,i)=>x===b[i]);
@@ -50,7 +54,7 @@ export function mountPageOrganizer(
       const actions=[
         ['up','Move page '+page+' up', '↑',index===0],
         ['down','Move page '+page+' down','↓',index===order.length-1],
-        ['copy','Duplicate page '+page,'⧉',false],
+        ['copy','Duplicate page '+page,'⧉',order.length>=MAX_PAGES],
         ['remove','Remove page '+page,'×',order.length===1]
       ] as const;
       for(const [action,label,symbol,disabled] of actions){
@@ -81,6 +85,8 @@ export function mountPageOrganizer(
       list.querySelectorAll('canvas').forEach(canvas=>observer?.observe(canvas));
     }
     total.textContent=order.length+' output '+(order.length===1?'page':'pages');
+    limit.hidden=order.length<MAX_PAGES;
+    limit.textContent=limit.hidden?'':'1,000-page output limit reached. Remove a page before duplicating another.';
     undo.disabled=!history.length;redo.disabled=!future.length;
     if(focusIndex>=0){
       const row=list.querySelector<HTMLElement>(`[data-plan-index="${Math.min(focusIndex,order.length-1)}"]`);
@@ -107,23 +113,39 @@ export function mountPageOrganizer(
     const next=[...order];const page=next[index]!;
     if(action==='up'&&index>0){[next[index-1],next[index]]=[page,next[index-1]!];commit(next,index-1);}
     if(action==='down'&&index<next.length-1){[next[index],next[index+1]]=[next[index+1]!,page];commit(next,index+1);}
-    if(action==='copy'){next.splice(index+1,0,page);commit(next,index+1);}
+    if(action==='copy'&&next.length<MAX_PAGES){next.splice(index+1,0,page);commit(next,index+1);}
     if(action==='remove'&&next.length>1){next.splice(index,1);commit(next,Math.min(index,next.length-1));}
   };
   const dragStart=(event:DragEvent):void=>{
     const row=event.target instanceof Element?event.target.closest<HTMLElement>('[data-plan-index]'):null;
-    if(!row||!event.dataTransfer)return;event.dataTransfer.setData('text/plain',row.dataset.planIndex!);event.dataTransfer.effectAllowed='move';
+    if(!row||!list.contains(row)||!event.dataTransfer)return;
+    const index=Number(row.dataset.planIndex);
+    if(!Number.isInteger(index)||index<0||index>=order.length)return;
+    dragFrom=index;
+    event.dataTransfer.setData('text/plain',String(index));
+    event.dataTransfer.effectAllowed='move';
   };
-  const dragOver=(event:DragEvent):void=>{if(event.target instanceof Element&&event.target.closest('[data-plan-index]')){event.preventDefault();if(event.dataTransfer)event.dataTransfer.dropEffect='move';}};
+  const dragOver=(event:DragEvent):void=>{
+    if(dragFrom!==null&&event.target instanceof Element&&event.target.closest('[data-plan-index]')){
+      event.preventDefault();
+      if(event.dataTransfer)event.dataTransfer.dropEffect='move';
+    }
+  };
   const drop=(event:DragEvent):void=>{
+    const from=dragFrom;
+    dragFrom=null;
     const row=event.target instanceof Element?event.target.closest<HTMLElement>('[data-plan-index]'):null;
-    if(!row||!event.dataTransfer)return;event.preventDefault();const raw=event.dataTransfer.getData('text/plain');
-    if(!/^\d+$/.test(raw))return;const from=Number(raw),to=Number(row.dataset.planIndex);
-    if(!Number.isInteger(from)||from<0||from>=order.length||from===to)return;
-    const next=[...order],page=next.splice(from,1)[0]!;next.splice(to,0,page);commit(next,to);
+    if(from===null||!row||!list.contains(row)||!event.dataTransfer)return;
+    event.preventDefault();
+    const to=Number(row.dataset.planIndex);
+    if(!Number.isInteger(to)||to<0||to>=order.length||from===to)return;
+    const next=[...order],page=next.splice(from,1)[0]!;
+    next.splice(to,0,page);commit(next,to);
   };
+  const dragEnd=():void=>{dragFrom=null;};
   host.addEventListener('click',click);
-  list.addEventListener('dragstart',dragStart);list.addEventListener('dragover',dragOver);list.addEventListener('drop',drop);
+  list.addEventListener('dragstart',dragStart);list.addEventListener('dragover',dragOver);
+  list.addEventListener('drop',drop);list.addEventListener('dragend',dragEnd);
   draw();
-  return { getOrder:()=>[...order], dispose:()=>{disposed=true;++thumbnailGeneration;observer?.disconnect();host.removeEventListener('click',click);list.removeEventListener('dragstart',dragStart);list.removeEventListener('dragover',dragOver);list.removeEventListener('drop',drop);host.querySelectorAll('canvas').forEach(c=>{c.width=1;c.height=1;});host.replaceChildren();}};
+  return { getOrder:()=>[...order], dispose:()=>{disposed=true;++thumbnailGeneration;observer?.disconnect();host.removeEventListener('click',click);list.removeEventListener('dragstart',dragStart);list.removeEventListener('dragover',dragOver);list.removeEventListener('drop',drop);list.removeEventListener('dragend',dragEnd);dragFrom=null;host.querySelectorAll('canvas').forEach(c=>{c.width=1;c.height=1;});host.replaceChildren();}};
 }
