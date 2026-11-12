@@ -105,3 +105,36 @@ test('Split rejects empty selections and Shift-click switches to the exact selec
   }
   expect(widths).toEqual([[300, 301], [302, 303]]);
 });
+
+test('malformed extract ranges never publish a PDF and valid decimal selections recover', async ({ page }) => {
+  await open(page, 'extract-pages');
+  const field = page.getByLabel('Pages to extract', { exact: true });
+  for (const invalid of ['1,,3', '0x2', '2.0', '1,']) {
+    await field.fill(invalid);
+    await expect(field).toHaveAttribute('aria-invalid', 'true');
+    await page.locator('[data-run]').click();
+    await expect(page.locator('[data-run-status]')).toContainText(/Invalid page|missing page/);
+    await expect(page.locator('.df2-output')).toHaveCount(0);
+  }
+  await field.fill('01, 3');
+  await expect(field).not.toHaveAttribute('aria-invalid', 'true');
+  const result = await PDFDocument.load(await runAndDownload(page));
+  expect(result.getPages().map(p => p.getWidth())).toEqual([300, 302]);
+});
+
+test('split rejects repeated semicolons before export, then produces exact separate ranges', async ({ page }) => {
+  await open(page, 'split');
+  await page.getByRole('combobox', { name: 'Split method' }).selectOption('ranges');
+  const field = page.getByLabel('Separate ranges (semicolon)', { exact: true });
+  await field.fill('1;;3');
+  await page.locator('[data-run]').click();
+  await expect(page.locator('[data-run-status]')).toContainText('Each split range needs at least one page');
+  await expect(page.locator('.df2-output')).toHaveCount(0);
+  await field.fill('1;3');
+  const zip = await JSZip.loadAsync(await runAndDownload(page));
+  const names = Object.keys(zip.files).sort();
+  expect(names).toEqual(['split-01.pdf', 'split-02.pdf']);
+  const first = await PDFDocument.load(await zip.file('split-01.pdf')!.async('uint8array'));
+  const second = await PDFDocument.load(await zip.file('split-02.pdf')!.async('uint8array'));
+  expect([first.getPage(0).getWidth(), second.getPage(0).getWidth()]).toEqual([300, 302]);
+});
