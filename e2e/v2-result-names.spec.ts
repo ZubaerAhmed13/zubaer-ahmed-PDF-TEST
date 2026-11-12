@@ -130,7 +130,7 @@ test('download filenames cannot hide their extension with invisible direction co
   const link = page.locator('.df2-output');
   await expect(link).toBeVisible();
   await page.getByText('Rename downloads', { exact: true }).click();
-  await page.getByLabel('Output filename').fill('invoice\\u202epdf\\u202c.PDF');
+  await page.getByLabel('Output filename').fill('invoice\u202epdf\u202c.PDF');
   await page.getByRole('button', { name: 'Save filename' }).click();
   await expect(link).toHaveAttribute('download', 'invoice-pdf-.pdf');
   const renamed = await download(page, link);
