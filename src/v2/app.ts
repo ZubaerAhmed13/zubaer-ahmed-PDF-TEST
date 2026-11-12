@@ -38,7 +38,7 @@ import {sanitizeCloudTools} from '../app/cloudSync';
 import {openPreferencesDialog} from './preferencesDialog';
 import {mountScanReview,type PhotoCorrections} from '../tools/scanReview';
 import {parseRequiredPageSelection,parseSplitRanges} from '../pdf/pageRanges';
-import {outputFilename} from '../app/outputFilename';
+import {outputFilename,safeResultFilenames} from '../app/outputFilename';
 import {addFileSharing} from '../app/fileShare';
 import {mountExportPdfReview} from './pdfReview';
 
@@ -829,6 +829,11 @@ class DocFlowV2 {
   private results():void {
     const tool=this.tool!,value=this.result;
     if(!value){this.workspace();return;}
+    // The original file may carry a hostile or misleading filename even when
+    // no user-initiated rename occurs. Sanitize before downloads, sharing,
+    // archive creation and handoff use the exported name.
+    const names=safeResultFilenames(value.outputs);
+    value.outputs.forEach((output,index)=>{output.name=names[index]!;});
     this.disposeReview?.();this.disposeReview=null;
     this.freeLinks();
     const outputBlobs=value.outputs.map(output=>new Blob([output.buffer],{type:output.type}));
