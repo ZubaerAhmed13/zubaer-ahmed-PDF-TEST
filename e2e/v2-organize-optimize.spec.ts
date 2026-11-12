@@ -50,3 +50,25 @@ test('smartphone page organizer works without gestures and has keyboard-accessib
   const doc=await download(page);
   expect(doc.getPages().map(p=>p.getWidth())).toEqual([347,310]);
 });
+
+test('external text drops and ended drags cannot reorder pages, but a genuine drag exports correctly', async ({ page }) => {
+  await page.goto(base + '#/tools/organize');
+  await page.locator('[data-file-input]').setInputFiles(await pdf(3));
+  await expect(page.locator('.df2-plan-row')).toHaveCount(3);
+
+  // An unrelated document or dragged text may contain the same "0" index.
+  await page.evaluate(() => {
+    const rows = document.querySelectorAll<HTMLElement>('.df2-plan-row');
+    const transfer = new DataTransfer();
+    transfer.setData('text/plain', '0');
+    rows[2]!.dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer: transfer }));
+    rows[0]!.dispatchEvent(new DragEvent('dragstart', { bubbles: true, cancelable: true, dataTransfer: transfer }));
+    rows[0]!.dispatchEvent(new DragEvent('dragend', { bubbles: true, dataTransfer: transfer }));
+    rows[2]!.dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer: transfer }));
+  });
+  await expect(page.locator('.df2-plan-row').first()).toContainText('Page 1');
+  await page.locator('.df2-plan-row').first().dragTo(page.locator('.df2-plan-row').last());
+  await expect(page.locator('.df2-plan-row').first()).toContainText('Page 2');
+  const result = await download(page);
+  expect(result.getPages().map(p => p.getWidth())).toEqual([347,384,310]);
+});
