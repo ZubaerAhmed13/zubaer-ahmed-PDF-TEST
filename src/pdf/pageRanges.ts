@@ -1,4 +1,5 @@
 import { PdfOperationError } from './errors';
+import { MAX_PAGES } from './resourceBudget';
 
 export function parsePageSelection(value: string, totalPages: number): number[] {
   const source = value.trim();
@@ -33,6 +34,9 @@ export function parseRequiredPageSelection(
 }
 
 export function parsePageOrder(value: string, totalPages: number): number[] {
+  if (totalPages > MAX_PAGES) {
+    throw new PdfOperationError('RESOURCE_LIMIT', 'Organized PDFs support at most 1,000 output pages.');
+  }
   const source = value.trim();
   if (!source) return Array.from({ length: totalPages }, (_, index) => index);
   const order: number[] = [];
@@ -42,6 +46,9 @@ export function parsePageOrder(value: string, totalPages: number): number[] {
       throw new PdfOperationError('INVALID_PAGE_ORDER', `Invalid page in order: ${token}`);
     }
     order.push(page - 1);
+    if (order.length > MAX_PAGES) {
+      throw new PdfOperationError('RESOURCE_LIMIT', 'Organized PDFs support at most 1,000 output pages. Remove pages or duplicate fewer pages.');
+    }
   }
   if (!order.length) throw new PdfOperationError('INVALID_PAGE_ORDER', 'Page order cannot be empty.');
   return order;
