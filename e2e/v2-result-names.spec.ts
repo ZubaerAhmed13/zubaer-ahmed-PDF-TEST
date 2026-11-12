@@ -122,3 +122,18 @@ test('renaming a queue result rejects duplicates and rebuilds an archive with ex
   expect(calls).toEqual([{ name: 'docflow-results.zip', type: 'application/zip', bytes: [...zipBytes] }]);
   expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(1);
 });
+
+test('download filenames cannot hide their extension with invisible direction controls', async ({ page }) => {
+  await page.goto(base + 'rotate');
+  await page.locator('[data-file-input]').setInputFiles(await fixture('source.pdf', 410));
+  await page.locator('[data-run]').click();
+  const link = page.locator('.df2-output');
+  await expect(link).toBeVisible();
+  await page.getByText('Rename downloads', { exact: true }).click();
+  await page.getByLabel('Output filename').fill('invoice\\u202epdf\\u202c.PDF');
+  await page.getByRole('button', { name: 'Save filename' }).click();
+  await expect(link).toHaveAttribute('download', 'invoice-pdf-.pdf');
+  const renamed = await download(page, link);
+  expect(renamed.name).toBe('invoice-pdf-.pdf');
+  expect((await PDFDocument.load(renamed.bytes)).getPage(0).getRotation().angle).toBe(90);
+});
