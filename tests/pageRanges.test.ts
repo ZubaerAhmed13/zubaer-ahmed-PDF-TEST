@@ -14,6 +14,11 @@ describe('page range parsing', () => {
   it('preserves duplicates in explicit page order', () => {
     expect(parsePageOrder('1,2,2,3', 3)).toEqual([0,1,1,2]);
   });
+  it('limits organized output to 1,000 pages, including duplicate page references', () => {
+    expect(parsePageOrder(Array(1000).fill('1').join(','), 1)).toHaveLength(1000);
+    expect(() => parsePageOrder(Array(1001).fill('1').join(','), 1)).toThrow(/1,000 output pages/i);
+    expect(() => parsePageOrder('', 1001)).toThrow(/1,000 output pages/i);
+  });
   it('supports semicolon-delimited split groups', () => {
     expect(parseSplitRanges('1-2;3,5', 5)).toEqual([[0,1],[2,4]]);
   });
