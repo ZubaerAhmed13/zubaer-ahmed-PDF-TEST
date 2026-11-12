@@ -2,7 +2,7 @@
  * Preserve ordinary Unicode (including emoji and joined scripts), but replace
  * path separators, invisible direction overrides and filename control codes.
  */
-const unsafeFilenameCharacters = /[\u0000-\u001f\u007f-\u009f\u061c\u200b\u200e\u200f\u2028-\u202e\u2060\u2066-\u2069\ufeff<>:"/\\|?*]/gu;
+const unsafeFilenameCharacters = /[\p{Cc}\u061c\u200b\u200e\u200f\u2028-\u202e\u2060\u2066-\u2069\ufeff<>:"/\\|?*]/gu;
 const windowsDeviceName = /^(?:con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\..*)?$/i;
 
 export function outputFilename(value: string, original: string): string {
