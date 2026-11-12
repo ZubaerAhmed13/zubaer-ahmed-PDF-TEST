@@ -203,6 +203,7 @@ class DocFlowV2 {
   private handoffCheck:AbortController|null=null;
   private readonly revisions=new WorkspaceHistory<WorkspaceRevision>();
   private renderId=0;
+  private pageNavigationGeneration=0;
   private currentPage=1;
   private zoom=1;
   private fitMode:'width'|'page'='width';
@@ -798,23 +799,31 @@ class DocFlowV2 {
   }
   private async showPage(page:number):Promise<void> {
     const controller=this.preview;if(!controller)return;
+    const request=++this.pageNavigationGeneration;
+    const selectedPage=Math.max(1,Math.min(page,controller.pageCount));
+    const requestedZoom=this.zoom,requestedFit=this.fitMode;
     this.reader?.clear();
     this.formFiller?.clearPage();
     this.redaction?.clearPage();
-    this.currentPage=Math.max(1,Math.min(page,controller.pageCount));
-    const pageInput=this.root.querySelector<HTMLInputElement>('[name=readerPage]');if(pageInput)pageInput.value=String(this.currentPage);
+    this.currentPage=selectedPage;
+    const pageInput=this.root.querySelector<HTMLInputElement>('[name=readerPage]');if(pageInput)pageInput.value=String(selectedPage);
     const label=this.root.querySelector<HTMLElement>('[data-page-label]');
-    if(label)label.textContent='Page '+this.currentPage+' / '+controller.pageCount;
-    const zoom=this.root.querySelector<HTMLElement>('[data-zoom-label]');if(zoom)zoom.textContent=Math.round(this.zoom*100)+'%';
-    const pdfPage=await controller.document.getPage(this.currentPage),pageSize=pdfPage.getViewport({scale:1});
-    if(controller!==this.preview)return;
+    if(label)label.textContent='Page '+selectedPage+' / '+controller.pageCount;
+    const zoom=this.root.querySelector<HTMLElement>('[data-zoom-label]');if(zoom)zoom.textContent=Math.round(requestedZoom*100)+'%';
+    const pdfPage=await controller.document.getPage(selectedPage);
+    // A later page/zoom request may already be in flight. Never size the
+    // latest page using an earlier page's geometry or repaint a stale overlay.
+    if(controller!==this.preview||request!==this.pageNavigationGeneration)return;
+    const pageSize=pdfPage.getViewport({scale:1});
     const stage=this.root.querySelector<HTMLElement>('.df2-page-stage');
     const width=Math.max(100,(stage?.clientWidth??700)-32),height=Math.max(100,(stage?.clientHeight??800)-32);
-    const fit=this.fitMode==='page'?Math.min(width/pageSize.width,height/pageSize.height):width/pageSize.width;
-    await controller.render(this.currentPage,Math.max(.1,Math.min(4,fit*this.zoom)));
-    this.editor?.show(this.currentPage);
+    const fit=requestedFit==='page'?Math.min(width/pageSize.width,height/pageSize.height):width/pageSize.width;
+    await controller.render(selectedPage,Math.max(.1,Math.min(4,fit*requestedZoom)));
+    if(controller!==this.preview||request!==this.pageNavigationGeneration)return;
+    this.editor?.show(selectedPage);
   }
   private async freePreview(invalidate=true):Promise<void> {
+    ++this.pageNavigationGeneration;
     ++this.ocrPreviewGeneration;
     this.formFiller?.dispose();this.formFiller=null;
     this.editorInspection?.cancel();this.editorInspection=null;
