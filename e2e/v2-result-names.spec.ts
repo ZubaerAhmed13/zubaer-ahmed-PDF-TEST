@@ -137,3 +137,22 @@ test('download filenames cannot hide their extension with invisible direction co
   expect(renamed.name).toBe('invoice-pdf-.pdf');
   expect((await PDFDocument.load(renamed.bytes)).getPage(0).getRotation().angle).toBe(90);
 });
+
+test('original-name PDF downloads are safe before renaming while the exported bytes stay unchanged', async ({ page }) => {
+  for (const [inputName,expectedName] of [
+    ['CON.pdf','_CON.pdf'],
+    ['invoice\u202eexe.pdf','invoice-exe.pdf']
+  ]) {
+    const input=await fixture(inputName,410);
+    await page.goto(base+'preview');
+    await page.locator('[data-file-input]').setInputFiles(input);
+    await page.locator('[data-run]').click();
+    const link=page.locator('.df2-output').first();
+    await expect(link).toHaveAttribute('download',expectedName);
+    const result=await download(page,link);
+    expect(result.name).toBe(expectedName);
+    expect(result.bytes.equals(input.buffer)).toBe(true);
+    const info=page.locator('.df2-result-info');
+    await expect(info).toBeVisible();
+  }
+});
