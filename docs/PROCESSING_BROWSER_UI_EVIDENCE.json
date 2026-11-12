@@ -1,0 +1,147 @@
+{
+  "schema": 1,
+  "source": "09b8462a732476237035b1287c3b6546511e393a",
+  "verifiedOn": "2026-11-05",
+  "scope": "V2 browser acceptance and protected staging asset checks",
+  "ci": {
+    "v2Run": 42028823178,
+    "chromium": {
+      "job": 127249720561,
+      "passed": 113,
+      "skipped": 0,
+      "flaky": 0,
+      "artifact": 13414354682
+    },
+    "firefox": {
+      "job": 127249721068,
+      "passed": 111,
+      "skipped": 2,
+      "flaky": 0,
+      "artifact": 13415501497
+    },
+    "webkit": {
+      "job": 127249721208,
+      "passed": 111,
+      "skipped": 2,
+      "flaky": 0,
+      "artifact": 13416140206
+    },
+    "quality": {
+      "run": 42028823324,
+      "job": 127249976967,
+      "status": "success",
+      "unitTests": 288,
+      "unitTestFiles": 48,
+      "checks": [
+        "dependency audit at high threshold",
+        "provenance",
+        "typecheck",
+        "lint",
+        "independent PDF corpus and form verification",
+        "build",
+        "reproducible release package"
+      ]
+    },
+    "processing": {
+      "run": 42028823027,
+      "job": 127249719989,
+      "status": "success",
+      "boundaryTests": 47
+    },
+    "fullBrowserRun": {
+      "status": "cancelled",
+      "legacyScenarios": "failures observed before cancellation"
+    }
+  },
+  "browserCoverage": {
+    "serverJourneysPerBrowser": 14,
+    "serverResponseScope": "Fully intercepted Auth and broker requests with a fake publishable key and synthetic responses. Actual hosted worker evidence is recorded in PROCESSING_TRANSPORT_EVIDENCE.json.",
+    "accessibility": {
+      "casesPerBrowser": 4,
+      "checks": "axe WCAG 2 and 2.1 A/AA plus best-practice rules",
+      "widthsPx": [
+        320,
+        390,
+        1440
+      ]
+    },
+    "offline": {
+      "chromium": "Offline reload, real rotated PDF download and prepared English OCR",
+      "firefox": "Offline reload, real rotated PDF download and prepared English OCR",
+      "webkit": "Cache byte and hash verification with network disabled, then online PDF execution. Offline reload and new-worker execution remain open."
+    },
+    "update": {
+      "brokenInstall": "redundant",
+      "busy": "blocked",
+      "discardDeclined": "retained result",
+      "approvedActivation": "recovered",
+      "unexpectedBeforeUnload": 0
+    },
+    "longDocument": {
+      "pages": 240,
+      "targetPage": 221,
+      "rotationDegrees": 270
+    },
+    "chromiumHeap": {
+      "artifact": 13414354682,
+      "scope": "JavaScript heap after forced GC",
+      "baselineBytes": 5598544,
+      "samplesBytes": [
+        5877448,
+        5966388,
+        6005372,
+        6084172,
+        6111492,
+        6002724,
+        6085916,
+        6326280
+      ],
+      "growthBytes": 727736,
+      "tailSpreadBytes": 323556
+    }
+  },
+  "preview": {
+    "deployment": "dpl_2UqJjr7tu9v8A5qABYtjzFWn8LD7",
+    "state": "READY",
+    "target": "staging",
+    "url": "https://docflow-v2-preview-ibpax8ux1-bhuyainria-7304.vercel.app/zubaer-ahmed-PDF-TEST/",
+    "releaseBuild": "09b8462a732476237035b1287c3b6546511e393a",
+    "httpChecks": {
+      "release.json": 200,
+      "index": 200,
+      "mainJavaScript": 200,
+      "mainCss": 200,
+      "manifest": 200,
+      "serviceWorker": 200
+    },
+    "mainJavaScript": "assets/index-M5juQn9A.js",
+    "mainCss": "assets/index-cbH7D7wc.css",
+    "interactiveSmoke": "Pending authenticated browser access. Earlier attempt reached Vercel sign-in."
+  },
+  "staging": {
+    "observedAt": "2026-11-05T16:24:14.626962Z",
+    "normalProcessingEnabled": false,
+    "allowedSyntheticOwners": 2,
+    "activeJobs": 0,
+    "storageObjects": 0,
+    "startsLast24Hours": 0,
+    "lastCleanupOk": "2026-11-05T16:20:00.900045Z",
+    "cleanupFailed": false,
+    "preflight": {
+      "currentPreviewOrigin": 204,
+      "retiredPreviewOrigin": 403
+    },
+    "snapshot": "snap_xmLQxHteb7AzQ5OrU68cBXYpkmiJ",
+    "snapshotStatus": "created",
+    "snapshotExpiresAt": "2026-11-06T18:37:26.847Z",
+    "vmStartedDuringUiWork": false,
+    "snapshotRebuilt": false
+  },
+  "remainingReleaseChecks": [
+    "Legacy scenario parity",
+    "Hosted authenticated browser to real worker",
+    "Physical devices and manual assistive technology",
+    "Broader document fidelity and resource stress",
+    "Durable engine image, capacity and cost"
+  ]
+}

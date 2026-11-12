@@ -5,16 +5,12 @@ if (!baseURL) throw new Error('DOCFLOW_PRODUCTION_BASE_URL is required for produ
 
 export default defineConfig({
   testDir: './e2e',
-  // Reuse the same export/reopen assertions against the built deployment.
-  // Keep expensive stress tests in the full pre-deployment browser matrix.
-  testMatch: [
-    'a1-native-highlights.spec.ts', 'r7-product-finish.spec.ts',
-    'r6-workflows-exports.spec.ts', 'r5-release.spec.ts', 'r4-document-quality.spec.ts', 'r3-mobile-offline.spec.ts', 'r2-editing-reading.spec.ts', 'production.spec.ts', 'r0-baseline.spec.ts', 'document-session.spec.ts',
-    'forms-matrix.spec.ts', 'color-fidelity.spec.ts',
-    'phase3-ocr-comparison.spec.ts', 'workflow-builder.spec.ts',
-    'professional-redaction-repair.spec.ts', 'release.spec.ts', 'organize-workspace.spec.ts', 'essential-utilities.spec.ts',
-    'image-watermark.spec.ts', 'professional-compression.spec.ts', 'extract-images.spec.ts',
-    'batch-workspace.spec.ts', 'encryption.spec.ts'
+  testMatch: 'v2-*.spec.ts',
+  // Local build fault injection, stress runs and mocked accounts stay in CI.
+  testIgnore: [
+    '**/v2-cloud-sync.spec.ts', '**/v2-input-budget.spec.ts', '**/v2-long-document.spec.ts',
+    '**/v2-offline.spec.ts', '**/v2-resource-lifecycle.spec.ts', '**/v2-server-processing.spec.ts',
+    '**/v2-update-recovery.spec.ts', '**/v2-visual-review.spec.ts',
   ],
   workers: 2,
   timeout: 120_000,
@@ -26,6 +22,11 @@ export default defineConfig({
     trace: 'retain-on-failure'
   },
   projects: [
-    { name: 'chromium', use: { ...devices['Desktop Chrome'] } }
+    { name: 'chromium', use: {
+      ...devices['Desktop Chrome'],
+      launchOptions: process.env.DOCFLOW_TEST_CHROMIUM
+        ? { executablePath: process.env.DOCFLOW_TEST_CHROMIUM }
+        : undefined
+    } }
   ]
 });

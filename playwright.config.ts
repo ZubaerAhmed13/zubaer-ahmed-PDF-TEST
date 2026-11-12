@@ -2,6 +2,10 @@ import { defineConfig, devices } from '@playwright/test';
 
 export default defineConfig({
   testDir: './e2e',
+  testMatch: 'v2-*.spec.ts',
+  testIgnore: process.env.VITE_DOCFLOW_SERVER_PROCESSING === '1'
+    ? []
+    : '**/v2-server-processing.spec.ts',
   timeout: 45_000,
   expect: { timeout: 8_000 },
   retries: process.env.CI ? 1 : 0,

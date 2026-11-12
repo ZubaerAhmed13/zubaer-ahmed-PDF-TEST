@@ -1,15 +1,11 @@
 import { preservationConsequences } from '../pdf/preservationPolicy';
 import '../styles/export-review.css';
 import { workspaceRuntime } from './workspaceRuntime';
+import { outputFilename } from './outputFilename';
 
 export interface OutputAction { action: 'review' | 'continue' | 'compare'; file: File; source?: File; status: HTMLElement }
 export interface OutputReady { link: HTMLAnchorElement; blob: Blob; source?: File; toolId: string }
-export function outputFilename(value: string, original: string): string {
-  const extension = original.match(/\.[a-z0-9]{1,8}$/i)?.[0] ?? '';
-  const clean = [...value].map(character => character.charCodeAt(0) < 32 || character.charCodeAt(0) === 127 || /[<>:"/\\|?*]/.test(character) ? '-' : character).join('').trim().replace(/^\.+|[. ]+$/g, '');
-  const base = extension && clean.toLowerCase().endsWith(extension.toLowerCase()) ? clean.slice(0, -extension.length) : clean;
-  return (base.slice(0, 100) || 'document') + extension;
-}
+export { outputFilename };
 
 /** Explicitly mounted next to each output. The existing tool still owns its URL. */
 export function addExportReview(link: HTMLAnchorElement, blob: Blob, source?: File, rename?: (name: string) => string): void {

@@ -5,7 +5,7 @@ Use the exact commit's Actions evidence and docs/R3_RELEASE.md (R0 remains histo
 ## Before merge
 - [ ] Dependency audit, typecheck, lint, unit/build pass.
 - [ ] Full Chromium, Firefox and WebKit pass for the PR head.
-- [ ] All 28 stable IDs/exports retained.
+- [ ] All 29 stable public routes and their exports verified. Office remains separately gated.
 - [ ] Redaction pixel/leakage/cancellation checks pass.
 - [ ] Genuine damaged-repair and fail-closed fixtures pass.
 - [ ] Capability docs, preservation warnings and build identity agree.
@@ -15,6 +15,7 @@ Use the exact commit's Actions evidence and docs/R3_RELEASE.md (R0 remains histo
 - [ ] Offline reload, Unicode edit/export/reopen and real prepared-language OCR pass.
 - [ ] Missing/evicted assets, cancellation, corrupt downloads and unavailable/quota-bound storage fail visibly.
 - [ ] Share activation/cancellation and cancelled pointer movement pass.
+- [ ] Record current-interface evidence for the retained legacy release gates below.
 - [ ] Schema change has isolation/privilege evidence.
 
 ## After merge

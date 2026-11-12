@@ -1,0 +1,9 @@
+# Reader acceptance
+
+The View PDF adapter provides bounded page rendering, actual PDF.js text selection, thumbnails, zoom/fit, page-number navigation with Go/Enter and a byte-identical original download. Text-selection geometry uses the same page and viewport as the canvas, including rotation. Scanned pages explicitly report when they lack selectable text; this adapter performs no OCR.
+
+Five browser journeys verify real mouse selection and selectable text content, phone zoom/alignment, rotated-page geometry and navigation, invalid page input, exact original bytes, a single recreated text layer after Back, a scan-only page, helper-canvas removal after document teardown, and cancellation of an obsolete text stream during rapid navigation. A fresh review identified that awaiting `getTextContent()` could leave obsolete extraction running; the regression failed before changing to `streamTextContent()`, then passed. PDF.js's existing document teardown cleans up its measurement canvases; the viewer's hidden-canvas CSS is also included.
+
+All 52 current v2 Chromium journeys and all 200 unit tests pass, along with typecheck/lint/build. The reader's source-selection layer is a named accessible group. Fresh three-browser CI on publication remains a separate gate. Real-device and screen-reader acceptance is still required; bookmarks, interactive link annotations and whole-document reader search are not implemented in this slice. General text extraction/search remains a separate tool.
+
+The image-extraction CI run at 4a12d08 passed Chromium and WebKit but failed the original Firefox URL-reload assertion twice because Firefox reused a cached decoded image after URL revocation. The revised regression observes the actual revoke API call (delegating to the browser implementation) and verifies a fresh URL on Forward. This corrects the test's lifecycle contract; it does not claim revocation evicts all browser caches.

@@ -12,6 +12,7 @@ import {
 import fontkit from "@pdf-lib/fontkit";
 import {
   displaySize,
+  MAX_EDIT_OBJECTS,
   pdfBounds,
   toPdf,
   toDisplay,
@@ -24,11 +25,24 @@ import { PdfOperationError } from "./errors";
 import { inspectNativeHighlights, removeAnnotationReferences, writeNativeHighlight } from "./nativeHighlights";
 
 const name = (value: string): PDFName => PDFName.of(value);
+function hasSignatures(doc:PDFDocument):boolean{
+  if(doc.catalog.has(name('Perms')))return true;
+  const pending:Array<PDFDict|PDFArray>=[],seen=new Set<PDFDict|PDFArray>();
+  const push=(value:unknown):void=>{if(value instanceof PDFDict||value instanceof PDFArray)pending.push(value);};
+  doc.context.enumerateIndirectObjects().forEach(([,object])=>push(object));
+  while(pending.length){
+    const object=pending.pop()!;if(seen.has(object))continue;seen.add(object);
+    if(seen.size>100000)throw new PdfOperationError('RESOURCE_LIMIT','PDF signature inspection exceeds the supported structure limit.');
+    if(object instanceof PDFDict){if(object.get(name('Type'))?.toString()==='/Sig'||object.has(name('ByteRange')))return true;object.entries().forEach(([,value])=>push(value));}
+    else object.asArray().forEach(push);
+  }
+  return false;
+}
 const decode = (value: unknown): string =>
   value instanceof PDFString || value instanceof PDFHexString
     ? value.decodeText()
     : "";
-function frameFor(page: ReturnType<PDFDocument["getPage"]>): PageFrame {
+export function frameFor(page: ReturnType<PDFDocument["getPage"]>): PageFrame {
   const unit = page.node.lookup(name('UserUnit'));
   if (unit !== undefined && (!(unit instanceof PDFNumber) || unit.asNumber() !== 1))
     throw new PdfOperationError('UNSUPPORTED_PAGE_SCALE', 'This PDF uses a custom page scale that Edit PDF cannot position accurately yet. Use another tool or keep the original unchanged.');
@@ -96,17 +110,21 @@ function inspectDocument(doc: PDFDocument): {
 }
 export async function inspectDirectEdit(
   files: InputFile[],
+  options: Record<string, unknown> = {},
 ): Promise<OperationResult> {
   if (!files[0]) throw new Error("Choose a PDF first.");
   const doc = await PDFDocument.load(files[0].buffer, { updateMetadata: false });
   const { frames, objects, preservedHighlights } = inspectDocument(doc);
-  const overlayIds = new Set(objects.filter(o => o.kind === 'native-highlight').map(o => o.originalId!));
+  const highlights = objects.filter(o => o.kind === 'native-highlight');
+  const editableHighlights = options.limitHighlights === true ? highlights.slice(0, MAX_EDIT_OBJECTS) : highlights;
+  const overlayIds = new Set(editableHighlights.map(o => o.originalId!));
+  const annotations = objects.filter(o => o.kind !== 'native-highlight' || overlayIds.has(o.originalId!));
   // The source file is retained separately. Its editable highlight appearances are
   // omitted from this disposable canvas copy so moved/deleted marks do not linger.
   removeAnnotationReferences(doc, overlayIds);
   return {
     outputs: overlayIds.size ? [{ name: 'editor-preview.pdf', type: 'application/pdf', buffer: (await doc.save()).slice().buffer }] : [],
-    info: { frames: JSON.stringify(frames), comments: JSON.stringify(objects), preservedHighlights },
+    info: { frames: JSON.stringify(frames), comments: JSON.stringify(annotations), preservedHighlights:preservedHighlights+highlights.length-editableHighlights.length,hasSignatures:hasSignatures(doc) },
   };
 }
 export function checkText(text: string, supported?: Set<number>): void {
@@ -133,8 +151,9 @@ async function applyEdits(
   const doc = await PDFDocument.load(files[0]!.buffer, {
     updateMetadata: false,
   });
+  if(options.requireUnsigned===true&&hasSignatures(doc))throw new PdfOperationError('SIGNED_PDF','This PDF contains an existing certificate signature. Use a certificate-aware editor; a visual mark cannot preserve its validity.');
   const plan = options.plan as EditPlan;
-  if (!plan || !Array.isArray(plan.objects) || plan.objects.length > 1000)
+  if (!plan || !Array.isArray(plan.objects) || plan.objects.length > MAX_EDIT_OBJECTS)
     throw new Error("The edit plan exceeds the 1,000 object limit.");
   let font;
   if (plan.objects.some((o) => o.kind === "text")) {

@@ -1,6 +1,8 @@
 import { allowWorkerUpdate, approveReload, prepareApprovedReload } from './app/workProtection';
 
 function showUpdate(registration: ServiceWorkerRegistration): void {
+  const available=registration.waiting;
+  if(!available||available.state!=='installed'||!navigator.serviceWorker.controller||available===navigator.serviceWorker.controller)return;
   if (document.querySelector('[data-app-update]')) return;
   const banner = document.createElement('section');
   banner.className = 'update-banner';
@@ -68,12 +70,14 @@ function watchForUpdates(registration: ServiceWorkerRegistration): void {
 
 export async function registerServiceWorker(): Promise<void> {
   if (!('serviceWorker' in navigator)) return;
-  window.addEventListener('load', () => {
+  const register=():void=>{
     void navigator.serviceWorker.register('./sw.js', { scope: './' }).then((registration) => {
       watchForUpdates(registration);
       void registration.update();
     }).catch(() => {
       // Registration failure is non-fatal; diagnostics expose service-worker state.
     });
-  }, { once: true });
+  };
+  if(document.readyState==='complete')register();
+  else window.addEventListener('load',register,{once:true});
 }

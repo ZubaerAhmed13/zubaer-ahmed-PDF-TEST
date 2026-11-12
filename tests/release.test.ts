@@ -54,6 +54,7 @@ async function extendedFormFixture(): Promise<InputFile> {
 
   const options = form.createOptionList('Skills');
   options.addOptions(['Excel', 'SAP', 'Jira']);
+  options.enableMultiselect();
   options.select(['Excel']);
   options.addToPage(page, { x: 40, y: 300, width: 160, height: 80 });
 

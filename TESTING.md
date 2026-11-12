@@ -11,7 +11,9 @@ npm run build
 npm run test:e2e
 ```
 
-Playwright runs Chromium, Firefox and WebKit. Existing 300-page, 300-DPI, forms, encryption, compression, cleanup, keyboard and responsive fixtures remain release-blocking.
+Playwright runs the maintained `e2e/v2-*.spec.ts` suites in Chromium, Firefox and WebKit. The public build omits the server-processing suite. The isolated preview workflow sets `VITE_DOCFLOW_SERVER_PROCESSING=1` with a browser-test key and runs those mocked server journeys too.
+
+The current suite covers long documents, image limits, forms, encryption, compression, cleanup, keyboard and responsive layouts. The release journeys open all 29 public routes, confirm the scoped service worker, and reopen downloads from rotation, crop, metadata editing, organization, annotation and numbering. They verify exact previous and next revision bytes and confirm that the rotation-to-encryption handoff sends no document requests.
 
 ## Synthetic corpus v1
 Source: tests/fixtures/pdfCorpus.ts. Fixtures contain no personal documents and use fixed dates.
@@ -24,10 +26,11 @@ Source: tests/fixtures/pdfCorpus.ts. Fixtures contain no personal documents and 
 
 ## Production verification
 ```bash
-DOCFLOW_PRODUCTION_BASE_URL=https://zubaerahmed13.github.io/zubaer-ahmed-PDF-TEST/ npm run test:production
+DOCFLOW_PRODUCTION_BASE_URL=https://zubaerahmed13.github.io/zubaer-ahmed-PDF-TEST/ \
+DOCFLOW_EXPECTED_BUILD=your_deployed_commit_sha npm run test:production
 ```
 
-The production config runs all-tool loading, visual form fill/flatten, image colour exports, actual OCR, comparison, workflow/ZIP and redaction/repair suites, plus rotation/AES-256. Two workers bound the load; expensive stress remains pre-deployment.
+The production config runs the deployed Chromium journeys for the public tool catalog, PDF downloads, visual form fill/flatten, image exports, OCR, comparison, workflow/ZIP, redaction, repair and AES-256. It uses two workers. Stress, build fault injection and mocked account or server jobs run separately. GitHub Actions supplies the expected deployment SHA through `GITHUB_SHA`. The identity check waits for `release.json` to report that exact commit.
 
 R0 baseline attachments contain two viewport samples of navigation/FCP/overflow and axe findings on the CI machine. They are not manual WCAG, physical-device, LCP/INP or field-performance certification.
 
@@ -45,20 +48,32 @@ OCR is implemented; certificate signing/original-page text replacement are not. 
 [Capability matrix](docs/CAPABILITIES.md) · [Preservation](docs/R0_PRESERVATION_MATRIX.md) · [R0 evidence](docs/R0_RELEASE.md).
 
 
-## R1 session acceptance
+## Historical browser suites
+
+The older specifications are kept as a reference for release parity. To run them against their matching interface, check out the legacy release in a separate worktree and use the Playwright configuration from that release.
+
+```bash
+git worktree add --detach ../docflow-legacy 0b680cf5929cf76065a1948ca7690f4d90118a9d
+cd ../docflow-legacy
+npm ci
+npx playwright install --with-deps
+npm run test:e2e
+```
+
+### R1 session acceptance
 
 `tests/documentSession.test.ts` chains real organize/annotate/number PDF operations and verifies exact-byte history, duplicate identities, history pruning, redaction barriers, invalid/stale results, multi-output selection and disposed-runtime callbacks. `tests/serviceWorkerUpdate.test.ts` executes the actual generated worker message handler for safe, busy/retained-work and unresponsive tabs.
 
-`e2e/document-session.spec.ts` verifies one-import chaining and export/reopen, original/current separation, session resume, same-named merge and selected split output, narrow/axe/leave protection, active redaction cancellation and applied-redaction history clearing. Chromium additionally verifies the actual two-tab service-worker handshake. These cases run in the production configuration as well as the full browser matrix. The other two browsers skip only the live handshake case; its decision logic is covered in runtime tests. Physical device and manual screen-reader acceptance remain independent.
+`e2e/document-session.spec.ts` covered one-import chaining, original/current separation, session resume, same-named merge, selected split output, narrow/axe/leave protection, redaction cancellation and applied-redaction history clearing. It also exercised the live two-tab service-worker handshake in Chromium. The v2 release journey carries forward chaining and exact revision downloads. The historical cases remain useful for reviewing v2 parity. Physical device and manual screen-reader acceptance remain independent.
 
-## R7 product finish and operations
+### R7 product finish and operations
 
 `tests/r7Product.test.ts` pins intent discovery and diagnostic allowlisting/redaction. `tests/r7Availability.test.ts` checks identity drift and asset failures. `e2e/r7-product-finish.spec.ts` covers discovery, nested workspace help, guards, reviewed diagnostic downloads, local data scope/denial, mobile axe and exact metadata. `e2e/update-recovery.spec.ts` serves the built release on an isolated origin with controlled baseline/broken/recovered markers, using the production-generated worker and real exports. It never changes the public deployment.
 
-The production selection includes every specialised workspace family plus R0–R7 smoke journeys. The separate `check:availability` command is a four-request identity/assets probe, not document telemetry or an installed external monitor. Human/device evidence is recorded in `docs/R7_ACCEPTANCE.md`; 30 scripted attempts cannot replace its moderated acceptance threshold.
+The separate `check:availability` command probes identity and assets in four requests. The legacy R7 journeys remain the reference for reviewed diagnostic downloads and scoped local-data controls. Human and device evidence is recorded in `docs/R7_ACCEPTANCE.md`, which defines its moderated acceptance threshold.
 
-## A1.1 native highlights
+### A1.1 native highlights
 
 `tests/a1Highlights.test.ts` checks true native objects, unchanged original content streams, searchable text, catalog/links/forms, four rotations with an offset CropBox, import after independent viewer edits, author/popup retention, unsupported annotation preservation, malformed flags/crossed geometry, shared references, custom-page-scale refusal and forged/duplicate identities. `scripts/verify-a1-highlights.py` independently checks displayed quad bounds, highlight/neighbor pixels and edit/save/reopen in PyMuPDF 1.26.6. Synthetic artifacts are retained under `artifacts/a1/` in quality CI.
 
-`e2e/a1-native-highlights.spec.ts` runs in all three browsers and production: create/export/reimport/property edit/duplicate/undo/delete, clean preview canvas, local-only requests, axe, mobile unsupported-mark retention and stale-state cleanup after a rejected custom-scale import. Historical release identity smoke now compares to package.json so new releases retain the same exact-version assertion.
+`e2e/a1-native-highlights.spec.ts` is the reference for the native highlight create/export/reimport, property edit, duplicate, undo and delete journey. It also checks canvas cleanup, local-only requests, axe, mobile unsupported-mark retention and stale-state cleanup after a rejected custom-scale import. Keep native highlight reimport and editing open in the v2 release gates until the current interface passes those journeys.

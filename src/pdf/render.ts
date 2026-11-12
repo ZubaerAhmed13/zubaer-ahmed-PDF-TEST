@@ -1,5 +1,6 @@
 import { fitRaster } from './resourceBudget';
 import { openLocalPdf } from './pdfjsPolicy';
+import { parsePageSelection } from './pageRanges';
 import * as pdfjs from 'pdfjs-dist';
 import type { PDFDocumentProxy, RenderTask } from 'pdfjs-dist';
 
@@ -125,7 +126,8 @@ export async function pdfToImages(
   format: 'png' | 'jpeg',
   scale: number,
   onProgress: (completed: number, total: number) => void,
-  isCancelled: () => boolean
+  isCancelled: () => boolean,
+  selection = ''
 ): Promise<Blob> {
   const [{ default: JSZip }] = await Promise.all([import('jszip')]);
   const task = openLocalPdf(buffer);
@@ -133,7 +135,10 @@ export async function pdfToImages(
   const zip = new JSZip();
   let encodedBytes = 0;
   try {
-    for (let pageNumber = 1; pageNumber <= doc.numPages; pageNumber += 1) {
+    const pages = parsePageSelection(selection, doc.numPages);
+    if (!pages.length) throw Error('Choose at least one page or leave the page field blank.');
+    for (const [index, pageIndex] of pages.entries()) {
+      const pageNumber = pageIndex + 1;
       if (isCancelled()) throw new DOMException('Operation cancelled', 'AbortError');
       const page = await doc.getPage(pageNumber);
       const canvas = document.createElement('canvas');
@@ -151,9 +156,9 @@ export async function pdfToImages(
         const blob = await new Promise<Blob>((resolve, reject) => canvas.toBlob((value) => value ? resolve(value) : reject(new Error('IMAGE_ENCODING_FAILED')), `image/${format}`, format === 'jpeg' ? 0.92 : undefined));
         if (isCancelled()) throw new DOMException('Operation cancelled','AbortError');
         encodedBytes += blob.size;
-        if (encodedBytes > 150*1048576) throw Error('Image export exceeds the 150 MB archive budget; export a smaller document.');
+        if (encodedBytes > 150*1048576) throw Error('Image export exceeds the 150 MB archive budget. Lower the resolution or export a smaller document.');
         zip.file(`page-${String(pageNumber).padStart(3, '0')}.${format === 'jpeg' ? 'jpg' : 'png'}`, blob);
-        onProgress(pageNumber, doc.numPages);
+        onProgress(index + 1, pages.length);
       } finally { clearInterval(cancellation); canvas.width=canvas.height=1; page.cleanup(); }
     }
     const output = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE', compressionOptions: { level: 6 } });

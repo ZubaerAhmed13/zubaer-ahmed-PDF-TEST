@@ -1,0 +1,32 @@
+# Browser processing workspace continuation
+
+Continue draft PR #36 from source 1a865b2. Keep the production release unchanged and normal backend uploads disabled. The published OCR adapter and actual backend transport evidence are the baseline; temporary uncommitted account/recovery work was lost during workspace maintenance and reconstructed with failing-then-passing regressions.
+
+## Requirements and implementation
+
+1. Shared tab-scoped account helpers, generation guards against refresh/sign-in completing after sign-out, credentials omitted on Auth requests, bounded timeouts. Passwords never enter document drafts.
+2. Recover the same uncertain create using its canonical idempotency key; retry cancellation after an acknowledgement failure; retrieve only verified completed output without another processing start.
+3. One processing session owns the workspace until terminal status is confirmed. Preserve the source after failures. Serialize recovery actions. Check/retrieve recovery waits until the original attempt settles, so early observations cannot unlock a new paid attempt.
+4. Device OCR is the default. Server OCR requires a configured build flag, an existing confirmed account, and fresh explicit consent naming Supabase/Vercel and retention. Server mode processes the whole document; local page/correction controls are disabled. Consent is excluded from option snapshots.
+5. Navigation awaits real cancellation acknowledgement, shares a pending cancellation between route requests, honors the newest navigation generation, and ignores disposed result callbacks. Unknown status retains the original workspace and account controls.
+6. Browser CI uses the CSP-permitted Supabase origin, fully intercepted before navigation and fake public configuration. Verify consent, actual PDF result review, cancellation uncertainty/retry, completed download retry, same-key unknown-create recovery, and overlapping navigation in Chromium/Firefox/WebKit. Actual hosted processing acceptance remains separate evidence.
+
+## Verification ledger
+
+- Recovered client regressions: cancellation retry, retrieve-only, lost create-body recovery, expiry checks, and completed-job/local-transfer cancellation observed failing before fixes.
+- Shared auth regressions: tab session, offline sign-out, refresh, and refresh-after-sign-out pass.
+- Session regressions: uncertain attempts cannot restart; retry/late-result disposal; retrieve-only; terminal-release requirement; no concurrent retrieval; no pre-settlement recovery checks. The two timing guards had failing regressions before their fixes.
+- Fresh read-only review found no remaining critical/important defects in the combined UI/auth/session diff. A premature check could leave stale `none` status after later uncertain creation; recovery checks now require settled initial work. Concurrent retrieval also waits for that work to settle.
+- 281 local unit tests, typecheck, lint, build and provenance checks pass. All three v2 browser CI jobs pass at 67fca54: Chromium 95, Firefox/WebKit 94 each. Quality and processing CI pass too. Do not claim hosted browser-to-backend acceptance.
+
+Ruling: keep normal uploads disabled and expose server mode only via explicit build configuration. The staging snapshot had seven-day retention from 29 October, so its current validity must be reverified before spending a real processing start. No image rebuild or production capacity expansion is implied by UI work.
+
+Deferred minor: switching server → device → server resets automatic deskew/rotation checkboxes. Error/recovery retention is verified separately. Add a browser regression and preserve these toggles in the next UI refinement.
+
+Managed interactive preview returned a Vite allowed-host error for its exact terminal.local URL. No local interactive smoke is claimed; do not weaken runtime security to make the preview pass.
+
+CI investigation: all five new journeys initially failed at sign-in because the fake .invalid origin was correctly blocked by the production CSP before interception. Trace console evidence confirms the boundary. Use the existing CSP-permitted origin with a fake publishable key and route every service request to synthetic responses; keep production CSP unchanged. Existing Chromium 89 and Firefox 88 journeys passed. A separate failing-then-passing unit regression covers definite first-response staging rejection; a lost first response followed by rejection remains uncertain. Added a browser journey for the definite-rejection exit.
+
+Checkpoint complete: account/consent/recovery UI implemented and published, with actual PDF review and six synthetic browser journeys in each engine. Protected preview dpl_88T1KMcoCaUeEuLGbWkxukGHR9XX serves exact 67fca54 and verified assets. Hosted interactive acceptance remains blocked at Vercel sign-in. Continue next with server compression/Office controls, mode-switch/mobile refinement and remaining release acceptance; do not merge/promote.
+
+Follow-up cancellation race: the client returned completed status but its later rejected local transfer could overwrite the UI message with generic cancellation. Extended the completed-download cancellation regression, observed the incorrect message, then changed cancellation errors to preserve “server finished before cancellation” and the retrieve-existing-output instruction. No new create/start is introduced.

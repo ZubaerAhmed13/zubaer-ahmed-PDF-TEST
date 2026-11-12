@@ -1,5 +1,4 @@
-import { openLocalPdf } from '../pdf/pdfjsPolicy';
-import { abortable } from '../pdf/pdfCancellation';
+import { verifyRepairedPdf } from '../pdf/repairVerification';
 import { addShareButton } from '../app/fileExport';
 import { workspaceRuntime } from '../app/workspaceRuntime';
 import '../styles/professional-tools.css';
@@ -290,21 +289,11 @@ export function mountWorkspace(container: HTMLDivElement, tool: ToolDefinition):
         });
         const result = await qpdf.result;
         if (currentAbort.signal.aborted || disposed) return;
-        // qpdf may recover structures that pdf-lib cannot parse, so PDF.js is the secondary verification engine.
         const bytes = result.outputs[0]?.buffer;
         if (!bytes) throw Error('qpdf returned no output.');
-        const task = openLocalPdf(bytes.slice(0),currentAbort.signal);
-        const verified = await task.promise;
-        try {
-          if (verified.numPages < 1) throw Error('The rewritten document contains no pages.');
-          for (let pageNumber = 1; pageNumber <= verified.numPages; pageNumber++) {
-            if (currentAbort.signal.aborted || disposed) throw new DOMException('Cancelled', 'AbortError');
-            progressText('Validating repaired page ' + pageNumber + ' of ' + verified.numPages, 97);
-            const checkedPage = await verified.getPage(pageNumber);
-            try {await abortable(checkedPage.getOperatorList(),currentAbort.signal,()=>{void verified.destroy().catch(()=>{});});}
-            finally {checkedPage.cleanup();}
-          }
-        } finally { if(currentAbort.signal.aborted)void verified.destroy().catch(()=>{});else await verified.destroy(); }
+        await verifyRepairedPdf(bytes, currentAbort.signal, (page, total) => {
+          progressText('Validating repaired page ' + page + ' of ' + total, 97);
+        });
         if (currentAbort.signal.aborted || disposed) return;
         renderResult(result);
       }
