@@ -17,6 +17,9 @@ async function accessibleWorkspacePdf(){
 test('high-use PDF workspaces pass axe with a real document loaded',async({page})=>{
   test.setTimeout(180_000);
   const fixture=await accessibleWorkspacePdf();
+  // Switching tools with a loaded PDF deliberately asks before discarding it.
+  // Accept that guard here because each route's fixture is disposable.
+  page.on('dialog',dialog=>dialog.accept());
   const routes=['preview','forms','redact-secure','ocr','sign-visual','organize','workflow','batch'];
   for(const tool of routes){
     await page.goto(base+'#/tools/'+tool);
