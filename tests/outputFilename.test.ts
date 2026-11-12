@@ -1,5 +1,5 @@
 import {describe,expect,it} from 'vitest';
-import {outputFilename} from '../src/app/outputFilename';
+import {outputFilename,safeResultFilenames} from '../src/app/outputFilename';
 
 describe('safe output download names',()=>{
   it('keeps the exact tool-defined extension without duplication',()=>{
@@ -26,5 +26,39 @@ describe('safe output download names',()=>{
     expect(outputFilename('😀'.repeat(105),'source.pdf')).toBe('😀'.repeat(100)+'.pdf');
     expect(outputFilename('A\u0301','source.pdf')).toBe('Á.pdf');
     expect(outputFilename('نام\u200cها','source.pdf')).toBe('نام\u200cها.pdf');
+  });
+});
+
+describe('generated result download filenames',()=>{
+  it('sanitizes untrusted default names even if the user never opens Rename',()=>{
+    expect(safeResultFilenames([
+      {name:'CON.pdf',type:'application/pdf'},
+      {name:'invoice\u202eexe.pdf',type:'application/pdf'},
+      {name:'Résumé বাংলা.pdf',type:'application/pdf'}
+    ])).toEqual(['_CON.pdf','invoice-exe.pdf','Résumé বাংলা.pdf']);
+  });
+  it('derives canonical extensions from output MIME, not attacker-defined extensions',()=>{
+    expect(safeResultFilenames([
+      {name:'invoice.exe',type:'application/pdf'},
+      {name:'report.PDF',type:'text/plain'},
+      {name:'results.txt',type:'text/html'},
+      {name:'archive.pdf',type:'application/zip'}
+    ])).toEqual(['invoice.pdf','report.txt','results.html','archive.zip']);
+  });
+  it('disambiguates colliding sanitized downloads without overwriting reserved names',()=>{
+    expect(safeResultFilenames([
+      {name:'a?b.pdf',type:'application/pdf'},
+      {name:'a:b.pdf',type:'application/pdf'},
+      {name:'a-b-2.pdf',type:'application/pdf'},
+      {name:'A-B.PDF',type:'application/pdf'}
+    ])).toEqual(['a-b.pdf','a-b-3.pdf','a-b-2.pdf','A-B-4.pdf']);
+  });
+  it('keeps already safe result names stable across remounts and ignores MIME parameters',()=>{
+    const initial=safeResultFilenames([
+      {name:'report.pdf',type:'application/pdf; charset=binary'},
+      {name:'notes.md',type:'text/markdown'}
+    ]);
+    expect(initial).toEqual(['report.pdf','notes.md']);
+    expect(safeResultFilenames(initial.map((name,index)=>({name,type:index?'text/markdown':'application/pdf'})))).toEqual(initial);
   });
 });
