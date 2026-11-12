@@ -2,6 +2,9 @@ import type {PreviewController} from '../pdf/render';
 import {createOrganizerDraft,type OrganizerDraft} from './draft';
 import {MAX_PAGES} from '../pdf/resourceBudget';
 
+/** Enforce the worker's output-page budget before changing the visible draft. */
+export const canDuplicateOrganizerPage=(count:number):boolean=>Number.isInteger(count)&&count>0&&count<MAX_PAGES;
+
 export interface PageOrganizer {
   getOrder(): number[];
   dispose(): void;
@@ -54,7 +57,7 @@ export function mountPageOrganizer(
       const actions=[
         ['up','Move page '+page+' up', '↑',index===0],
         ['down','Move page '+page+' down','↓',index===order.length-1],
-        ['copy','Duplicate page '+page,'⧉',order.length>=MAX_PAGES],
+        ['copy','Duplicate page '+page,'⧉',!canDuplicateOrganizerPage(order.length)],
         ['remove','Remove page '+page,'×',order.length===1]
       ] as const;
       for(const [action,label,symbol,disabled] of actions){
@@ -113,7 +116,7 @@ export function mountPageOrganizer(
     const next=[...order];const page=next[index]!;
     if(action==='up'&&index>0){[next[index-1],next[index]]=[page,next[index-1]!];commit(next,index-1);}
     if(action==='down'&&index<next.length-1){[next[index],next[index+1]]=[next[index+1]!,page];commit(next,index+1);}
-    if(action==='copy'&&next.length<MAX_PAGES){next.splice(index+1,0,page);commit(next,index+1);}
+    if(action==='copy'&&canDuplicateOrganizerPage(next.length)){next.splice(index+1,0,page);commit(next,index+1);}
     if(action==='remove'&&next.length>1){next.splice(index,1);commit(next,Math.min(index,next.length-1));}
   };
   const dragStart=(event:DragEvent):void=>{
